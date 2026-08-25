@@ -97,6 +97,9 @@ function parseStoredTask(value: unknown, taskId: string): StoredTask {
 
   try {
     const graph = normalizeGraph(value.graph as TaskGraph);
+    if (value.graphDigest !== graphDigest(graph)) {
+      throw new TaskStoreError(`task "${taskId}" graph digest does not match its persisted Task Graph`);
+    }
     return {
       schemaVersion: TASK_MEMORY_SCHEMA_VERSION,
       id: taskId,

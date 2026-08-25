@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,6 +10,7 @@ import {
   reviseTask,
   TaskAlreadyExistsError,
 } from "../../src/task-memory/task-store.ts";
+import { taskRecordPath } from "../../src/task-memory/paths.ts";
 import { parseTaskGraph } from "../../src/task-graph/parse.ts";
 import { validateTaskGraph } from "../../src/task-graph/validate.ts";
 
@@ -72,5 +73,17 @@ test("revises an idle task with a monotonic revision and new digest", async () =
     assert.equal(revised.status, "ready");
     assert.notEqual(revised.graphDigest, original.graphDigest);
     assert.equal(revised.updatedAt, "2026-08-25T12:01:00.000Z");
+  });
+});
+
+test("rejects a persisted task whose graph digest no longer matches its graph", async () => {
+  await withProject(async (projectRoot) => {
+    await createTask({ projectRoot, taskId: "health", graph: graph(), clock });
+    const path = taskRecordPath(projectRoot, "health");
+    const record = JSON.parse(await readFile(path, "utf8")) as { graphDigest: string };
+    record.graphDigest = "0".repeat(64);
+    await writeFile(path, JSON.stringify(record));
+
+    await assert.rejects(loadTask({ projectRoot, taskId: "health" }), /graph digest/i);
   });
 });
