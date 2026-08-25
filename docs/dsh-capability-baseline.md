@@ -25,6 +25,24 @@ Consequently, the remaining live boundary is deliberate and manual: a DSH foregr
 discover the project Skill and call its `workflow` tool with the compiled request. A successful
 compile or installation is not evidence of a live workflow run.
 
+## Durable task-memory boundary
+
+The V3 task commands own project persistence under `.maestro/`, while DSH continues to own every
+live Workflow, child-Agent, cancellation and session action:
+
+1. `create-task` persists a validated version-one Task Graph.
+2. `prepare-task-run` persists one active run and prints a fixed DSH request with an optional,
+   bounded task-memory context in JSON `args`.
+3. A person or foreground DSH Agent makes the one `workflow` call.
+4. `record-task-run` validates the returned aggregate result, snapshots declared in-project files,
+   writes an immutable receipt, and derives a source-linked memory entry.
+
+The CLI never starts DSH or a model. It rejects an active-task revision, result task IDs that differ
+from the stored Graph, non-regular/missing/outside-project Artifacts, and individual Artifact files
+larger than 5 MiB. Project-memory retrieval is deterministic keyword matching and occurs only when
+the preparation caller supplies a query; no DSH Goal, `todo_write`, or ambient chat history is used
+as project memory.
+
 ## Required manual verification
 
 The automated suite does not invoke a model or start DSH. Before claiming a live integration, manually verify in the selected DSH version:
@@ -34,5 +52,7 @@ The automated suite does not invoke a model or start DSH. Before claiming a live
 3. A TPM child Agent returns a schema-valid result and the parent receives the completed workflow result.
 4. `todo_write` renders runtime progress without changing Task Graph semantics.
 5. Cancellation and an interrupted child leave a truthful DSH workflow result.
+6. A persisted task can be prepared, executed through DSH, recorded, then inspected or revised from
+   a new DSH session without relying on the prior session transcript.
 
 Run `npm run dsh:probe` for a read-only local CLI diagnostic. `unavailable` means only that `dsh` is not on `PATH`; it is not a failing test and does not modify DSH.
