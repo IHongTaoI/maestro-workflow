@@ -9,9 +9,9 @@
   "scripts": {
     "maestro": "tsx src/cli.ts",
     "dsh:probe": "tsx src/dsh/probe-cli.ts",
-    "dsh:compile": "npm run maestro -- compile-task-graph",
-    "dsh:install-skill": "npm run maestro -- install-dsh-skill",
-    "dsh:verify-skill": "npm run maestro -- verify-dsh-skill",
+    "dsh:compile": "tsx src/cli.ts compile-task-graph",
+    "dsh:install-skill": "tsx src/cli.ts install-dsh-skill",
+    "dsh:verify-skill": "tsx src/cli.ts verify-dsh-skill",
     "test": "tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
