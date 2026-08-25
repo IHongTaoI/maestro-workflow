@@ -50,6 +50,11 @@ test("parses only the supported commands and options", () => {
     projectRoot: resolve("C:/repo"),
     memoryQuery: ["retry database"],
   });
+  assert.deepEqual(parseCliArguments(["resume-task-run", "--task", "health"], "C:/repo"), {
+    command: "resume-task-run",
+    taskId: "health",
+    projectRoot: resolve("C:/repo"),
+  });
   assert.throws(() => parseCliArguments(["install-dsh-skill", "--file", "graph.yaml"]), /does not support --file/);
 });
 
@@ -110,6 +115,10 @@ test("creates, prepares, records, revises, and queries a durable task through th
     const prepareIo = captureIo();
     assert.equal(await runCli(["prepare-task-run", "--project", projectRoot, "--task", "health"], prepareIo), 0);
     assert.equal(JSON.parse(prepareIo.stdout).args.taskContext.taskId, "health");
+
+    const resumeIo = captureIo();
+    assert.equal(await runCli(["resume-task-run", "--project", projectRoot, "--task", "health"], resumeIo), 0);
+    assert.deepEqual(JSON.parse(resumeIo.stdout), JSON.parse(prepareIo.stdout));
 
     const resultPath = join(projectRoot, "workflow-result.json");
     await writeFile(resultPath, JSON.stringify({

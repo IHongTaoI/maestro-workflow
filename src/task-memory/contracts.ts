@@ -1,4 +1,5 @@
 import type { TaskGraph } from "../task-graph/types.ts";
+import type { DshWorkflowRequest } from "../dsh/workflow-contract.ts";
 
 export const TASK_MEMORY_SCHEMA_VERSION = 1;
 export const TASK_STATUS = ["ready", "running", "blocked", "completed"] as const;
@@ -40,6 +41,11 @@ export type PreparedRun = {
   status: "running";
   preparedAt: string;
   memoryQuery: string[];
+  /** The immutable context that was embedded in this run's DSH request. */
+  taskContext: PersistedTaskContext;
+  /** The exact, compile-only DSH workflow request that this run is authorized to invoke. */
+  workflow: DshWorkflowRequest;
+  workflowDigest: string;
 };
 
 export type ArtifactRecord = {

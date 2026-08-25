@@ -23,7 +23,16 @@ npm run --silent maestro -- prepare-task-run --task <task-id> [--memory <query>]
 ```
 
 `prepare-task-run` 输出经验证的 `{ script, meta, args }` JSON，并在 `.maestro/` 中先记录该任务的
-`running` 状态。将输出 JSON 原样作为一次 DSH `workflow` 工具调用的参数。
+`running` 状态和该 JSON 的完整副本。将输出 JSON 原样作为一次 DSH `workflow` 工具调用的参数。
+
+如果在 **实际调用 workflow 之前** 会话中断，不要重新 `prepare`。恢复原始请求：
+
+```powershell
+npm run --silent maestro -- resume-task-run --task <task-id>
+```
+
+它只读取持久化的原始 JSON，不重新编译、不重新检索记忆、也不改变任务状态。若不能确定 DSH 是否已经
+调用过 workflow，绝不能再次调用；应先找回已有的 DSH 返回结果并用 `record-task-run` 记录。
 
 `compile-task-graph` 只保留给不创建任务的本地编译检查：
 `npm run --silent maestro -- compile-task-graph --file <task-graph.yaml>`。经批准的交付不可跳过

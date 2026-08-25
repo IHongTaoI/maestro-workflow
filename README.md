@@ -60,8 +60,16 @@ npm run --silent maestro -- prepare-task-run --task health-delivery --memory "he
 ```
 
 `prepare-task-run` first records an active run below `.maestro/`, then prints the exact DSH
-`{ script, meta, args }` request. It still does not start DSH or a model. Give that JSON unchanged
-to one DSH `workflow` call. After the foreground session receives the aggregate workflow result,
+`{ script, meta, args }` request and persists an identical copy in its run receipt. It still does
+not start DSH or a model. Give that JSON unchanged to one DSH `workflow` call. If the session ends
+before that call, recover the original request without recompiling or rereading memory:
+
+```powershell
+npm run --silent maestro -- resume-task-run --task health-delivery
+```
+
+If it is unclear whether DSH already made the workflow call, do not invoke it again; recover its
+existing result and record it. After the foreground session receives the aggregate workflow result,
 save the returned JSON and record it locally:
 
 ```powershell

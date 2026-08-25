@@ -6,7 +6,7 @@ import { compileTaskGraph } from "./dsh/compile-workflow.ts";
 import { installProjectSkill, verifyProjectSkill } from "./dsh/install-skill.ts";
 import { queryProjectMemory } from "./task-memory/memory-store.ts";
 import { recordTaskRun } from "./task-memory/record-run.ts";
-import { prepareTaskRun } from "./task-memory/task-run.ts";
+import { prepareTaskRun, resumeTaskRun } from "./task-memory/task-run.ts";
 import { createTask, reviseTask } from "./task-memory/task-store.ts";
 import { parseTaskGraph } from "./task-graph/parse.ts";
 import { validateTaskGraph } from "./task-graph/validate.ts";
@@ -23,6 +23,7 @@ export type MaestroCliCommand =
   | { command: "verify-dsh-skill"; projectRoot: string }
   | { command: "create-task"; projectRoot: string; taskId: string; filePath: string }
   | { command: "prepare-task-run"; projectRoot: string; taskId: string; memoryQuery: string[] }
+  | { command: "resume-task-run"; projectRoot: string; taskId: string }
   | { command: "record-task-run"; projectRoot: string; taskId: string; filePath: string }
   | { command: "revise-task"; projectRoot: string; taskId: string; filePath: string }
   | { command: "query-memory"; projectRoot: string; query: string };
@@ -33,6 +34,7 @@ const HELP = `Usage:
   maestro verify-dsh-skill [--project <project-root>]
   maestro create-task --task <task-id> --file <task-graph.yaml> [--project <project-root>]
   maestro prepare-task-run --task <task-id> [--memory <query>] [--project <project-root>]
+  maestro resume-task-run --task <task-id> [--project <project-root>]
   maestro record-task-run --task <task-id> --file <workflow-result.json> [--project <project-root>]
   maestro revise-task --task <task-id> --file <task-graph.yaml> [--project <project-root>]
   maestro query-memory --query <query> [--project <project-root>]
@@ -59,6 +61,7 @@ function parseOptions(command: string, args: readonly string[]): Map<string, str
           : command === "create-task" || command === "revise-task" || command === "record-task-run"
             ? ["--project", "--task", "--file"]
             : command === "prepare-task-run" ? ["--project", "--task", "--memory"]
+              : command === "resume-task-run" ? ["--project", "--task"]
               : command === "query-memory" ? ["--project", "--query"]
                 : [],
   );
@@ -103,7 +106,7 @@ export function parseCliArguments(args: readonly string[], currentDirectory = pr
   if (command === undefined || command === "--help" || command === "-h" || command === "help") {
     return { command: "help" };
   }
-  if (!["compile-task-graph", "install-dsh-skill", "verify-dsh-skill", "create-task", "prepare-task-run", "record-task-run", "revise-task", "query-memory"].includes(command)) {
+  if (!["compile-task-graph", "install-dsh-skill", "verify-dsh-skill", "create-task", "prepare-task-run", "resume-task-run", "record-task-run", "revise-task", "query-memory"].includes(command)) {
     throw new Error(`unknown command: ${command}`);
   }
 
@@ -125,6 +128,13 @@ export function parseCliArguments(args: readonly string[], currentDirectory = pr
       projectRoot,
       taskId: requiredOption(parsedOptions, command, "--task"),
       memoryQuery: typeof memory === "string" ? [memory] : [],
+    };
+  }
+  if (command === "resume-task-run") {
+    return {
+      command,
+      projectRoot,
+      taskId: requiredOption(parsedOptions, command, "--task"),
     };
   }
   if (command === "query-memory") {
@@ -194,6 +204,11 @@ export async function runCli(args: readonly string[], io: CliIo, currentDirector
         taskId: command.taskId,
         memoryQuery: command.memoryQuery,
       });
+      writeJson(io, result.workflow);
+      return 0;
+    }
+    if (command.command === "resume-task-run") {
+      const result = await resumeTaskRun({ projectRoot: command.projectRoot, taskId: command.taskId });
       writeJson(io, result.workflow);
       return 0;
     }

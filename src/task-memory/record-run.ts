@@ -15,6 +15,7 @@ import {
 } from "./contracts.ts";
 import { writeMemoryEntry } from "./memory-store.ts";
 import { artifactContentPath, artifactDirectory, artifactMetadataPath, runReceiptPath } from "./paths.ts";
+import { loadPreparedRun, TaskRunConflictError } from "./task-run.ts";
 import { type Clock, loadTask, persistTask } from "./task-store.ts";
 
 const MAX_ARTIFACT_BYTES = 5 * 1024 * 1024;
@@ -97,36 +98,6 @@ function validateWorkflowResult(value: unknown, task: StoredTask): WorkflowResul
   return {
     graph: task.graph.name,
     tasks: Object.fromEntries(task.graph.tasks.map((node) => [node.id, parseTaskResult(taskResults[node.id], node.id)])),
-  };
-}
-
-async function loadPreparedRun(projectRoot: string, task: StoredTask): Promise<PreparedRun> {
-  if (task.activeRunId === undefined) throw new TaskRunRecordError(`task "${task.id}" has no active run to record`);
-  let value: unknown;
-  try {
-    value = JSON.parse(await readFile(runReceiptPath(projectRoot, task.id, task.activeRunId), "utf8")) as unknown;
-  } catch (error) {
-    if (error instanceof SyntaxError) throw new TaskRunRecordError(`active run "${task.activeRunId}" contains invalid JSON`);
-    throw error;
-  }
-  if (!isRecord(value)
-    || value.schemaVersion !== TASK_MEMORY_SCHEMA_VERSION
-    || value.id !== task.activeRunId
-    || value.taskId !== task.id
-    || value.taskRevision !== task.revision
-    || value.status !== "running"
-    || typeof value.preparedAt !== "string"
-    || !Array.isArray(value.memoryQuery) || value.memoryQuery.some((query) => typeof query !== "string")) {
-    throw new TaskRunRecordError(`active run "${task.activeRunId}" is not a valid running receipt`);
-  }
-  return {
-    schemaVersion: TASK_MEMORY_SCHEMA_VERSION,
-    id: task.activeRunId,
-    taskId: task.id,
-    taskRevision: task.revision,
-    status: "running",
-    preparedAt: value.preparedAt,
-    memoryQuery: [...value.memoryQuery],
   };
 }
 
@@ -230,7 +201,14 @@ function derivedMemory(task: StoredTask, run: PreparedRun, result: WorkflowResul
 /** Validates and records the sole active DSH run; it never invokes DSH itself. */
 export async function recordTaskRun(options: RecordTaskRunOptions): Promise<RecordedTaskRun> {
   const task = await loadTask({ projectRoot: options.projectRoot, taskId: options.taskId });
-  const prepared = await loadPreparedRun(options.projectRoot, task);
+  if (task.activeRunId === undefined) throw new TaskRunRecordError(`task "${task.id}" has no active run to record`);
+  let prepared: PreparedRun;
+  try {
+    prepared = await loadPreparedRun(options.projectRoot, task);
+  } catch (error) {
+    if (error instanceof TaskRunConflictError) throw new TaskRunRecordError(error.message);
+    throw error;
+  }
   const result = validateWorkflowResult(options.result, task);
   const recordedAt = timestamp(options.clock);
   const snapshots = await prepareArtifactSnapshots(options.projectRoot, task, prepared, recordedAt, result);

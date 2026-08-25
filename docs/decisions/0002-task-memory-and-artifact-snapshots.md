@@ -15,8 +15,8 @@ removed V2 Runtime or its data format.
 ## Decision
 
 V3 stores project-owned state under `.maestro/`. A task has a validated, versioned Task Graph and
-at most one active run. Preparing a run persists its `running` state before returning a compiled
-DSH request. Recording a DSH result writes an immutable run receipt, snapshots every declared
+at most one active run. Preparing a run persists its `running` state and exact compiled DSH request
+before returning it. Recording a DSH result writes an immutable run receipt, snapshots every declared
 regular-file Artifact inside `.maestro/artifacts/`, and derives a source-linked project-memory entry.
 
 Task data, run receipts, Artifact metadata and memory entries are intended to be committed to Git.
@@ -29,7 +29,9 @@ vector database, remote service, generic Runtime, or DSH execution transport.
 
 ## Consequences
 
-- A DSH workflow can be resumed from local task records rather than an opaque session transcript.
+- A DSH workflow request can be resumed verbatim from local task records rather than an opaque
+  session transcript. If the operator cannot determine whether the request was already invoked,
+  they must not invoke it again.
 - Artifact history is reproducible up to a bounded snapshot size; paths outside the project and
   missing or non-file artifacts are rejected.
 - `prepare-task-run` and `record-task-run` remain local commands. A person or DSH foreground Agent

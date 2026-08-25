@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { writeMemoryEntry } from "../../src/task-memory/memory-store.ts";
-import { prepareTaskRun, TaskRunConflictError } from "../../src/task-memory/task-run.ts";
+import { prepareTaskRun, resumeTaskRun, TaskRunConflictError } from "../../src/task-memory/task-run.ts";
 import { loadTask, reviseTask, TaskHasActiveRunError, createTask } from "../../src/task-memory/task-store.ts";
 import { parseTaskGraph } from "../../src/task-graph/parse.ts";
 import { validateTaskGraph } from "../../src/task-graph/validate.ts";
@@ -67,6 +67,32 @@ test("preparing a run does not retrieve project memory when the query is empty",
     const prepared = await prepareTaskRun({ projectRoot, taskId: "health", memoryQuery: [] });
 
     assert.deepEqual(prepared.workflow.args.taskContext?.memory, []);
+  });
+});
+
+test("resumes an active run with the exact workflow request persisted at preparation time", async () => {
+  await withProject(async (projectRoot) => {
+    await createTask({ projectRoot, taskId: "health", graph: graph() });
+    const prepared = await prepareTaskRun({ projectRoot, taskId: "health", memoryQuery: ["retry database"] });
+
+    const resumed = await resumeTaskRun({ projectRoot, taskId: "health" });
+
+    assert.deepEqual(resumed.workflow, prepared.workflow);
+    assert.deepEqual(resumed.run.taskContext, prepared.workflow.args.taskContext);
+    assert.match(resumed.run.workflowDigest, /^[a-f0-9]{64}$/);
+  });
+});
+
+test("refuses to resume a run whose persisted workflow no longer matches its digest", async () => {
+  await withProject(async (projectRoot) => {
+    await createTask({ projectRoot, taskId: "health", graph: graph() });
+    await prepareTaskRun({ projectRoot, taskId: "health" });
+    const receiptPath = join(projectRoot, ".maestro", "tasks", "health", "runs", "run-000001.json");
+    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { workflow: { args: { graphName: string } } };
+    receipt.workflow.args.graphName = "tampered";
+    await writeFile(receiptPath, JSON.stringify(receipt));
+
+    await assert.rejects(resumeTaskRun({ projectRoot, taskId: "health" }), /workflow digest does not match/);
   });
 });
 

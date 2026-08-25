@@ -31,8 +31,9 @@ The V3 task commands own project persistence under `.maestro/`, while DSH contin
 live Workflow, child-Agent, cancellation and session action:
 
 1. `create-task` persists a validated version-one Task Graph.
-2. `prepare-task-run` persists one active run and prints a fixed DSH request with an optional,
-   bounded task-memory context in JSON `args`.
+2. `prepare-task-run` persists one active run and the exact fixed DSH request with an optional,
+   bounded task-memory context in JSON `args`; `resume-task-run` re-reads that same request without
+   recomputing it.
 3. A person or foreground DSH Agent makes the one `workflow` call.
 4. `record-task-run` validates the returned aggregate result, snapshots declared in-project files,
    writes an immutable receipt, and derives a source-linked memory entry.
@@ -54,5 +55,7 @@ The automated suite does not invoke a model or start DSH. Before claiming a live
 5. Cancellation and an interrupted child leave a truthful DSH workflow result.
 6. A persisted task can be prepared, executed through DSH, recorded, then inspected or revised from
    a new DSH session without relying on the prior session transcript.
+7. If a session ends after preparation but before the workflow call, `resume-task-run` returns the
+   byte-equivalent request. If execution status is uncertain, the operator does not invoke again.
 
 Run `npm run dsh:probe` for a read-only local CLI diagnostic. `unavailable` means only that `dsh` is not on `PATH`; it is not a failing test and does not modify DSH.
