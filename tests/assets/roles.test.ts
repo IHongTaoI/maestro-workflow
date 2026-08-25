@@ -10,6 +10,9 @@ test("ships Lao Zhou and every MVP role as DSH skill assets", async () => {
   assert.match(skill, /^---\nname: maestro-workflow\n/m);
   assert.match(skill, /todo_write/);
   assert.match(skill, /npm run --silent maestro -- compile-task-graph/);
+  assert.match(skill, /create-task/);
+  assert.match(skill, /prepare-task-run/);
+  assert.match(skill, /record-task-run/);
   assert.match(skill, /workflow/);
 
   for (const role of roles) {

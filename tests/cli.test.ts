@@ -38,6 +38,18 @@ test("parses only the supported commands and options", () => {
     projectRoot: resolve("C:/project"),
     force: true,
   });
+  assert.deepEqual(parseCliArguments(["create-task", "--task", "health", "--file", "planning/task-graph.yaml"], "C:/repo"), {
+    command: "create-task",
+    taskId: "health",
+    projectRoot: resolve("C:/repo"),
+    filePath: resolve("C:/repo", "planning/task-graph.yaml"),
+  });
+  assert.deepEqual(parseCliArguments(["prepare-task-run", "--task", "health", "--memory", "retry database"], "C:/repo"), {
+    command: "prepare-task-run",
+    taskId: "health",
+    projectRoot: resolve("C:/repo"),
+    memoryQuery: ["retry database"],
+  });
   assert.throws(() => parseCliArguments(["install-dsh-skill", "--file", "graph.yaml"]), /does not support --file/);
 });
 
@@ -83,5 +95,37 @@ test("makes a modified project Skill observable to CI through a nonzero verify s
 
     assert.equal(await runCli(["verify-dsh-skill", "--project", projectRoot], io), 1);
     assert.equal(JSON.parse(io.stdout).status, "modified");
+  });
+});
+
+test("creates, prepares, records, revises, and queries a durable task through the CLI", async () => {
+  await withTemporaryProject(async (projectRoot) => {
+    const graphPath = join(projectRoot, "health.yaml");
+    await writeFile(graphPath, `name: health-delivery\ntasks:\n  - id: requirements\n    role: tpm\n    description: Define the health command.\n`);
+
+    const createIo = captureIo();
+    assert.equal(await runCli(["create-task", "--project", projectRoot, "--task", "health", "--file", graphPath], createIo), 0);
+    assert.equal(JSON.parse(createIo.stdout).status, "ready");
+
+    const prepareIo = captureIo();
+    assert.equal(await runCli(["prepare-task-run", "--project", projectRoot, "--task", "health"], prepareIo), 0);
+    assert.equal(JSON.parse(prepareIo.stdout).args.taskContext.taskId, "health");
+
+    const resultPath = join(projectRoot, "workflow-result.json");
+    await writeFile(resultPath, JSON.stringify({
+      graph: "health-delivery",
+      tasks: { requirements: { summary: "The health command is read-only.", artifacts: [], blockers: [] } },
+    }));
+    const recordIo = captureIo();
+    assert.equal(await runCli(["record-task-run", "--project", projectRoot, "--task", "health", "--file", resultPath], recordIo), 0);
+    assert.equal(JSON.parse(recordIo.stdout).task.status, "completed");
+
+    const memoryIo = captureIo();
+    assert.equal(await runCli(["query-memory", "--project", projectRoot, "--query", "health"], memoryIo), 0);
+    assert.equal(JSON.parse(memoryIo.stdout).length, 1);
+
+    const reviseIo = captureIo();
+    assert.equal(await runCli(["revise-task", "--project", projectRoot, "--task", "health", "--file", graphPath], reviseIo), 0);
+    assert.equal(JSON.parse(reviseIo.stdout).revision, 2);
   });
 });
