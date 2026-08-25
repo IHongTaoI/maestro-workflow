@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "tpm-memory-smoke",
+  "status": "completed",
+  "revision": 1,
+  "graph": {
+    "name": "tpm-smoke",
+    "tasks": [
+      {
+        "id": "tpm-smoke",
+        "role": "tpm",
+        "description": "Produce a concise TPM smoke-test brief for a proposed `maestro health` command. State the goal, in-scope and out-of-scope behavior, three verifiable acceptance criteria, and one risk with mitigation. This is a read-only smoke test: do not create or modify files.",
+        "depends": [],
+        "acceptance": [
+          "Return a summary that covers goal, scope, acceptance criteria, and one risk.",
+          "Include exactly three concrete acceptance criteria.",
+          "Return artifacts as an empty array because this smoke test creates no files.",
+          "Return blockers as an empty array if no clarification is required."
+        ]
+      }
+    ]
+  },
+  "graphDigest": "8ae04821e3f12f3f00fb11c248e1bc49c50d11847a3b7f8aaac3c929d902be86",
+  "createdAt": "2026-08-25T13:42:44.894Z",
+  "updatedAt": "2026-08-25T13:49:22.678Z"
+}

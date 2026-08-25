@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "memory-tpm-memory-smoke-run-000001",
+  "taskId": "tpm-memory-smoke",
+  "runId": "run-000001",
+  "tags": [
+    "tpm-memory-smoke",
+    "tpm-smoke",
+    "tpm"
+  ],
+  "text": "Task tpm-memory-smoke revision 1 run run-000001 is completed.\n\ntpm-smoke (tpm): # TPM Smoke-Test Brief — `maestro health`\n\n## Goal\nVerify, read-only, that a proposed `maestro health` command works as a fast environment sanity check for the Maestro CLI: it should report whether the CLI, its runtime (Node/npm), and the DSH skill installation are usable — without changing any state.\n\n## Scope\n**In-scope**\n- Command exists, parses arguments, and runs to completion without error.\n- Reports structured status (e.g., `status: ok | degraded | error`) plus Node version, npm availability, and whether the installed DSH skill copy matches the repo-built version.\n- Exits non-zero with a human-readable reason when any checked component is unhealthy.\n- `--help` / `-h` prints usage and exits 0.\n\n**Out-of-scope**\n- No file creation, modification, or repair of any kind (no install, no `verify-dsh-skill`-style mutation, no state in `.maestro/`).\n- No network calls, telemetry, or external service checks.\n- No performance benchmarking, dependency-graph depth analysis, or functional testing of delivery workflows.\n\n## Acceptance Criteria (exactly three, verifiable)\n1. **Healthy exit + report:** In a known-good project, `maestro health` exits 0 and prints a report containing `status: ok`, the Node version, and the DSH skill install status.\n2. **Unhealthy exit + reason:** With the DSH skill copy tampered/missing, `maestro health` exits non-zero (1) and prints `status: error|degraded` with a concrete human-readable reason naming the failing check.\n3. **Read-only guarantee:** Running `maestro health` (including `--help`) leaves `.maestro/` and the skill files byte-identical — verified by checksums taken before and after the run.\n\n## Risk & Mitigation\n**Risk:** Shallow checks yield a false \"healthy\" result (e.g., CLI binary present but Node/npm actually broken), lulling users into skipping the authoritative `verify-dsh-skill`.\n**Mitigation:** Have health actually execute the runtime checks (`node --version`, `npm --version`) and compare the installed skill checksum against the repo-built copy, surfacing each check's pass/fail in the report; document in `--help` that `maestro health` is a smoke indicator only and `verify-dsh-skill` remains the authoritative verification.\nBlockers: none",
+  "sourceArtifactIds": [],
+  "createdAt": "2026-08-25T13:49:22.678Z"
+}

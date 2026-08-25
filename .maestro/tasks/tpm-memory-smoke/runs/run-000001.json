@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "id": "run-000001",
+  "taskId": "tpm-memory-smoke",
+  "taskRevision": 1,
+  "status": "completed",
+  "preparedAt": "2026-08-25T13:42:51.505Z",
+  "memoryQuery": [],
+  "taskContext": {
+    "taskId": "tpm-memory-smoke",
+    "taskRevision": 1,
+    "runId": "run-000001",
+    "memory": []
+  },
+  "workflow": {
+    "script": "const results = {};\nfor (const layer of args.layers) {\n  phase(layer.phase);\n  const batchResults = await parallel(layer.tasks.map((task) => async () => {\n    const dependencies = Object.fromEntries(task.depends.map((dependencyId) => [dependencyId, results[dependencyId]]));\n    const prompt = [\n      \"You are the Maestro \" + task.role + \" role.\",\n      \"Task: \" + task.description,\n      \"Acceptance criteria: \" + JSON.stringify(task.acceptance),\n      \"Completed dependency results: \" + JSON.stringify(dependencies),\n      \"Persisted task context: \" + JSON.stringify(args.taskContext ?? null),\n      \"Return only a JSON result that matches the supplied schema.\",\n    ].join(\"\\n\");\n    return await agent(prompt, { label: task.id, phase: layer.phase, schema: args.resultSchema });\n  }));\n\n  layer.tasks.forEach((task, index) => {\n    const result = batchResults[index];\n    if (result === null) throw new Error(\"Task failed: \" + task.id);\n    results[task.id] = result;\n  });\n}\nreturn { graph: args.graphName, tasks: results };",
+    "meta": {
+      "name": "maestro-tpm-smoke",
+      "description": "Execute the Maestro task graph \"tpm-smoke\".",
+      "whenToUse": "Use after the user has approved a validated Maestro task graph.",
+      "phases": [
+        {
+          "title": "layer-1",
+          "detail": "Run tpm-smoke."
+        }
+      ]
+    },
+    "args": {
+      "graphName": "tpm-smoke",
+      "layers": [
+        {
+          "phase": "layer-1",
+          "tasks": [
+            {
+              "id": "tpm-smoke",
+              "role": "tpm",
+              "description": "Produce a concise TPM smoke-test brief for a proposed `maestro health` command. State the goal, in-scope and out-of-scope behavior, three verifiable acceptance criteria, and one risk with mitigation. This is a read-only smoke test: do not create or modify files.",
+              "depends": [],
+              "acceptance": [
+                "Return a summary that covers goal, scope, acceptance criteria, and one risk.",
+                "Include exactly three concrete acceptance criteria.",
+                "Return artifacts as an empty array because this smoke test creates no files.",
+                "Return blockers as an empty array if no clarification is required."
+              ]
+            }
+          ]
+        }
+      ],
+      "resultSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "summary",
+          "artifacts",
+          "blockers"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "description"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "taskContext": {
+        "taskId": "tpm-memory-smoke",
+        "taskRevision": 1,
+        "runId": "run-000001",
+        "memory": []
+      }
+    }
+  },
+  "workflowDigest": "eb0fcec0763a3843cbe4211b6111c2fceea803347d95a542ecdb398d84c4edaf",
+  "recordedAt": "2026-08-25T13:49:22.678Z",
+  "result": {
+    "graph": "tpm-smoke",
+    "tasks": {
+      "tpm-smoke": {
+        "summary": "# TPM Smoke-Test Brief — `maestro health`\n\n## Goal\nVerify, read-only, that a proposed `maestro health` command works as a fast environment sanity check for the Maestro CLI: it should report whether the CLI, its runtime (Node/npm), and the DSH skill installation are usable — without changing any state.\n\n## Scope\n**In-scope**\n- Command exists, parses arguments, and runs to completion without error.\n- Reports structured status (e.g., `status: ok | degraded | error`) plus Node version, npm availability, and whether the installed DSH skill copy matches the repo-built version.\n- Exits non-zero with a human-readable reason when any checked component is unhealthy.\n- `--help` / `-h` prints usage and exits 0.\n\n**Out-of-scope**\n- No file creation, modification, or repair of any kind (no install, no `verify-dsh-skill`-style mutation, no state in `.maestro/`).\n- No network calls, telemetry, or external service checks.\n- No performance benchmarking, dependency-graph depth analysis, or functional testing of delivery workflows.\n\n## Acceptance Criteria (exactly three, verifiable)\n1. **Healthy exit + report:** In a known-good project, `maestro health` exits 0 and prints a report containing `status: ok`, the Node version, and the DSH skill install status.\n2. **Unhealthy exit + reason:** With the DSH skill copy tampered/missing, `maestro health` exits non-zero (1) and prints `status: error|degraded` with a concrete human-readable reason naming the failing check.\n3. **Read-only guarantee:** Running `maestro health` (including `--help`) leaves `.maestro/` and the skill files byte-identical — verified by checksums taken before and after the run.\n\n## Risk & Mitigation\n**Risk:** Shallow checks yield a false \"healthy\" result (e.g., CLI binary present but Node/npm actually broken), lulling users into skipping the authoritative `verify-dsh-skill`.\n**Mitigation:** Have health actually execute the runtime checks (`node --version`, `npm --version`) and compare the installed skill checksum against the repo-built copy, surfacing each check's pass/fail in the report; document in `--help` that `maestro health` is a smoke indicator only and `verify-dsh-skill` remains the authoritative verification.",
+        "artifacts": [],
+        "blockers": []
+      }
+    }
+  },
+  "artifactIds": [],
+  "memoryEntryId": "memory-tpm-memory-smoke-run-000001"
+}
