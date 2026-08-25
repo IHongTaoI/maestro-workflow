@@ -9,6 +9,8 @@ test("ships Lao Zhou and every MVP role as DSH skill assets", async () => {
   const skill = await readFile(new URL("SKILL.md", skillRoot), "utf8");
   assert.match(skill, /^---\nname: maestro-workflow\n/m);
   assert.match(skill, /todo_write/);
+  assert.match(skill, /npm run maestro -- compile-task-graph/);
+  assert.match(skill, /workflow/);
 
   for (const role of roles) {
     const content = await readFile(new URL(`roles/${role}.md`, skillRoot), "utf8");
