@@ -9,6 +9,9 @@ export interface CommandResult {
 
 export type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
 
+/** npm's Windows `dsh.cmd` shim requires cmd.exe resolution; the probe uses fixed arguments only. */
+export const useCommandShell = process.platform === "win32";
+
 export type DshProbeResult =
   | { status: "available"; command: "dsh"; version: string }
   | { status: "unavailable"; command: "dsh"; reason: string }
@@ -16,7 +19,7 @@ export type DshProbeResult =
   | { status: "error"; command: "dsh"; reason: string };
 
 export const runCommand: CommandRunner = (command, args) => new Promise((resolve) => {
-  const child = spawn(command, args, { shell: false, windowsHide: true });
+  const child = spawn(command, args, { shell: useCommandShell, windowsHide: true });
   let stdout = "";
   let stderr = "";
   let errorCode: string | undefined;

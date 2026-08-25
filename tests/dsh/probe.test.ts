@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { probeDsh, type CommandRunner } from "../../src/dsh/probe.ts";
+import { probeDsh, type CommandRunner, useCommandShell } from "../../src/dsh/probe.ts";
+
+test("uses cmd.exe resolution only on Windows for npm command shims", () => {
+  assert.equal(useCommandShell, process.platform === "win32");
+});
 
 test("reports an unavailable DSH CLI without treating it as a test failure", async () => {
   const runner: CommandRunner = async () => ({ exitCode: null, stdout: "", stderr: "", errorCode: "ENOENT" });
