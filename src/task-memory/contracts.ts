@@ -77,7 +77,7 @@ export type PersistedTaskContext = {
   memory: MemoryExcerpt[];
 };
 
-export type RecordedRun = PreparedRun & {
+export type RecordedRun = Omit<PreparedRun, "status"> & {
   status: "completed" | "blocked";
   recordedAt: string;
   result: WorkflowResult;

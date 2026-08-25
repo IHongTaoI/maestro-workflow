@@ -1,4 +1,5 @@
 import type { MaestroRole } from "../task-graph/types.ts";
+import type { PersistedTaskContext } from "../task-memory/contracts.ts";
 
 export interface DshWorkflowPhase {
   title: string;
@@ -54,6 +55,7 @@ export interface CompiledWorkflowArgs {
   graphName: string;
   layers: CompiledLayer[];
   resultSchema: typeof TASK_RESULT_SCHEMA;
+  taskContext?: PersistedTaskContext;
 }
 
 /** The model-facing subset of DSH's workflow tool input. */

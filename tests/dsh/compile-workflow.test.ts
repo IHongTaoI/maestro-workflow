@@ -48,3 +48,31 @@ tasks:
   assert.doesNotMatch(request.script, /injected/);
   assert.equal(request.args.layers[0]?.tasks[0]?.description, '"; throw new Error("injected"); //');
 });
+
+test("keeps persisted task context in workflow args rather than executable source", () => {
+  const graph = validateTaskGraph(parseTaskGraph(`
+tasks:
+  - id: task
+    role: tpm
+    description: Inspect the scope.
+`));
+
+  const request = compileTaskGraph(graph, {
+    taskContext: {
+      taskId: "health",
+      taskRevision: 2,
+      runId: "run-000003",
+      memory: [{
+        id: "memory-health-run-000001",
+        taskId: "health",
+        runId: "run-000001",
+        tags: ["health"],
+        text: "Never retry when the database is unavailable.",
+      }],
+    },
+  });
+
+  assert.equal(request.args.taskContext?.taskId, "health");
+  assert.doesNotMatch(request.script, /Never retry when the database is unavailable/);
+  assert.match(request.script, /Persisted task context/);
+});

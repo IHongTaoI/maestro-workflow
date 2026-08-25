@@ -36,9 +36,13 @@ export function taskRecordPath(projectRoot: string, taskId: string): string {
   return resolve(taskDirectory(projectRoot, taskId), "task.json");
 }
 
+export function runDirectory(projectRoot: string, taskId: string): string {
+  return resolve(taskDirectory(projectRoot, taskId), "runs");
+}
+
 export function runReceiptPath(projectRoot: string, taskId: string, runId: string): string {
   requireRunIdentifier(runId);
-  return resolve(taskDirectory(projectRoot, taskId), "runs", `${runId}.json`);
+  return resolve(runDirectory(projectRoot, taskId), `${runId}.json`);
 }
 
 export function artifactDirectory(projectRoot: string, artifactId: string): string {
@@ -54,7 +58,11 @@ export function artifactMetadataPath(projectRoot: string, artifactId: string): s
   return resolve(artifactDirectory(projectRoot, artifactId), "metadata.json");
 }
 
+export function memoryDirectory(projectRoot: string): string {
+  return resolve(projectStateRoot(projectRoot), "memory");
+}
+
 export function memoryEntryPath(projectRoot: string, memoryId: string): string {
   requireIdentifier(memoryId, "memory id");
-  return resolve(projectStateRoot(projectRoot), "memory", `${memoryId}.json`);
+  return resolve(memoryDirectory(projectRoot), `${memoryId}.json`);
 }

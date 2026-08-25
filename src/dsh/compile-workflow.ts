@@ -1,4 +1,5 @@
 import type { Task, TaskGraph } from "../task-graph/types.ts";
+import type { PersistedTaskContext } from "../task-memory/contracts.ts";
 import { TASK_RESULT_SCHEMA, type CompiledLayer, type DshWorkflowRequest } from "./workflow-contract.ts";
 
 const WORKFLOW_SCRIPT = `const results = {};
@@ -11,6 +12,7 @@ for (const layer of args.layers) {
       "Task: " + task.description,
       "Acceptance criteria: " + JSON.stringify(task.acceptance),
       "Completed dependency results: " + JSON.stringify(dependencies),
+      "Persisted task context: " + JSON.stringify(args.taskContext ?? null),
       "Return only a JSON result that matches the supplied schema.",
     ].join("\\n");
     return await agent(prompt, { label: task.id, phase: layer.phase, schema: args.resultSchema });
@@ -59,7 +61,11 @@ function dependencyLayers(graph: TaskGraph): CompiledLayer[] {
  * Compiles a validated static graph to the data accepted by DSH's `workflow` tool.
  * User YAML becomes JSON args only; it never becomes executable workflow source.
  */
-export function compileTaskGraph(graph: TaskGraph): DshWorkflowRequest {
+export type CompileTaskGraphOptions = {
+  taskContext?: PersistedTaskContext;
+};
+
+export function compileTaskGraph(graph: TaskGraph, options: CompileTaskGraphOptions = {}): DshWorkflowRequest {
   const layers = dependencyLayers(graph);
   return {
     script: WORKFLOW_SCRIPT,
@@ -76,6 +82,7 @@ export function compileTaskGraph(graph: TaskGraph): DshWorkflowRequest {
       graphName: graph.name,
       layers,
       resultSchema: TASK_RESULT_SCHEMA,
+      ...(options.taskContext === undefined ? {} : { taskContext: options.taskContext }),
     },
   };
 }
