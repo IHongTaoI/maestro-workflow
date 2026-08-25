@@ -12,7 +12,7 @@
 
 ## Scope and acceptance criteria
 
-- A constrained YAML Task Graph with `id`, `role`, `description`, `depends_on`, and optional `acceptance` is parsed and validated.
+- A constrained YAML Task Graph with `id`, `role`, `description`, `depends`, and optional `acceptance` is parsed and validated.
 - Invalid identifiers, unknown roles, duplicate IDs, missing dependencies, and cyclic graphs fail before compilation.
 - The compiler emits one deterministic DSH workflow request. Its `meta.phases` is display/progress vocabulary only; dependencies are represented exclusively in the generated script.
 - Independent ready tasks are dispatched through DSH `parallel()` and dependent tasks await their prerequisites. Compilation is deliberately limited to the DSH documented workflow hooks.

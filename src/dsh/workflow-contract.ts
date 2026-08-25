@@ -1,0 +1,64 @@
+import type { MaestroRole } from "../task-graph/types.ts";
+
+export interface DshWorkflowPhase {
+  title: string;
+  detail?: string;
+}
+
+export interface DshWorkflowMeta {
+  name: string;
+  description: string;
+  whenToUse: string;
+  phases: DshWorkflowPhase[];
+}
+
+export interface CompiledTask {
+  id: string;
+  role: MaestroRole;
+  description: string;
+  depends: string[];
+  acceptance: string[];
+}
+
+export interface CompiledLayer {
+  phase: string;
+  tasks: CompiledTask[];
+}
+
+export const TASK_RESULT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "artifacts", "blockers"],
+  properties: {
+    summary: { type: "string" },
+    artifacts: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["path", "description"],
+        properties: {
+          path: { type: "string" },
+          description: { type: "string" },
+        },
+      },
+    },
+    blockers: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+} as const;
+
+export interface CompiledWorkflowArgs {
+  graphName: string;
+  layers: CompiledLayer[];
+  resultSchema: typeof TASK_RESULT_SCHEMA;
+}
+
+/** The model-facing subset of DSH's workflow tool input. */
+export interface DshWorkflowRequest {
+  script: string;
+  meta: DshWorkflowMeta;
+  args: CompiledWorkflowArgs;
+}
