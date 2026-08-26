@@ -4,7 +4,7 @@ import { relative, resolve, sep } from "node:path";
 
 import { atomicCreateJson } from "./atomic.ts";
 import { withTaskLock } from "./task-lock.ts";
-import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError } from "./project-path.ts";
+import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError, resolveProjectContainedExistingPath } from "./project-path.ts";
 import { writeMemoryEntry } from "../task-memory/memory-store.ts";
 import type { MemoryEntry } from "../task-memory/contracts.ts";
 import { workspaceRoot } from "../workspace/paths.ts";
@@ -260,13 +260,21 @@ export async function collectResult(options: {
   const expectedOutputs = proposal.expectedOutputs.map(relativePath);
   const artifacts = [];
   for (const declared of options.artifactPaths.map(relativePath)) {
-    await requireContainedPath(options.projectRoot, declared);
     if (!expectedOutputs.some((prefix) => below(declared, prefix))) {
       throw new CoreProtocolError(`result artifact was not declared by proposal: ${declared}`);
     }
-    const absolute = resolve(options.projectRoot, declared);
+    const lexical = resolve(options.projectRoot, declared);
+    const declaredStat = await lstat(lexical);
+    if (!declaredStat.isFile() || declaredStat.isSymbolicLink()) throw new CoreProtocolError(`result artifact must be a regular file: ${declared}`);
+    let absolute: string;
+    try {
+      absolute = await resolveProjectContainedExistingPath(options.projectRoot, declared, "result artifact");
+    } catch (error) {
+      if (error instanceof ProjectPathError) throw new CoreProtocolError(error.message);
+      throw error;
+    }
     const stat = await lstat(absolute);
-    if (!stat.isFile() || stat.isSymbolicLink()) throw new CoreProtocolError(`result artifact must be a regular file: ${declared}`);
+    if (!stat.isFile()) throw new CoreProtocolError(`result artifact must be a regular file: ${declared}`);
     const contents = await readFile(absolute);
     artifacts.push({ path: declared, sha256: createHash("sha256").update(contents).digest("hex"), byteLength: contents.length });
   }

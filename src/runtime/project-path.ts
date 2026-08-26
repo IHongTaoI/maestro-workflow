@@ -14,7 +14,8 @@ function isMissing(error: unknown): boolean {
 
 function outside(root: string, target: string): boolean {
   const pathFromRoot = relative(root, target);
-  return pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`) || posix.isAbsolute(pathFromRoot.replaceAll("\\", "/"));
+  const portable = pathFromRoot.replaceAll("\\", "/");
+  return pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`) || posix.isAbsolute(portable) || /^[A-Za-z]:\//.test(portable);
 }
 
 /** Normalizes a user-supplied project path before any prefix or permission checks. */
@@ -50,4 +51,18 @@ export async function assertProjectContainedPath(projectRoot: string, projectRel
       current = parent;
     }
   }
+}
+
+/** Resolves an existing path once and returns the canonical in-project target for safe reads. */
+export async function resolveProjectContainedExistingPath(projectRoot: string, projectRelativePath: string, label = "path"): Promise<string> {
+  const root = await realpath(resolve(projectRoot));
+  let resolved: string;
+  try {
+    resolved = await realpath(resolve(projectRoot, projectRelativePath));
+  } catch (error) {
+    if (isMissing(error)) throw new ProjectPathError(`${label} does not exist: ${projectRelativePath}`);
+    throw error;
+  }
+  if (outside(root, resolved)) throw new ProjectPathError(`${label} escapes project root through a symlink: ${projectRelativePath}`);
+  return resolved;
 }

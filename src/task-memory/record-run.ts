@@ -18,7 +18,7 @@ import { artifactContentPath, artifactDirectory, artifactMetadataPath, runCommit
 import { loadPreparedRun, TaskRunConflictError } from "./task-run.ts";
 import { type Clock, loadTask, persistTask } from "./task-store.ts";
 import { atomicCreateJson } from "../runtime/atomic.ts";
-import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError } from "../runtime/project-path.ts";
+import { normalizeProjectRelativePath, ProjectPathError, resolveProjectContainedExistingPath } from "../runtime/project-path.ts";
 import { withTaskLock } from "../runtime/task-lock.ts";
 import { writeRoleState } from "../memory/three-layer-store.ts";
 
@@ -141,22 +141,30 @@ async function requireArtifactFile(projectRoot: string, declaredPath: string): P
   let normalized: string;
   try {
     normalized = normalizeProjectRelativePath(declaredPath, "Artifact path");
-    await assertProjectContainedPath(projectRoot, normalized, "Artifact path");
   } catch (error) {
     if (error instanceof ProjectPathError) throw new TaskRunRecordError(error.message);
     throw error;
   }
-  const sourcePath = resolve(projectRoot, normalized);
+  const lexicalPath = resolve(projectRoot, normalized);
 
-  let stat: Stats;
+  let declaredStat: Stats;
   try {
-    stat = await lstat(sourcePath);
+    declaredStat = await lstat(lexicalPath);
   } catch {
     throw new TaskRunRecordError(`Artifact file does not exist: ${declaredPath}`);
   }
-  if (!stat.isFile() || stat.isSymbolicLink()) {
+  if (!declaredStat.isFile() || declaredStat.isSymbolicLink()) {
     throw new TaskRunRecordError(`Artifact must be a regular project file: ${declaredPath}`);
   }
+  let sourcePath: string;
+  try {
+    sourcePath = await resolveProjectContainedExistingPath(projectRoot, normalized, "Artifact path");
+  } catch (error) {
+    if (error instanceof ProjectPathError) throw new TaskRunRecordError(error.message);
+    throw error;
+  }
+  const stat = await lstat(sourcePath);
+  if (!stat.isFile()) throw new TaskRunRecordError(`Artifact must be a regular project file: ${declaredPath}`);
   if (stat.size > MAX_ARTIFACT_BYTES) {
     throw new TaskRunRecordError(`Artifact exceeds the ${MAX_ARTIFACT_BYTES} byte snapshot limit: ${declaredPath}`);
   }
