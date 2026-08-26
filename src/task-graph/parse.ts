@@ -29,6 +29,13 @@ function stringArray(value: unknown, path: string): string[] {
   return [...value];
 }
 
+function attempts(value: unknown, path: string): number {
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 3) {
+    throw new TaskGraphParseError(`${path} must be an integer between 1 and 3`);
+  }
+  return value as number;
+}
+
 function rejectUnknownFields(record: UnknownRecord, allowed: readonly string[], path: string): void {
   for (const field of Object.keys(record)) {
     if (!allowed.includes(field)) {
@@ -41,13 +48,15 @@ function parseTask(value: unknown, index: number): ParsedTask {
   const path = `tasks[${index}]`;
   if (!isRecord(value)) throw new TaskGraphParseError(`${path} must be a mapping`);
 
-  rejectUnknownFields(value, ["id", "role", "description", "depends", "acceptance"], path);
+  rejectUnknownFields(value, ["id", "role", "description", "depends", "acceptance", "writes", "maxAttempts"], path);
   return {
     id: requireString(value.id, `${path}.id`),
     role: requireString(value.role, `${path}.role`),
     description: requireString(value.description, `${path}.description`),
     depends: value.depends === undefined ? [] : stringArray(value.depends, `${path}.depends`),
     acceptance: value.acceptance === undefined ? [] : stringArray(value.acceptance, `${path}.acceptance`),
+    writes: value.writes === undefined ? [] : stringArray(value.writes, `${path}.writes`),
+    maxAttempts: value.maxAttempts === undefined ? 3 : attempts(value.maxAttempts, `${path}.maxAttempts`),
   };
 }
 

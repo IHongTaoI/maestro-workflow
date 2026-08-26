@@ -2,6 +2,11 @@ import { isMaestroRole, type ParsedTaskGraph, type Task, type TaskGraph } from "
 
 const IDENTIFIER = /^[a-z][a-z0-9-]*$/;
 
+function validWritePath(value: string): boolean {
+  const normalized = value.replaceAll("\\", "/");
+  return normalized !== "" && !normalized.startsWith("/") && normalized !== ".." && !normalized.startsWith("../") && !/^[A-Za-z]:\//.test(normalized);
+}
+
 export class TaskGraphValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -61,6 +66,12 @@ export function validateTaskGraph(graph: ParsedTaskGraph): TaskGraph {
       }
       dependencies.add(dependency);
     }
+    const writes = new Set<string>();
+    for (const path of task.writes) {
+      if (!validWritePath(path)) throw new TaskGraphValidationError(`task "${task.id}" has unsafe write path "${path}"`);
+      if (writes.has(path)) throw new TaskGraphValidationError(`task "${task.id}" has duplicate write path "${path}"`);
+      writes.add(path);
+    }
   }
 
   for (const task of graph.tasks) {
@@ -81,6 +92,8 @@ export function validateTaskGraph(graph: ParsedTaskGraph): TaskGraph {
       role: task.role,
       depends: [...task.depends],
       acceptance: [...task.acceptance],
+      writes: [...task.writes],
+      maxAttempts: task.maxAttempts,
     };
   });
 

@@ -16,16 +16,16 @@ removed V2 Runtime or its data format.
 
 V3 stores project-owned state under `.maestro/`. A task has a validated, versioned Task Graph and
 at most one active run. Preparing a run persists its `running` state and exact compiled DSH request
-before returning it. Recording a DSH result writes an immutable run receipt, snapshots every declared
+before returning it. Recording a DSH result writes a separate immutable result receipt, snapshots every declared
 regular-file Artifact inside `.maestro/artifacts/`, and derives a source-linked project-memory entry.
 
-Task data, run receipts, Artifact metadata and memory entries are intended to be committed to Git.
+Task data, prepared/result receipts, Artifact metadata and memory entries are intended to be committed to Git.
 They are portable JSON/Markdown and never contain an absolute project path. Cache and lock files,
 if introduced later, must be ignored separately.
 
-Project-memory retrieval is explicit. It uses deterministic keyword matching over stored entry text
-and tags, then injects bounded excerpts into the compiled workflow `args`. V3 does not introduce a
-vector database, remote service, generic Runtime, or DSH execution transport.
+Project-memory retrieval is explicit. It uses deterministic scoped matching over stored entry text
+and tags, then injects bounded per-role excerpts into the compiled workflow `args`. V3 does not
+introduce a vector database, remote service, or DSH execution transport.
 
 ## Consequences
 

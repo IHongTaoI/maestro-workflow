@@ -28,6 +28,8 @@ tasks:
         description: "Define the scope and acceptance criteria.",
         depends: [],
         acceptance: ["Requirements are explicit."],
+        writes: [],
+        maxAttempts: 3,
       },
       {
         id: "architecture",
@@ -35,6 +37,8 @@ tasks:
         description: "Design the implementation.",
         depends: ["specification"],
         acceptance: [],
+        writes: [],
+        maxAttempts: 3,
       },
     ],
   });

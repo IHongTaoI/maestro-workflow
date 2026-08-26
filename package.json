@@ -1,8 +1,17 @@
 {
   "name": "@maestro/v3-dsh",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "private": false,
   "type": "module",
+  "bin": {
+    "maestro": "bin/maestro.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "README.md"
+  ],
   "engines": {
     "node": ">=22.18"
   },
@@ -12,15 +21,15 @@
     "dsh:compile": "tsx src/cli.ts compile-task-graph",
     "dsh:install-skill": "tsx src/cli.ts install-dsh-skill",
     "dsh:verify-skill": "tsx src/cli.ts verify-dsh-skill",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts tests/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "tsx": "^4.20.3",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
-    "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }
 }

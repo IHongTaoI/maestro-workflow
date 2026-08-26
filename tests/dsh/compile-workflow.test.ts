@@ -76,3 +76,23 @@ tasks:
   assert.doesNotMatch(request.script, /Never retry when the database is unavailable/);
   assert.match(request.script, /Persisted task context/);
 });
+
+test("serializes tasks with overlapping write sets and caps retries at three", () => {
+  const graph = validateTaskGraph(parseTaskGraph(`
+name: conflict-safe
+tasks:
+  - id: first
+    role: coder
+    description: Change API files.
+    writes: [src/api]
+    maxAttempts: 2
+  - id: second
+    role: coder
+    description: Change one API file.
+    writes: [src/api/handler.ts]
+`));
+  const request = compileTaskGraph(graph);
+  assert.deepEqual(request.args.layers.map((layer) => layer.tasks.map((task) => task.id)), [["first"], ["second"]]);
+  assert.equal(request.args.layers[0]?.tasks[0]?.maxAttempts, 2);
+  assert.match(request.script, /attempt <= task\.maxAttempts/);
+});

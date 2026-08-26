@@ -6,6 +6,9 @@ import { TASK_MEMORY_SCHEMA_VERSION, TASK_STATUS, type StoredTask } from "./cont
 import { taskDirectory, taskRecordPath } from "./paths.ts";
 import type { TaskGraph } from "../task-graph/types.ts";
 import { validateTaskGraph } from "../task-graph/validate.ts";
+import { atomicWriteJson } from "../runtime/atomic.ts";
+import { withTaskLock } from "../runtime/task-lock.ts";
+import { taskLockPath } from "./paths.ts";
 
 export type Clock = () => Date;
 
@@ -126,36 +129,38 @@ async function writeJson(path: string, value: unknown, exclusive = false): Promi
 export async function persistTask(projectRoot: string, task: StoredTask): Promise<void> {
   await requireProjectRoot(projectRoot);
   const normalized = parseStoredTask(task, task.id);
-  await writeJson(taskRecordPath(projectRoot, normalized.id), normalized);
+  await atomicWriteJson(taskRecordPath(projectRoot, normalized.id), normalized);
 }
 
 /** Creates one task from an already validated graph and never overwrites an existing task. */
 export async function createTask(options: CreateTaskOptions): Promise<StoredTask> {
   await requireProjectRoot(options.projectRoot);
-  const graph = normalizeGraph(options.graph);
-  const timestamp = now(options.clock);
-  const task: StoredTask = {
-    schemaVersion: TASK_MEMORY_SCHEMA_VERSION,
-    id: options.taskId,
-    status: "ready",
-    revision: 1,
-    graph,
-    graphDigest: graphDigest(graph),
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  const recordPath = taskRecordPath(options.projectRoot, options.taskId);
+  return withTaskLock(taskLockPath(options.projectRoot, options.taskId), async () => {
+    const graph = normalizeGraph(options.graph);
+    const timestamp = now(options.clock);
+    const task: StoredTask = {
+      schemaVersion: TASK_MEMORY_SCHEMA_VERSION,
+      id: options.taskId,
+      status: "ready",
+      revision: 1,
+      graph,
+      graphDigest: graphDigest(graph),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    const recordPath = taskRecordPath(options.projectRoot, options.taskId);
 
-  try {
-    await mkdir(taskDirectory(options.projectRoot, options.taskId), { recursive: true });
-    await writeJson(recordPath, task, true);
-  } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") {
-      throw new TaskAlreadyExistsError(options.taskId);
+    try {
+      await mkdir(taskDirectory(options.projectRoot, options.taskId), { recursive: true });
+      await writeJson(recordPath, task, true);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") {
+        throw new TaskAlreadyExistsError(options.taskId);
+      }
+      throw error;
     }
-    throw error;
-  }
-  return task;
+    return task;
+  });
 }
 
 export async function loadTask(options: LoadTaskOptions): Promise<StoredTask> {
@@ -172,18 +177,20 @@ export async function loadTask(options: LoadTaskOptions): Promise<StoredTask> {
 
 /** Revisions replace only the Task Graph and are forbidden once a run is active. */
 export async function reviseTask(options: ReviseTaskOptions): Promise<StoredTask> {
-  const current = await loadTask(options);
-  if (current.activeRunId !== undefined) throw new TaskHasActiveRunError(options.taskId);
+  return withTaskLock(taskLockPath(options.projectRoot, options.taskId), async () => {
+    const current = await loadTask(options);
+    if (current.activeRunId !== undefined) throw new TaskHasActiveRunError(options.taskId);
 
-  const graph = normalizeGraph(options.graph);
-  const revised: StoredTask = {
-    ...current,
-    status: "ready",
-    revision: current.revision + 1,
-    graph,
-    graphDigest: graphDigest(graph),
-    updatedAt: now(options.clock),
-  };
-  await persistTask(options.projectRoot, revised);
-  return revised;
+    const graph = normalizeGraph(options.graph);
+    const revised: StoredTask = {
+      ...current,
+      status: "ready",
+      revision: current.revision + 1,
+      graph,
+      graphDigest: graphDigest(graph),
+      updatedAt: now(options.clock),
+    };
+    await persistTask(options.projectRoot, revised);
+    return revised;
+  });
 }
