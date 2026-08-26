@@ -48,11 +48,14 @@ function parseTask(value: unknown, index: number): ParsedTask {
   const path = `tasks[${index}]`;
   if (!isRecord(value)) throw new TaskGraphParseError(`${path} must be a mapping`);
 
-  rejectUnknownFields(value, ["id", "role", "description", "depends", "acceptance", "writes", "maxAttempts"], path);
+  rejectUnknownFields(value, ["id", "role", "description", "title", "depends", "acceptance", "writes", "maxAttempts"], path);
+  if (value.description !== undefined && value.title !== undefined) {
+    throw new TaskGraphParseError(`${path} must not contain both "description" and compatibility alias "title"`);
+  }
   return {
     id: requireString(value.id, `${path}.id`),
     role: requireString(value.role, `${path}.role`),
-    description: requireString(value.description, `${path}.description`),
+    description: requireString(value.description ?? value.title, `${path}.description`),
     depends: value.depends === undefined ? [] : stringArray(value.depends, `${path}.depends`),
     acceptance: value.acceptance === undefined ? [] : stringArray(value.acceptance, `${path}.acceptance`),
     writes: value.writes === undefined ? [] : stringArray(value.writes, `${path}.writes`),
@@ -69,7 +72,10 @@ export function parseTaskGraph(source: string): ParsedTaskGraph {
 
   const root = document.toJS();
   if (!isRecord(root)) throw new TaskGraphParseError("task graph root must be a mapping");
-  rejectUnknownFields(root, ["name", "tasks"], "task graph root");
+  rejectUnknownFields(root, ["name", "tasks", "version"], "task graph root");
+  if (root.version !== undefined && root.version !== 1) {
+    throw new TaskGraphParseError("task graph root.version must be 1 when specified");
+  }
 
   if (!Array.isArray(root.tasks)) throw new TaskGraphParseError("task graph root.tasks must be an array");
   const name = root.name === undefined ? "delivery" : requireString(root.name, "task graph root.name");

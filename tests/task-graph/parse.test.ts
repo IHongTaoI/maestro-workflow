@@ -57,3 +57,36 @@ test("rejects non-array dependencies before compilation", () => {
     (error: unknown) => error instanceof TaskGraphParseError && error.message.includes("depends"),
   );
 });
+
+test("accepts controlled version and title compatibility aliases", () => {
+  assert.deepEqual(parseTaskGraph(`
+version: 1
+name: compatibility
+tasks:
+  - id: inspect
+    role: laborer
+    title: Inspect the current behavior.
+`), {
+    name: "compatibility",
+    tasks: [{
+      id: "inspect",
+      role: "laborer",
+      description: "Inspect the current behavior.",
+      depends: [],
+      acceptance: [],
+      writes: [],
+      maxAttempts: 3,
+    }],
+  });
+});
+
+test("rejects unsupported graph versions and ambiguous task descriptions", () => {
+  assert.throws(
+    () => parseTaskGraph("version: 2\ntasks: []"),
+    (error: unknown) => error instanceof TaskGraphParseError && error.message.includes("version must be 1"),
+  );
+  assert.throws(
+    () => parseTaskGraph("tasks:\n  - id: a\n    role: tpm\n    title: A\n    description: B"),
+    (error: unknown) => error instanceof TaskGraphParseError && error.message.includes("must not contain both"),
+  );
+});

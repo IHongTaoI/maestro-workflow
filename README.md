@@ -37,6 +37,7 @@ Old Zhou selects a mode with the user, then creates a workspace below
 | Lite | intake → implementation → testing → delivery |
 | Plan | intake → planning → implementation → testing → delivery |
 | Workflow | intake → requirements → design → architecture → planning → implementation → testing → delivery |
+| Diagnosis | intake → diagnosis → planning → implementation → testing → delivery |
 
 ```powershell
 npx --no-install maestro create-workspace --workspace 202608260900-health --mode workflow --identity "Health endpoint" --file request.md
@@ -48,6 +49,12 @@ Every stage transition validates required artifacts and creates an immutable che
 severity is explicit: Minor, Major or Critical. Testing advances only when
 `testing/test-report.md` contains `status: passed`; delivery completes only with
 `delivery/report.md` containing `status: accepted`.
+
+Use Diagnosis for bugs and performance work whose root cause is not yet supported by evidence.
+The stage loops over baseline collection, traces/profiles, hypotheses and minimal experiments. It
+cannot advance until `diagnosis/report.md` declares `status: confirmed`, `problem_type`, a measured
+`baseline`, `root_cause`, `evidence` and `success_metric`. Only then is the implementation Task
+Graph frozen. Diagnostic scripts are evidence Artifacts, not automatically production code.
 
 ## Task Graph and execution
 
@@ -66,6 +73,10 @@ tasks:
     acceptance:
       - Unit tests pass.
 ```
+
+Canonical graphs omit `version` and use `description`, not `title`. For existing generated graphs,
+the parser accepts only the controlled aliases `version: 1` and `title`; it rejects other versions
+and ambiguous tasks containing both `title` and `description`.
 
 ```powershell
 npx --no-install maestro compile-task-graph --file planning/task-graph.yaml
@@ -112,6 +123,12 @@ cursor and source hash.
 The DSH Skill ships Old Zhou plus TPM, Laborer, Architect, Orchestrator, Coder, Test Designer,
 Test Runner and Delivery. Legacy `planner` and `tester` role names remain accepted for old graphs.
 Roles can return `needsUserInput`, `needsDelegation` and a bounded `roleState`.
+
+Maestro does not create DSH Goals. The foreground controller must not call `create_goal` unless the
+user explicitly requests DSH Goal mode. While delegated Agents are running, Old Zhou waits or
+checks status; lack of a file is not a failure signal, and the controller never takes over role
+implementation. `npx --no-install` is reserved for the `maestro` package binary; Node scripts use
+`node` directly.
 
 See [the implementation contract](docs/maestro-v3-implementation.md), the
 [DSH ownership decision](docs/decisions/0001-dsh-owns-agent-execution.md), and the

@@ -56,3 +56,50 @@ test("enforces the full workflow lifecycle, checkpoints and delivery gates", asy
     await rm(projectRoot, { recursive: true, force: true });
   }
 });
+
+test("keeps diagnosis iterative until evidence and a confirmed root cause exist", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "maestro-diagnosis-"));
+  try {
+    const id = "202608261000-startup-performance";
+    const root = workspaceRoot(projectRoot, id);
+    let meta = await createWorkspace({
+      projectRoot,
+      workspaceId: id,
+      identity: "Diagnose startup performance",
+      mode: "diagnosis",
+      request: "Find the measured bottleneck before optimizing.",
+    });
+    meta = await advanceWorkspace({ projectRoot, workspaceId: id });
+    assert.equal(meta.currentStage, "diagnosis");
+
+    await mkdir(join(root, "diagnosis"), { recursive: true });
+    await writeFile(join(root, "diagnosis", "plan.md"), "# Measurement plan\n");
+    await writeFile(join(root, "diagnosis", "report.md"), "status: investigating\nproblem_type: performance\n");
+    await assert.rejects(advanceWorkspace({ projectRoot, workspaceId: id }), /status: confirmed/);
+
+    await writeFile(join(root, "diagnosis", "report.md"), [
+      "status: confirmed",
+      "problem_type: performance",
+      "baseline: LCP p75 is 4.2 seconds",
+      "root_cause: render-blocking startup bundle",
+      "evidence: trace and coverage identify 1.4 MB unused startup JavaScript",
+      "success_metric: LCP p75 below 3 seconds",
+      "",
+      "# Evidence",
+      "Detailed experiment notes.",
+      "",
+    ].join("\n"));
+    meta = await advanceWorkspace({ projectRoot, workspaceId: id });
+    assert.equal(meta.currentStage, "planning");
+
+    await mkdir(join(root, "planning"), { recursive: true });
+    await writeFile(join(root, "planning", "task-plan.md"), "# Tasks\n");
+    await writeFile(join(root, "planning", "automated-test-plan.md"), "# Tests\n");
+    await assert.rejects(advanceWorkspace({ projectRoot, workspaceId: id }), /task-graph.yaml/);
+    await writeFile(join(root, "planning", "task-graph.yaml"), "name: optimize-startup\ntasks: []\n");
+    meta = await advanceWorkspace({ projectRoot, workspaceId: id });
+    assert.equal(meta.currentStage, "implementation");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});

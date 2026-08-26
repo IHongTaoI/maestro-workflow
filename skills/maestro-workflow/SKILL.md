@@ -20,11 +20,18 @@ npx --no-install maestro probe-host
 
 探针失败必须停止，不得把纸面兼容当成实机通过。todo_write 只能表示当前 DSH 会话进度，不能替代磁盘状态、Task Graph 或跨会话记忆。
 
+`npx --no-install` 只用于调用项目依赖提供的 `maestro` 可执行文件。运行 JavaScript 必须直接使用 `node` 或明确的 `node.exe`，禁止生成 `npx --no-install node ...`；实际 Node 版本必须满足项目 `engines`。不得通过 `NODE_TLS_REJECT_UNAUTHORIZED=0` 关闭 TLS 校验。
+
+## DSH Goal 边界
+
+Maestro 模式禁止调用 `create_goal`，也不把 DSH Goal 当作持续执行、等待、恢复或工作区生命周期。用户要求“开工”或确认运行 Maestro Workflow，不等于授权创建 Goal。只有用户明确要求使用 DSH Goal 时才能例外，并且必须先说明它不属于 Maestro 的持久状态。Maestro 正常执行只调用编译结果对应的一次 `workflow`。
+
 ## 模式
 
 - Lite：范围明确的小修改，走 intake → implementation → testing → delivery。
 - Plan：需要任务计划但不需要完整架构阶段，走 intake → planning → implementation → testing → delivery。
 - Workflow：复杂交付，走 requirements → design → architecture → planning → implementation → testing → delivery。
+- Diagnosis：Bug 根因、性能瓶颈或其他结论依赖尚未采集证据的任务，走 intake → diagnosis → planning → implementation → testing → delivery。
 
 未确定模式时先用大白话说明判断，得到用户确认后再创建工作区。工作区状态位于 `.agents/.local/work/<workspace-id>/`：
 
@@ -33,6 +40,17 @@ npx --no-install maestro create-workspace --workspace <id> --mode <mode> --ident
 ```
 
 阶段产物完成后使用 `advance-workspace`；每次推进都会冻结不可变 checkpoint。范围变更必须使用 `revise-workspace`，并明确 Minor、Major 或 Critical，不能直接覆盖已冻结阶段。
+
+## Diagnosis 模式
+
+当解决方案依赖尚未获得的数据、复现结果、Trace、Coverage、Profile、日志或实验结论时，禁止提前冻结实施 Task Graph，必须先进入 Diagnosis。采集和分析是诊断任务，不是已经确定方案后的实施任务。
+
+Diagnosis 阶段维护：
+
+- `diagnosis/plan.md`：问题类型、基线指标、采集方法、假设与下一项最小实验。
+- `diagnosis/report.md`：首部包含 `status: investigating|confirmed`、`problem_type: bug|performance`、`baseline`、`root_cause`、`evidence`、`success_metric`。
+
+每次只执行能验证当前假设的最小采集或实验，然后依据新证据更新计划；`status` 仍为 `investigating` 时继续留在 Diagnosis，不得进入设计或实施。只有可复现基线、根因证据和成功指标齐全并写为 `status: confirmed` 后，才能推进到 planning、生成 Task Graph，并进入现有实施与验证流程。诊断脚本属于可审计 Artifact，不得被默认为最终产品代码。
 
 ## 角色和调度
 
@@ -47,7 +65,33 @@ npx --no-install maestro create-workspace --workspace <id> --mode <mode> --ident
 
 角色返回 `needsUserInput` 时，由老周翻译成大白话询问用户；返回 `needsDelegation` 时，由老周重新路由。角色结果必须是结构化 JSON：summary、artifacts、blockers，并维护精简 roleState。
 
-Workflow 的架构阶段输出并冻结 `planning/task-graph.yaml`。创建和准备持久任务：
+### 等待和接管
+
+存在 `running` 的 SubAgent 时，老周进入 `waiting_for_delegates`：只能等待、查询状态或向用户报告进度。暂时没有文件、仍在阅读或规划、运行不足 15 分钟，都不能判定卡死；复杂诊断和编码任务默认至少等待 30 分钟。只有明确 `completed`、`failed`、`blocked`、达到约定超时或用户要求取消时才能结束委派。
+
+确需取消时必须先中断并确认 `subagent-settled`。取消后只能依据已保存证据重新拆分或派发，老周不得亲自搜索大量文件、写脚本、修改业务代码或执行原角色任务。不得用“不等了，我来做”推进 Maestro。
+
+## Task Graph 契约
+
+新图只使用以下规范字段，不生成根字段 `version`，不生成任务字段 `title`：
+
+```yaml
+name: startup-optimization
+tasks:
+  - id: implement-lazy-loading
+    role: coder
+    description: Implement the confirmed lazy-loading change.
+    depends: []
+    acceptance:
+      - Startup bundle decreases without functional regression.
+    writes:
+      - src/startup
+    maxAttempts: 3
+```
+
+根只允许 `name`、`tasks`；任务只允许 `id`、`role`、`description`、`depends`、`acceptance`、`writes`、`maxAttempts`。兼容解析器可以读取旧图的 `version: 1` 和 `title`，但新产物不得继续生成兼容别名。写入后必须先运行 `compile-task-graph`，通过后才能创建任务。
+
+Workflow 的架构阶段、Diagnosis/Plan 的 planning 阶段输出并冻结 `planning/task-graph.yaml`。创建和准备持久任务：
 
 ```powershell
 npx --no-install maestro create-task --task <task-id> --file planning/task-graph.yaml

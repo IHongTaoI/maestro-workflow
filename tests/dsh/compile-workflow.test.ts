@@ -31,6 +31,7 @@ tasks:
   assert.match(request.script, /await parallel\(layer\.tasks\.map/);
   assert.match(request.script, /await agent\(prompt/);
   assert.match(request.script, /phase\(layer\.phase\)/);
+  assert.doesNotMatch(request.script, /create_goal/);
   assert.doesNotMatch(request.script, /Implement the approved design/);
   assert.doesNotThrow(() => new Function(`return (async () => {\n${request.script}\n})();`));
 });

@@ -14,6 +14,7 @@ import { createExecutionPlan } from "./task-graph/execution.ts";
 import { initializeHost, verifyHostInstallation, type MaestroHost } from "./hosts/init.ts";
 import { createWorkspace, advanceWorkspace, loadWorkspace, reviseWorkspace, setWorkspacePaused } from "./workspace/store.ts";
 import type { RevisionSeverity, WorkMode, WorkspaceStage } from "./workspace/contracts.ts";
+import { WORK_MODES } from "./workspace/contracts.ts";
 import { createTemporaryDraft, promoteWikiEntry, queryWiki, setTemporaryDraftStatus, writeCurrentMemorySummary } from "./memory/three-layer-store.ts";
 import type { CurrentMemorySummary } from "./memory/contracts.ts";
 import { recordTestReport, writeDeliveryReport, type TestCheck } from "./testing/gate.ts";
@@ -78,7 +79,7 @@ const HELP = `Usage:
   maestro record-task-run --task <task-id> --file <workflow-result.json> [--project <project-root>]
   maestro revise-task --task <task-id> --file <task-graph.yaml> [--project <project-root>]
   maestro query-memory --query <query> [--project <project-root>]
-  maestro create-workspace --workspace <id> --mode <lite|plan|workflow> --identity <text> --file <request.md> [--project <root>]
+  maestro create-workspace --workspace <id> --mode <lite|plan|workflow|diagnosis> --identity <text> --file <request.md> [--project <root>]
   maestro workspace-status|advance-workspace|pause-workspace|resume-workspace --workspace <id> [--project <root>]
   maestro revise-workspace --workspace <id> --severity <minor|major|critical> --reason <text> [--stage <stage>] [--project <root>]
   maestro create-draft --draft <id> --file <text.md> [--workspace <id>] [--project <root>]
@@ -220,7 +221,7 @@ export function parseCliArguments(args: readonly string[], currentDirectory = pr
   }
   if (command === "create-workspace") {
     const mode = requiredOption(parsedOptions, command, "--mode");
-    if (!(["lite", "plan", "workflow"] as string[]).includes(mode)) throw new Error("--mode must be lite, plan, or workflow");
+    if (!(WORK_MODES as readonly string[]).includes(mode)) throw new Error("--mode must be lite, plan, workflow, or diagnosis");
     return {
       command,
       projectRoot,

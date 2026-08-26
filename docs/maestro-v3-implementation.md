@@ -14,6 +14,7 @@ pretends that compilation proves live execution.
   events.jsonl
   progress.md
   input/request.md
+  diagnosis/
   requirements/
   design/
   planning/
@@ -49,12 +50,21 @@ Revisions never mutate a checkpoint. Minor, Major and Critical requests move the
 an allowed stage and increment that stage revision. Critical revisions return a Workflow workspace
 to requirements.
 
+Diagnosis is a separate mode for unknown bug roots and performance bottlenecks. It remains in an
+evidence loop until its report confirms a baseline, root cause, supporting evidence and success
+metric. The Runtime rejects an attempted transition while the report is still investigating or any
+required field is absent. A static implementation Task Graph is frozen only after that gate.
+
 ## Role execution
 
 Old Zhou is a clean controller and user translator. Roles do concrete work and return schema-valid
 results. The Orchestrator produces a frozen plan and execution ledger. Write-set overlap serializes
 otherwise dependency-ready tasks. A task has one to three attempts; exhausting attempts produces a
 blocked result rather than an unbounded loop.
+
+DSH Goal state is not part of Maestro orchestration. The Skill forbids an implicit `create_goal`
+call and treats a live delegated Agent as a valid controller wait state. No-file-yet is not failure;
+after an intentional cancellation the controller may re-route work but may not implement it.
 
 ## Memory promotion
 
@@ -89,3 +99,5 @@ a failed host report and the Skill requires Old Zhou to stop before starting a W
 Existing schema-version-1 Task Graphs remain valid: missing `writes` defaults to an empty set and
 missing `maxAttempts` defaults to three. Legacy `planner` and `tester` roles remain recognized.
 Existing prepared run receipts can still resume; new completions use a separate `.result.json`.
+The parser also normalizes the controlled legacy aliases `version: 1` and task `title`; canonical
+new graphs omit `version` and use `description`.

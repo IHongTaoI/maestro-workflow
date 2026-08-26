@@ -13,6 +13,10 @@ Maestro v3 currently targets `@deepseek-ai/dsh` `0.1.1-rc.2`. The version is pin
 
 Maestro therefore validates graph dependencies before compilation and emits a fixed script template. YAML descriptions and other user content are carried as JSON `args`, never inserted into executable source.
 
+The Maestro Skill does not authorize `create_goal`. Starting or approving a Maestro run authorizes
+one compiled `workflow` call, not a persistent DSH Goal. This prevents Goal rounds from pressuring
+the foreground controller to interrupt healthy child Agents or duplicate their work.
+
 ## Project integration boundary
 
 `npm run --silent dsh:install-skill` copies the versioned repository Skill to

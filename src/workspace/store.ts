@@ -26,11 +26,13 @@ import {
 const MODE_STAGES: Record<WorkMode, WorkspaceStage[]> = {
   lite: ["intake", "implementation", "testing", "delivery", "completed"],
   plan: ["intake", "planning", "implementation", "testing", "delivery", "completed"],
-  workflow: [...WORKSPACE_STAGES],
+  workflow: ["intake", "requirements", "design", "architecture", "planning", "implementation", "testing", "delivery", "completed"],
+  diagnosis: ["intake", "diagnosis", "planning", "implementation", "testing", "delivery", "completed"],
 };
 
 const STAGE_DIRECTORY: Partial<Record<WorkspaceStage, string>> = {
   intake: "input",
+  diagnosis: "diagnosis",
   requirements: "requirements",
   design: "design",
   architecture: "design",
@@ -41,10 +43,11 @@ const STAGE_DIRECTORY: Partial<Record<WorkspaceStage, string>> = {
 };
 
 const REQUIRED_ARTIFACTS: Partial<Record<WorkspaceStage, string[]>> = {
+  diagnosis: ["diagnosis/plan.md", "diagnosis/report.md"],
   requirements: ["requirements/spec.md"],
   design: ["design/design.md"],
   architecture: ["design/architecture.md", "planning/task-graph.yaml"],
-  planning: ["planning/task-plan.md", "planning/automated-test-plan.md"],
+  planning: ["planning/task-graph.yaml", "planning/task-plan.md", "planning/automated-test-plan.md"],
   implementation: ["implementation/execution.json"],
   testing: ["testing/test-report.md"],
   delivery: ["delivery/report.md"],
@@ -153,6 +156,19 @@ async function requireGateArtifacts(projectRoot: string, meta: WorkspaceMeta): P
     try {
       const stat = await lstat(absolute);
       if (!stat.isFile() || stat.isSymbolicLink()) throw new WorkspaceStoreError(`stage gate artifact must be a regular file: ${path}`);
+      if (meta.currentStage === "diagnosis" && path === "diagnosis/report.md") {
+        const report = await readFile(absolute, "utf8");
+        if (!/^status:\s*confirmed\s*$/im.test(report)) {
+          throw new WorkspaceStoreError("diagnosis cannot advance until report.md contains status: confirmed");
+        }
+        if (!/^problem_type:\s*(bug|performance)\s*$/im.test(report)) {
+          throw new WorkspaceStoreError("diagnosis report.md must declare problem_type: bug or performance");
+        }
+        for (const field of ["baseline", "root_cause", "evidence", "success_metric"] as const) {
+          const pattern = new RegExp(`^${field}:\\s*\\S.+$`, "im");
+          if (!pattern.test(report)) throw new WorkspaceStoreError(`diagnosis report.md must contain a non-empty ${field}`);
+        }
+      }
       if (meta.currentStage === "testing") {
         const report = await readFile(absolute, "utf8");
         if (!/^status:\s*passed\s*$/im.test(report)) throw new WorkspaceStoreError("testing cannot advance until test-report.md contains status: passed");

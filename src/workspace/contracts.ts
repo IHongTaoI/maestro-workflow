@@ -1,8 +1,9 @@
-export const WORK_MODES = ["lite", "plan", "workflow"] as const;
+export const WORK_MODES = ["lite", "plan", "workflow", "diagnosis"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
 export const WORKSPACE_STAGES = [
   "intake",
+  "diagnosis",
   "requirements",
   "design",
   "architecture",

@@ -55,6 +55,14 @@ test("parses only the supported commands and options", () => {
     taskId: "health",
     projectRoot: resolve("C:/repo"),
   });
+  assert.deepEqual(parseCliArguments(["create-workspace", "--workspace", "perf-v2", "--mode", "diagnosis", "--identity", "Profile startup", "--file", "request.md"], "C:/repo"), {
+    command: "create-workspace",
+    projectRoot: resolve("C:/repo"),
+    workspaceId: "perf-v2",
+    mode: "diagnosis",
+    identity: "Profile startup",
+    filePath: resolve("C:/repo", "request.md"),
+  });
   assert.throws(() => parseCliArguments(["install-dsh-skill", "--file", "graph.yaml"]), /does not support --file/);
 });
 
