@@ -33,20 +33,39 @@ async function removeStaleLock(lockPath: string): Promise<boolean> {
   return false;
 }
 
-/** Serializes all read-modify-write operations for one task across processes. */
-export async function withTaskLock<T>(lockPath: string, operation: () => Promise<T>): Promise<T> {
-  await mkdir(dirname(lockPath), { recursive: true });
-  let handle: FileHandle;
+async function acquireGuard(lockPath: string): Promise<FileHandle> {
+  const guardPath = `${lockPath}.acquire`;
   try {
-    handle = await open(lockPath, "wx");
+    return await open(guardPath, "wx");
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") {
-      if (await removeStaleLock(lockPath)) return withTaskLock(lockPath, operation);
       throw new TaskLockConflictError(lockPath);
     }
     throw error;
   }
+}
 
+async function acquireLock(lockPath: string): Promise<FileHandle> {
+  const guardPath = `${lockPath}.acquire`;
+  const guard = await acquireGuard(lockPath);
+  try {
+    try {
+      return await open(lockPath, "wx");
+    } catch (error) {
+      if (!(typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST")) throw error;
+      if (!(await removeStaleLock(lockPath))) throw new TaskLockConflictError(lockPath);
+      return await open(lockPath, "wx");
+    }
+  } finally {
+    await guard.close();
+    await rm(guardPath, { force: true });
+  }
+}
+
+/** Serializes all read-modify-write operations for one task across processes. */
+export async function withTaskLock<T>(lockPath: string, operation: () => Promise<T>): Promise<T> {
+  await mkdir(dirname(lockPath), { recursive: true });
+  const handle = await acquireLock(lockPath);
   try {
     await handle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })}\n`);
     await handle.sync();

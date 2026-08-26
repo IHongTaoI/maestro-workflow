@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
-import { isAbsolute, posix, relative, resolve, sep } from "node:path";
+import { relative, resolve, sep } from "node:path";
 
 import { atomicCreateJson } from "./atomic.ts";
 import { withTaskLock } from "./task-lock.ts";
+import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError } from "./project-path.ts";
 import { writeMemoryEntry } from "../task-memory/memory-store.ts";
 import type { MemoryEntry } from "../task-memory/contracts.ts";
 import { workspaceRoot } from "../workspace/paths.ts";
@@ -86,10 +87,21 @@ function requireId(value: string, label: string): void {
 }
 
 function relativePath(value: string): string {
-  if (value.trim() === "" || isAbsolute(value)) throw new CoreProtocolError(`path must be project-relative: ${value}`);
-  const normalized = posix.normalize(value.trim().replaceAll("\\", "/").replace(/^\.\//, ""));
-  if (normalized === ".." || normalized.startsWith("../")) throw new CoreProtocolError(`path escapes project root: ${value}`);
-  return normalized;
+  try {
+    return normalizeProjectRelativePath(value);
+  } catch (error) {
+    if (error instanceof ProjectPathError) throw new CoreProtocolError(error.message);
+    throw error;
+  }
+}
+
+async function requireContainedPath(projectRoot: string, path: string): Promise<void> {
+  try {
+    await assertProjectContainedPath(projectRoot, path);
+  } catch (error) {
+    if (error instanceof ProjectPathError) throw new CoreProtocolError(error.message);
+    throw error;
+  }
 }
 
 function below(path: string, prefix: string): boolean {
@@ -140,6 +152,9 @@ export async function submitProposal(options: {
   requireId(options.taskId, "task id");
   requireId(options.role, "role");
   if (options.summary.trim() === "") throw new CoreProtocolError("proposal summary must not be empty");
+  const effects = options.effects.map((effect) => ({ ...effect, path: relativePath(effect.path) }));
+  const expectedOutputs = options.expectedOutputs.map(relativePath);
+  for (const path of [...effects.map((effect) => effect.path), ...expectedOutputs]) await requireContainedPath(options.projectRoot, path);
   const proposal: RuntimeProposal = {
     schemaVersion: 1,
     id: options.id ?? `proposal-${randomUUID()}`,
@@ -147,8 +162,8 @@ export async function submitProposal(options: {
     taskId: options.taskId,
     role: options.role,
     summary: options.summary,
-    effects: options.effects.map((effect) => ({ ...effect, path: relativePath(effect.path) })),
-    expectedOutputs: options.expectedOutputs.map(relativePath),
+    effects,
+    expectedOutputs,
     submittedAt: timestamp(options.clock),
   };
   await atomicCreateJson(runtimePath(options.projectRoot, options.workspaceId, "proposals", proposal.id), proposal);
@@ -177,6 +192,7 @@ export async function applyPermissions(options: {
     execute: normalize(options.execute),
     appliedAt: timestamp(options.clock),
   };
+  for (const path of [...grant.read, ...grant.write, ...grant.execute]) await requireContainedPath(options.projectRoot, path);
   const protectedPaths = protectedWorkspacePaths(options.projectRoot, options.workspaceId);
   for (const path of [...grant.write, ...grant.execute]) {
     if (protectedPaths.some((protectedPath) => overlaps(path, protectedPath))) {
@@ -200,12 +216,22 @@ export async function validateProposal(options: {
   const protectedPaths = protectedWorkspacePaths(options.projectRoot, options.workspaceId);
   if (proposal.role !== grant.role) reasons.push("proposal role does not match permission grant role");
   for (const effect of proposal.effects) {
-    const allowed = effect.action === "read" ? grant.read : effect.action === "write" ? grant.write : grant.execute;
-    if (effect.action !== "read" && protectedPaths.some((protectedPath) => overlaps(effect.path, protectedPath))) {
-      reasons.push(`${effect.action} targets protected path ${effect.path}`);
+    let path: string;
+    let allowed: string[];
+    try {
+      path = relativePath(effect.path);
+      await requireContainedPath(options.projectRoot, path);
+      allowed = (effect.action === "read" ? grant.read : effect.action === "write" ? grant.write : grant.execute).map(relativePath);
+      for (const prefix of allowed) await requireContainedPath(options.projectRoot, prefix);
+    } catch (error) {
+      reasons.push(error instanceof Error ? error.message : String(error));
       continue;
     }
-    if (!allowed.some((prefix) => below(effect.path, prefix))) reasons.push(`${effect.action} is not allowed for ${effect.path}`);
+    if (effect.action !== "read" && protectedPaths.some((protectedPath) => overlaps(path, protectedPath))) {
+      reasons.push(`${effect.action} targets protected path ${path}`);
+      continue;
+    }
+    if (!allowed.some((prefix) => below(path, prefix))) reasons.push(`${effect.action} is not allowed for ${path}`);
   }
   const validation: ProposalValidation = {
     schemaVersion: 1,
@@ -231,16 +257,14 @@ export async function collectResult(options: {
   const proposal = await loadJson<RuntimeProposal>(runtimePath(options.projectRoot, options.workspaceId, "proposals", options.proposalId), `proposal "${options.proposalId}"`);
   const validation = await loadJson<ProposalValidation>(runtimePath(options.projectRoot, options.workspaceId, "validations", options.proposalId), `validation for "${options.proposalId}"`);
   if (validation.status !== "approved") throw new CoreProtocolError(`proposal "${proposal.id}" was not approved`);
+  const expectedOutputs = proposal.expectedOutputs.map(relativePath);
   const artifacts = [];
   for (const declared of options.artifactPaths.map(relativePath)) {
-    if (!proposal.expectedOutputs.some((prefix) => below(declared, prefix))) {
+    await requireContainedPath(options.projectRoot, declared);
+    if (!expectedOutputs.some((prefix) => below(declared, prefix))) {
       throw new CoreProtocolError(`result artifact was not declared by proposal: ${declared}`);
     }
     const absolute = resolve(options.projectRoot, declared);
-    const pathFromProject = relative(options.projectRoot, absolute);
-    if (pathFromProject === ".." || pathFromProject.startsWith(`..${sep}`) || isAbsolute(pathFromProject)) {
-      throw new CoreProtocolError(`result artifact escapes project root: ${declared}`);
-    }
     const stat = await lstat(absolute);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new CoreProtocolError(`result artifact must be a regular file: ${declared}`);
     const contents = await readFile(absolute);

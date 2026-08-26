@@ -15,7 +15,7 @@ import { queryProjectMemory } from "./memory-store.ts";
 import { runDirectory, runReceiptPath, runResultPath, taskLockPath } from "./paths.ts";
 import { type Clock, loadTask, persistTask } from "./task-store.ts";
 import { withTaskLock } from "../runtime/task-lock.ts";
-import { loadRoleState, queryWiki } from "../memory/three-layer-store.ts";
+import { loadRoleState, queryWiki, writeRoleState } from "../memory/three-layer-store.ts";
 import type { RoleState, WikiExcerpt } from "../memory/contracts.ts";
 
 export type PrepareTaskRunOptions = {
@@ -339,6 +339,24 @@ export async function resumeTaskRun(options: ResumeTaskRunOptions): Promise<Prep
   return { task, run, workflow: run.workflow };
 }
 
+async function replayRecordedRoleStates(projectRoot: string, task: StoredTask, recorded: RecordedRun): Promise<void> {
+  for (const node of task.graph.tasks) {
+    const state = recorded.result.tasks[node.id]?.roleState;
+    if (state === undefined) continue;
+    await writeRoleState({
+      projectRoot,
+      state: {
+        schemaVersion: 1,
+        taskId: task.id,
+        role: node.role,
+        ...state,
+        sourceRunId: recorded.id,
+        updatedAt: recorded.recordedAt,
+      },
+    });
+  }
+}
+
 /** Repairs the two crash windows using only project-owned receipts; no session state is consulted. */
 export async function recoverTaskRunState(options: ResumeTaskRunOptions): Promise<RecoveredTaskState> {
   return withTaskLock(taskLockPath(options.projectRoot, options.taskId), async () => {
@@ -354,6 +372,7 @@ export async function recoverTaskRunState(options: ResumeTaskRunOptions): Promis
           || recorded.workflowDigest !== workflowDigest(recorded.workflow)) {
           throw new TaskRunConflictError(`recorded result "${task.activeRunId}" failed recovery validation`);
         }
+        await replayRecordedRoleStates(options.projectRoot, task, recorded);
         const recoveredTask: StoredTask = { ...task, status: recorded.status, updatedAt: recorded.recordedAt };
         delete recoveredTask.activeRunId;
         await persistTask(options.projectRoot, recoveredTask);

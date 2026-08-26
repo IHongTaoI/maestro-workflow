@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import type { Stats } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 
 import {
   TASK_MEMORY_SCHEMA_VERSION,
@@ -18,6 +18,7 @@ import { artifactContentPath, artifactDirectory, artifactMetadataPath, runCommit
 import { loadPreparedRun, TaskRunConflictError } from "./task-run.ts";
 import { type Clock, loadTask, persistTask } from "./task-store.ts";
 import { atomicCreateJson } from "../runtime/atomic.ts";
+import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError } from "../runtime/project-path.ts";
 import { withTaskLock } from "../runtime/task-lock.ts";
 import { writeRoleState } from "../memory/three-layer-store.ts";
 
@@ -136,19 +137,16 @@ function validateWorkflowResult(value: unknown, task: StoredTask): WorkflowResul
   };
 }
 
-function insideProject(projectRoot: string, sourcePath: string): boolean {
-  const pathFromProject = relative(projectRoot, sourcePath);
-  return pathFromProject !== "" && !pathFromProject.startsWith(`..${sep}`) && pathFromProject !== ".." && !isAbsolute(pathFromProject);
-}
-
 async function requireArtifactFile(projectRoot: string, declaredPath: string): Promise<{ sourcePath: string; sourceRelativePath: string; stat: Stats; contents: Buffer }> {
-  if (declaredPath.trim() === "" || isAbsolute(declaredPath)) {
-    throw new TaskRunRecordError(`Artifact path must be a non-empty project-relative file: ${declaredPath}`);
+  let normalized: string;
+  try {
+    normalized = normalizeProjectRelativePath(declaredPath, "Artifact path");
+    await assertProjectContainedPath(projectRoot, normalized, "Artifact path");
+  } catch (error) {
+    if (error instanceof ProjectPathError) throw new TaskRunRecordError(error.message);
+    throw error;
   }
-  const sourcePath = resolve(projectRoot, declaredPath);
-  if (!insideProject(projectRoot, sourcePath)) {
-    throw new TaskRunRecordError(`Artifact path escapes the project root: ${declaredPath}`);
-  }
+  const sourcePath = resolve(projectRoot, normalized);
 
   let stat: Stats;
   try {

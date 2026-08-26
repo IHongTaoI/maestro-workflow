@@ -5,7 +5,8 @@ import type { PersistedTaskContext } from "../task-memory/contracts.ts";
 import { TASK_RESULT_SCHEMA, type CompiledLayer, type DshWorkflowRequest } from "./workflow-contract.ts";
 
 const WORKFLOW_SCRIPT = `const results = {};
-for (const layer of args.layers) {
+for (let layerIndex = 0; layerIndex < args.layers.length; layerIndex += 1) {
+  const layer = args.layers[layerIndex];
   phase(layer.phase);
   const batchResults = await parallel(layer.tasks.map((task) => async () => {
     const dependencies = Object.fromEntries(task.depends.map((dependencyId) => [dependencyId, results[dependencyId]]));
@@ -33,11 +34,30 @@ for (const layer of args.layers) {
     return result;
   }));
 
+  let interruption = null;
   layer.tasks.forEach((task, index) => {
     const result = batchResults[index];
     if (result === null) throw new Error("Task failed: " + task.id);
     results[task.id] = result;
+    if (interruption === null && (result.needsUserInput !== undefined || result.needsDelegation !== undefined)) {
+      interruption = { taskId: task.id, needsUserInput: result.needsUserInput, needsDelegation: result.needsDelegation };
+      const reason = result.needsUserInput !== undefined ? "workflow paused for user input" : "workflow paused for delegation";
+      if (!result.blockers.includes(reason)) result.blockers.push(reason);
+    }
   });
+
+  if (interruption !== null) {
+    for (let pendingLayerIndex = layerIndex + 1; pendingLayerIndex < args.layers.length; pendingLayerIndex += 1) {
+      for (const pendingTask of args.layers[pendingLayerIndex].tasks) {
+        results[pendingTask.id] = {
+          summary: "Not run because workflow was interrupted by " + interruption.taskId + ".",
+          artifacts: [],
+          blockers: ["workflow interrupted before this task ran"],
+        };
+      }
+    }
+    return { graph: args.graphName, tasks: results };
+  }
 }
 return { graph: args.graphName, tasks: results };`;
 
