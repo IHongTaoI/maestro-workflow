@@ -45,6 +45,21 @@ export function runReceiptPath(projectRoot: string, taskId: string, runId: strin
   return resolve(runDirectory(projectRoot, taskId), `${runId}.json`);
 }
 
+export function runResultPath(projectRoot: string, taskId: string, runId: string): string {
+  requireRunIdentifier(runId);
+  return resolve(runDirectory(projectRoot, taskId), `${runId}.result.json`);
+}
+
+export function runCommitPath(projectRoot: string, taskId: string, runId: string): string {
+  requireRunIdentifier(runId);
+  return resolve(runDirectory(projectRoot, taskId), `${runId}.commit.json`);
+}
+
+export function taskLockPath(projectRoot: string, taskId: string): string {
+  requireIdentifier(taskId, "task id");
+  return resolve(projectStateRoot(projectRoot), "locks", `task-${taskId}.lock`);
+}
+
 export function artifactDirectory(projectRoot: string, artifactId: string): string {
   requireIdentifier(artifactId, "artifact id");
   return resolve(projectStateRoot(projectRoot), "artifacts", artifactId);
@@ -65,4 +80,41 @@ export function memoryDirectory(projectRoot: string): string {
 export function memoryEntryPath(projectRoot: string, memoryId: string): string {
   requireIdentifier(memoryId, "memory id");
   return resolve(memoryDirectory(projectRoot), `${memoryId}.json`);
+}
+
+export function currentMemorySummaryPath(projectRoot: string): string {
+  return resolve(memoryDirectory(projectRoot), "current-summary.md");
+}
+
+export function draftMemoryPath(projectRoot: string, draftId: string): string {
+  requireIdentifier(draftId, "draft id");
+  return resolve(projectStateRoot(projectRoot), "drafts", `${draftId}.json`);
+}
+
+export function roleStatePath(projectRoot: string, taskId: string, role: string): string {
+  requireIdentifier(taskId, "task id");
+  requireIdentifier(role, "role");
+  return resolve(taskDirectory(projectRoot, taskId), "roles", role, "current-state.md");
+}
+
+export function roleHistoryPath(projectRoot: string, taskId: string, role: string): string {
+  requireIdentifier(taskId, "task id");
+  requireIdentifier(role, "role");
+  return resolve(taskDirectory(projectRoot, taskId), "roles", role, "history.jsonl");
+}
+
+export function wikiDirectory(projectRoot: string, wikiId: string): string {
+  requireIdentifier(wikiId, "wiki id");
+  return resolve(projectStateRoot(projectRoot), "wiki", wikiId);
+}
+
+export function wikiVersionPath(projectRoot: string, wikiId: string, revision: number): string {
+  if (!Number.isInteger(revision) || revision < 1 || revision > 999_999) {
+    throw new TaskMemoryPathError("wiki revision must be between 1 and 999999");
+  }
+  return resolve(wikiDirectory(projectRoot, wikiId), `v${String(revision).padStart(6, "0")}.json`);
+}
+
+export function wikiCurrentPath(projectRoot: string, wikiId: string): string {
+  return resolve(wikiDirectory(projectRoot, wikiId), "current.json");
 }

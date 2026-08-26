@@ -1,115 +1,118 @@
-# Maestro v3 for DeepSeek Harness
+# Maestro V3 for DeepSeek Harness
 
-Maestro v3 is a declarative software-delivery orchestration layer for DeepSeek Harness (DSH).
-It owns role contracts, Task Graph validation, workflow compilation, durable project artifacts,
-and revision rules. DSH owns Agent execution, child-session lifecycle, workflow execution, Goals,
-and session-scoped `todo_write` progress.
+Maestro V3 is a project-owned, recoverable software-delivery workflow for DeepSeek Harness (DSH).
+Maestro owns lifecycle gates, role contracts, Task Graph validation, durable state, permissions,
+memory and delivery evidence. DSH owns child-Agent execution and the live `workflow` call.
 
-This repository deliberately does **not** include an Agent Runtime, a DAG scheduler, a generic
-host Adapter layer, or a Cordis dashboard.
+## Install and verify
 
-## Development
+The package now exposes a real `maestro` executable. Install the package in the target project,
+then initialize the DSH adapter; copying the Skill alone is not a complete installation.
+
+```powershell
+npm install --save-dev @maestro/v3-dsh
+npx --no-install maestro init --host dsh
+npx --no-install maestro verify-host
+npx --no-install maestro probe-host
+```
+
+`probe-host` runs P01-P07 and fails closed: atomic state writes, exclusive locking, memory IO,
+protected-path denial, role assets, the DSH executable contract and workspace-only recovery.
+
+For repository development:
 
 ```powershell
 npm install
 npm run typecheck
 npm test
-npm run dsh:probe
 ```
 
-`dsh:probe` only runs `dsh --version`. It does not open DSH, invoke a model, or modify DSH settings.
+## Work modes and lifecycle
 
-## Project Skill and TPM smoke workflow
+Old Zhou selects a mode with the user, then creates a workspace below
+`.agents/.local/work/<workspace-id>/`.
 
-From this repository's root, install the bundled `maestro-workflow` Skill into DSH's
-project-level discovery path, then verify its byte-identical copy:
+| Mode | Stages |
+|---|---|
+| Lite | intake → implementation → testing → delivery |
+| Plan | intake → planning → implementation → testing → delivery |
+| Workflow | intake → requirements → design → architecture → planning → implementation → testing → delivery |
 
 ```powershell
-npm run --silent dsh:install-skill
-npm run --silent dsh:verify-skill
+npx --no-install maestro create-workspace --workspace 202608260900-health --mode workflow --identity "Health endpoint" --file request.md
+npx --no-install maestro advance-workspace --workspace 202608260900-health
+npx --no-install maestro revise-workspace --workspace 202608260900-health --severity major --stage design --reason "API boundary changed"
 ```
 
-The generated `.dsh/` directory is ignored by Git; the source of truth remains
-[`skills/maestro-workflow`](skills/maestro-workflow). An installation refuses to overwrite a
-modified project copy. Use `npm run --silent dsh:install-skill -- --force` only when intentionally
-replacing that local copy.
+Every stage transition validates required artifacts and creates an immutable checkpoint. Revision
+severity is explicit: Minor, Major or Critical. Testing advances only when
+`testing/test-report.md` contains `status: passed`; delivery completes only with
+`delivery/report.md` containing `status: accepted`.
 
-Compile the included read-only TPM smoke graph to the exact request data accepted by DSH:
+## Task Graph and execution
+
+The architecture stage freezes `planning/task-graph.yaml`. Tasks declare dependencies, acceptance
+criteria, intended write sets and at most three attempts. The compiler never places overlapping
+write sets in the same parallel layer.
+
+```yaml
+name: health-delivery
+tasks:
+  - id: implement-api
+    role: coder
+    description: Implement the approved endpoint.
+    writes: [src/api]
+    maxAttempts: 3
+    acceptance:
+      - Unit tests pass.
+```
 
 ```powershell
-npm run --silent dsh:compile -- --file examples/tpm-smoke.task-graph.yaml
+npx --no-install maestro compile-task-graph --file planning/task-graph.yaml
+npx --no-install maestro compile-execution --file planning/task-graph.yaml
+npx --no-install maestro create-task --task health-delivery --file planning/task-graph.yaml
+npx --no-install maestro prepare-task-run --task health-delivery --memory "health api"
 ```
 
-This prints only JSON. It validates the YAML and produces the fixed `{ script, meta, args }`
-request, but does **not** open DSH, send a model request, or create a child Agent.
-
-For the live handoff, open a fresh DSH Web session for this project after installation. Tell the
-foreground Agent that execution is explicitly approved, ask it to load `maestro-workflow`, and
-instruct it to use the compiled JSON unchanged for exactly one `workflow` invocation. The expected
-successful result is one `tpm` child Agent returning schema-valid `summary`, `artifacts`, and
-`blockers`; no files should be created by this smoke graph. Inspect the resulting DSH trajectory
-for the child completion and schema validation—only that UI run is a live Harness verification.
-
-## Durable task workflow
-
-For a real delivery, use a persistent task instead of the stateless smoke command:
+`prepare-task-run` persists an immutable prepared receipt before returning the exact
+`{ script, meta, args }` for one DSH `workflow` call. `record-task-run` stores a separate,
+immutable result receipt. Commits are idempotent and can be repaired without a session:
 
 ```powershell
-npm run --silent maestro -- create-task --task health-delivery --file planning/task-graph.yaml
-npm run --silent maestro -- prepare-task-run --task health-delivery --memory "health retry"
+npx --no-install maestro resume-task-run --task health-delivery
+npx --no-install maestro recover-task --task health-delivery
+npx --no-install maestro record-task-run --task health-delivery --file workflow-result.json
 ```
 
-`prepare-task-run` first records an active run below `.maestro/`, then prints the exact DSH
-`{ script, meta, args }` request and persists an identical copy in its run receipt. It still does
-not start DSH or a model. Give that JSON unchanged to one DSH `workflow` call. If the session ends
-before that call, recover the original request without recompiling or rereading memory:
+## Core protocol and permissions
 
-```powershell
-npm run --silent maestro -- resume-task-run --task health-delivery
-```
-
-If it is unclear whether DSH already made the workflow call, do not invoke it again; recover its
-existing result and record it. After the foreground session receives the aggregate workflow result,
-save the returned JSON and record it locally:
-
-```powershell
-npm run --silent maestro -- record-task-run --task health-delivery --file workflow-result.json
-```
-
-The command accepts only a result whose graph name and task IDs exactly match the persisted Task
-Graph. It writes an immutable run receipt, snapshots every declared project-relative regular-file
-Artifact of at most 5 MiB, and derives one source-linked memory entry. A run with any non-empty
-`blockers` array becomes `blocked`; otherwise it becomes `completed`. Query remembered material
-without invoking DSH:
-
-```powershell
-npm run --silent maestro -- query-memory --query "health retry"
-```
-
-`.maestro/` is durable project state and is intentionally not ignored: commit task records, run
-receipts, Artifact snapshots, and memory entries when they are appropriate project evidence. Do
-not place secrets or unsuitable binary data in declared Artifacts. Use `revise-task` with a new
-validated YAML file only after the task has no active run; it creates the next graph revision.
+Role effects use five guarded actions:
 
 ```text
-.maestro/
-  tasks/<task-id>/task.json
-  tasks/<task-id>/runs/run-000001.json
-  artifacts/<artifact-id>/content
-  artifacts/<artifact-id>/metadata.json
-  memory/<memory-id>.json
+submit_proposal → apply_permissions → validate_proposal → collect_result → commit_memory
 ```
 
-Memory is explicit rather than ambient. `prepare-task-run` injects bounded keyword-matched excerpts
-only when given `--memory`; an empty query injects no project memory. This v3 storage is new and is
-not compatible with, or derived from, the removed V2 Runtime state.
+Permissions default to deny. Roles cannot receive write or execute grants for protected workspace
+metadata, events, the original request, memory, or Runtime records. Result Artifacts must have been
+declared by an approved proposal and are hashed during collection.
 
-## MVP boundary
+## Three memory layers
 
-The first MVP validates a YAML Task Graph and compiles it to the `{ script, meta, args }` request
-consumed by DSH's `workflow` tool. The generated script delegates execution to the Harness using
-its documented workflow hooks. A graph is a static plan; `todo_write` is an ephemeral per-session
-runtime checklist and is never used as the source of graph structure or durable completion state.
+1. Temporary drafts hold unconfirmed discussion. Confirmation or discard is explicit.
+2. Task memory holds immutable runs, Artifact evidence and per-role `current-state.md` plus history.
+3. Project LLM Wiki holds promoted, versioned knowledge linked to source Memory IDs.
 
-See [the implementation plan](docs/plans/2026-08-25-deepseek-harness-mvp.md) and
-[the DSH capability baseline](docs/dsh-capability-baseline.md).
+Explicit queries are bounded. During run preparation, Wiki excerpts and task memory are selected
+per role; the same ambient context is not broadcast to every Agent. `memory/current-summary.md`
+contains the compact goal, decisions, constraints, frozen versions, open questions, coverage
+cursor and source hash.
+
+## V3 roles
+
+The DSH Skill ships Old Zhou plus TPM, Laborer, Architect, Orchestrator, Coder, Test Designer,
+Test Runner and Delivery. Legacy `planner` and `tester` role names remain accepted for old graphs.
+Roles can return `needsUserInput`, `needsDelegation` and a bounded `roleState`.
+
+See [the implementation contract](docs/maestro-v3-implementation.md), the
+[DSH ownership decision](docs/decisions/0001-dsh-owns-agent-execution.md), and the
+[three-layer memory decision](docs/decisions/0003-three-layer-memory.md).

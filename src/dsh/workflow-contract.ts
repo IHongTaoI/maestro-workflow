@@ -19,6 +19,8 @@ export interface CompiledTask {
   description: string;
   depends: string[];
   acceptance: string[];
+  writes: string[];
+  maxAttempts: number;
 }
 
 export interface CompiledLayer {
@@ -47,6 +49,35 @@ export const TASK_RESULT_SCHEMA = {
     blockers: {
       type: "array",
       items: { type: "string" },
+    },
+    needsUserInput: {
+      type: "object",
+      additionalProperties: false,
+      required: ["question", "context"],
+      properties: {
+        question: { type: "string" },
+        context: { type: "string" },
+      },
+    },
+    needsDelegation: {
+      type: "object",
+      additionalProperties: false,
+      required: ["role", "task"],
+      properties: {
+        role: { type: "string" },
+        task: { type: "string" },
+      },
+    },
+    roleState: {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "decisions", "blockers", "nextActions"],
+      properties: {
+        summary: { type: "string" },
+        decisions: { type: "array", items: { type: "string" } },
+        blockers: { type: "array", items: { type: "string" } },
+        nextActions: { type: "array", items: { type: "string" } },
+      },
     },
   },
 } as const;

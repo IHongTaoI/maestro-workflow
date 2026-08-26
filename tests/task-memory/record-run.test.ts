@@ -6,8 +6,8 @@ import test from "node:test";
 
 import { artifactContentPath, artifactMetadataPath } from "../../src/task-memory/paths.ts";
 import { recordTaskRun, TaskRunRecordError } from "../../src/task-memory/record-run.ts";
-import { prepareTaskRun } from "../../src/task-memory/task-run.ts";
-import { createTask, loadTask } from "../../src/task-memory/task-store.ts";
+import { prepareTaskRun, recoverTaskRunState } from "../../src/task-memory/task-run.ts";
+import { createTask, loadTask, persistTask } from "../../src/task-memory/task-store.ts";
 import { parseTaskGraph } from "../../src/task-graph/parse.ts";
 import { validateTaskGraph } from "../../src/task-graph/validate.ts";
 
@@ -95,5 +95,19 @@ test("rejects a second record attempt and invalid Artifact references without ch
 
     await recordTaskRun({ projectRoot, taskId: "health", result: result() });
     await assert.rejects(recordTaskRun({ projectRoot, taskId: "health", result: result() }), TaskRunRecordError);
+  });
+});
+
+test("recovers a completed result when a crash leaves task.json active", async () => {
+  await withProject(async (projectRoot) => {
+    await createTask({ projectRoot, taskId: "health", graph: graph() });
+    await prepareTaskRun({ projectRoot, taskId: "health" });
+    const recorded = await recordTaskRun({ projectRoot, taskId: "health", result: result() });
+    await persistTask(projectRoot, { ...recorded.task, status: "running", activeRunId: recorded.run.id });
+
+    const recovered = await recoverTaskRunState({ projectRoot, taskId: "health" });
+    assert.equal(recovered.recovered, "recorded-result");
+    assert.equal(recovered.task.status, "completed");
+    assert.equal(recovered.task.activeRunId, undefined);
   });
 });

@@ -17,6 +17,8 @@ export type QueryProjectMemoryOptions = {
   queries: readonly string[];
   limit?: number;
   maximumCharacters?: number;
+  taskId?: string;
+  role?: string;
 };
 
 export class MemoryStoreError extends Error {
@@ -43,7 +45,12 @@ function parseMemoryEntry(value: unknown, expectedId: string): MemoryEntry {
     || !Array.isArray(value.tags) || value.tags.some((tag) => typeof tag !== "string")
     || typeof value.text !== "string"
     || !Array.isArray(value.sourceArtifactIds) || value.sourceArtifactIds.some((id) => typeof id !== "string")
-    || typeof value.createdAt !== "string") {
+    || typeof value.createdAt !== "string"
+    || (value.scope !== undefined && !["project", "task", "role"].includes(String(value.scope)))
+    || (value.role !== undefined && typeof value.role !== "string")
+    || (value.kind !== undefined && !["decision", "constraint", "fact", "failure", "summary"].includes(String(value.kind)))
+    || (value.status !== undefined && !["current", "superseded"].includes(String(value.status)))
+    || (value.supersedes !== undefined && (!Array.isArray(value.supersedes) || value.supersedes.some((id) => typeof id !== "string")))) {
     throw new MemoryStoreError(`memory entry "${expectedId}" is invalid`);
   }
   return {
@@ -55,6 +62,11 @@ function parseMemoryEntry(value: unknown, expectedId: string): MemoryEntry {
     text: value.text,
     sourceArtifactIds: [...value.sourceArtifactIds],
     createdAt: value.createdAt,
+    ...(typeof value.scope === "string" ? { scope: value.scope as Exclude<MemoryEntry["scope"], undefined> } : {}),
+    ...(typeof value.role === "string" ? { role: value.role } : {}),
+    ...(typeof value.kind === "string" ? { kind: value.kind as Exclude<MemoryEntry["kind"], undefined> } : {}),
+    ...(typeof value.status === "string" ? { status: value.status as Exclude<MemoryEntry["status"], undefined> } : {}),
+    ...(Array.isArray(value.supersedes) ? { supersedes: [...value.supersedes] as string[] } : {}),
   };
 }
 
@@ -71,6 +83,12 @@ function excerpt(entry: MemoryEntry, remainingCharacters: number): MemoryExcerpt
     runId: entry.runId,
     tags: [...entry.tags],
     text: entry.text.slice(0, remainingCharacters),
+    sourceArtifactIds: [...entry.sourceArtifactIds],
+    createdAt: entry.createdAt,
+    ...(entry.scope === undefined ? {} : { scope: entry.scope }),
+    ...(entry.role === undefined ? {} : { role: entry.role }),
+    ...(entry.kind === undefined ? {} : { kind: entry.kind }),
+    ...(entry.status === undefined ? {} : { status: entry.status }),
   };
 }
 
@@ -83,7 +101,9 @@ export async function writeMemoryEntry(options: WriteMemoryEntryOptions): Promis
     await writeFile(path, `${JSON.stringify(normalized, null, 2)}\n`, { flag: "wx" });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") {
-      throw new MemoryStoreError(`memory entry "${options.entry.id}" already exists`);
+      const existing = parseMemoryEntry(JSON.parse(await readFile(path, "utf8")) as unknown, options.entry.id);
+      if (JSON.stringify(existing) === JSON.stringify(normalized)) return;
+      throw new MemoryStoreError(`memory entry "${options.entry.id}" already exists with different content`);
     }
     throw error;
   }
@@ -101,10 +121,20 @@ async function allEntries(projectRoot: string): Promise<MemoryEntry[]> {
   const files = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .sort((left, right) => left.name.localeCompare(right.name));
-  return Promise.all(files.map(async (file) => {
+  const loaded = await Promise.allSettled(files.map(async (file) => {
     const id = file.name.slice(0, -".json".length);
     return parseMemoryEntry(JSON.parse(await readFile(memoryEntryPath(projectRoot, id), "utf8")) as unknown, id);
   }));
+  return loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+}
+
+export async function loadMemoryEntry(projectRoot: string, id: string): Promise<MemoryEntry> {
+  try {
+    return parseMemoryEntry(JSON.parse(await readFile(memoryEntryPath(projectRoot, id), "utf8")) as unknown, id);
+  } catch (error) {
+    if (isMissing(error)) throw new MemoryStoreError(`memory entry "${id}" does not exist`);
+    throw error;
+  }
 }
 
 /** Deterministically retrieves bounded excerpts only when the caller supplies query terms. */
@@ -112,12 +142,23 @@ export async function queryProjectMemory(options: QueryProjectMemoryOptions): Pr
   const queryTokens = tokens(options.queries);
   if (queryTokens.length === 0) return [];
 
-  const scored = (await allEntries(options.projectRoot)).map((entry) => {
+  const scored = (await allEntries(options.projectRoot)).filter((entry) => {
+    if (entry.status === "superseded") return false;
+    if (options.taskId !== undefined && (entry.scope === "task" || entry.scope === "role") && entry.taskId !== options.taskId) return false;
+    if (options.role !== undefined && entry.scope === "role" && entry.role !== options.role) return false;
+    return true;
+  }).map((entry) => {
     const haystack = `${entry.tags.join(" ")} ${entry.text}`.toLocaleLowerCase();
-    const score = queryTokens.reduce((total, token) => total + (haystack.includes(token) ? 1 : 0), 0);
+    const tagSet = new Set(tokens(entry.tags));
+    const lexicalScore = queryTokens.reduce((total, token) => total + (tagSet.has(token) ? 4 : haystack.includes(token) ? 1 : 0), 0);
+    const scopeScore = options.taskId === entry.taskId ? 3 : 0;
+    const roleScore = options.role !== undefined && options.role === entry.role ? 2 : 0;
+    const score = lexicalScore + scopeScore + roleScore;
     return { entry, score };
   }).filter(({ score }) => score > 0).sort((left, right) => (
-    right.score - left.score || left.entry.id.localeCompare(right.entry.id)
+    right.score - left.score
+      || right.entry.createdAt.localeCompare(left.entry.createdAt)
+      || left.entry.id.localeCompare(right.entry.id)
   ));
 
   const limit = Math.min(options.limit ?? MAX_MEMORY_EXCERPTS, MAX_MEMORY_EXCERPTS);

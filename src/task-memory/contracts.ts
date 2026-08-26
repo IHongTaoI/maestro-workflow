@@ -1,5 +1,6 @@
 import type { TaskGraph } from "../task-graph/types.ts";
 import type { DshWorkflowRequest } from "../dsh/workflow-contract.ts";
+import type { RoleState, WikiExcerpt } from "../memory/contracts.ts";
 
 export const TASK_MEMORY_SCHEMA_VERSION = 1;
 export const TASK_STATUS = ["ready", "running", "blocked", "completed"] as const;
@@ -14,6 +15,14 @@ export type TaskResult = {
   summary: string;
   artifacts: TaskResultArtifact[];
   blockers: string[];
+  needsUserInput?: { question: string; context: string };
+  needsDelegation?: { role: string; task: string };
+  roleState?: {
+    summary: string;
+    decisions: string[];
+    blockers: string[];
+    nextActions: string[];
+  };
 };
 
 export type WorkflowResult = {
@@ -72,15 +81,23 @@ export type MemoryEntry = {
   text: string;
   sourceArtifactIds: string[];
   createdAt: string;
+  scope?: "project" | "task" | "role";
+  role?: string;
+  kind?: "decision" | "constraint" | "fact" | "failure" | "summary";
+  status?: "current" | "superseded";
+  supersedes?: string[];
 };
 
-export type MemoryExcerpt = Pick<MemoryEntry, "id" | "taskId" | "runId" | "tags" | "text">;
+export type MemoryExcerpt = Pick<MemoryEntry, "id" | "taskId" | "runId" | "tags" | "text">
+  & Partial<Pick<MemoryEntry, "sourceArtifactIds" | "createdAt" | "scope" | "role" | "kind" | "status">>;
 
 export type PersistedTaskContext = {
   taskId: string;
   taskRevision: number;
   runId: string;
   memory: MemoryExcerpt[];
+  projectWiki?: WikiExcerpt[];
+  roleMemory?: Record<string, { state?: RoleState; memory: MemoryExcerpt[] }>;
 };
 
 export type RecordedRun = Omit<PreparedRun, "status"> & {

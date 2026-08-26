@@ -3,13 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const skillRoot = new URL("../../skills/maestro-workflow/", import.meta.url);
-const roles = ["tpm", "architect", "planner", "coder", "tester"] as const;
+const roles = ["tpm", "laborer", "architect", "orchestrator", "coder", "test-designer", "test-runner", "delivery", "planner", "tester"] as const;
 
 test("ships Lao Zhou and every MVP role as DSH skill assets", async () => {
   const skill = await readFile(new URL("SKILL.md", skillRoot), "utf8");
   assert.match(skill, /^---\nname: maestro-workflow\n/m);
   assert.match(skill, /todo_write/);
-  assert.match(skill, /npm run --silent maestro -- compile-task-graph/);
+  assert.match(skill, /npx --no-install maestro compile-task-graph/);
   assert.match(skill, /create-task/);
   assert.match(skill, /prepare-task-run/);
   assert.match(skill, /record-task-run/);

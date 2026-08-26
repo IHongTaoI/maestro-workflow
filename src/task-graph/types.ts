@@ -1,4 +1,16 @@
-export const MAESTRO_ROLES = ["tpm", "architect", "planner", "coder", "tester"] as const;
+export const MAESTRO_ROLES = [
+  "tpm",
+  "laborer",
+  "architect",
+  "orchestrator",
+  "coder",
+  "test-designer",
+  "test-runner",
+  "delivery",
+  // Compatibility aliases for graphs created by the DSH MVP.
+  "planner",
+  "tester",
+] as const;
 
 export type MaestroRole = (typeof MAESTRO_ROLES)[number];
 
@@ -8,6 +20,8 @@ export interface ParsedTask {
   description: string;
   depends: string[];
   acceptance: string[];
+  writes: string[];
+  maxAttempts: number;
 }
 
 export interface ParsedTaskGraph {
