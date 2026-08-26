@@ -1,4 +1,7 @@
 node_modules/
 coverage/
+*.tsbuildinfo
 .maestro/
+.dsh/
+.agents/.local/
 *.log

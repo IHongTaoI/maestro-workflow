@@ -6,7 +6,7 @@
   "required": ["operation", "source_files", "current_memory", "memory_hints"],
   "properties": {
     "operation": {
-      "enum": ["role-compress", "session-handoff", "task-bootstrap", "long-term-candidate"]
+      "enum": ["role-compress", "session-handoff", "task-bootstrap", "task-complete", "long-term-candidate"]
     },
     "source_files": {
       "type": "array",

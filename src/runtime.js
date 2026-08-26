@@ -39,6 +39,17 @@ function taskBase(id) {
   return `tasks/${assertSafeId(id, "task id")}`;
 }
 
+function archivedTaskBase(id) {
+  return `tasks/archive/${assertSafeId(id, "task id")}`;
+}
+
+function candidateBase(state, id) {
+  if (!new Set(["pending", "approved", "rejected"]).has(state)) {
+    throw new ValidationError("Candidate state must be pending, approved or rejected.");
+  }
+  return `memory/long-term/candidates/${state}/${assertSafeId(id, "candidate id")}.json`;
+}
+
 export class MaestroRuntime {
   constructor(projectRoot, options = {}) {
     this.store = new MaestroStore(projectRoot);
@@ -142,6 +153,109 @@ export class MaestroRuntime {
     return refs;
   }
 
+  async persistLongTermCandidates(outcome, context = {}, sourceRefMap = {}) {
+    if (outcome.status !== "completed") {
+      return [];
+    }
+    const persisted = [];
+    for (const candidate of outcome.result.long_term_candidates) {
+      const id = makeId("candidate", this.now());
+      const record = {
+        ...candidate,
+        id,
+        status: "pending",
+        source_refs: candidate.source_refs.map((source) => sourceRefMap[source] ?? source),
+        context,
+        created_at: this.now().toISOString(),
+      };
+      await this.store.write(candidateBase("pending", id), record);
+      persisted.push(record);
+    }
+    return persisted;
+  }
+
+  async remapPendingSources(outcome, sourceRefMap) {
+    if (outcome.status !== "pending" || !outcome.pending_id) {
+      return;
+    }
+    const relative = `memory/pending/${outcome.pending_id}.json`;
+    const pending = await this.store.read(relative);
+    const request = pending.request ?? {};
+    const sourceContent = request.source_content ?? {};
+    await this.store.write(relative, {
+      ...pending,
+      request: {
+        ...request,
+        source_files: (request.source_files ?? []).map(
+          (source) => sourceRefMap[source] ?? source,
+        ),
+        source_content: Object.fromEntries(
+          Object.entries(sourceContent).map(([source, content]) => [
+            sourceRefMap[source] ?? source,
+            content,
+          ]),
+        ),
+      },
+    });
+  }
+
+  async listLongTermCandidates(state = "pending") {
+    candidateBase(state, "candidate-placeholder");
+    const entries = await this.store.list(`memory/long-term/candidates/${state}`);
+    const candidates = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .map((entry) => this.store.read(`memory/long-term/candidates/${state}/${entry.name}`)),
+    );
+    return candidates.sort((left, right) => left.created_at.localeCompare(right.created_at));
+  }
+
+  async reviewLongTermCandidate({ candidateId, approved, reviewer, rationale = "" }) {
+    assertSafeId(candidateId, "candidate id");
+    if (typeof approved !== "boolean") {
+      throw new ValidationError("approved must be an explicit boolean.");
+    }
+    requireNonEmptyString(reviewer, "reviewer");
+    const pendingPath = candidateBase("pending", candidateId);
+    if (!(await exists(this.store.resolve(pendingPath)))) {
+      throw new NotFoundError("Long-term candidate", candidateId);
+    }
+    const candidate = await this.store.read(pendingPath);
+    const now = this.now().toISOString();
+    const status = approved ? "approved" : "rejected";
+    const review = {
+      approved,
+      reviewer: reviewer.trim(),
+      rationale: typeof rationale === "string" ? rationale.trim() : "",
+      reviewed_at: now,
+    };
+    const reviewed = { ...candidate, status, review };
+
+    if (approved) {
+      const current = await this.store.read("memory/long-term/current.json");
+      await this.store.write("memory/long-term/current.json", {
+        ...current,
+        entries: [
+          ...(Array.isArray(current.entries) ? current.entries : []),
+          {
+            candidate_id: candidateId,
+            title: candidate.title,
+            content: candidate.content,
+            source_refs: candidate.source_refs,
+            review,
+            promoted_at: now,
+          },
+        ],
+        updated_at: now,
+      });
+    }
+
+    await this.store.write(`memory/long-term/decisions/${candidateId}.json`, reviewed);
+    await this.store.write(candidateBase(status, candidateId), reviewed);
+    await this.store.remove(pendingPath);
+    return reviewed;
+  }
+
   async handoffTemporary(id) {
     const base = temporaryBase(id);
     if (!(await exists(this.store.resolve(`${base}/current.json`)))) {
@@ -212,10 +326,13 @@ export class MaestroRuntime {
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     });
-    await this.store.write(`${base}/context.json`, context);
     await this.store.write(`${base}/decisions.json`, { decisions: [] });
     await this.store.write(`${base}/progress.json`, { entries: [] });
-    await this.applyMemoryResult(base, outcome);
+    const refs = await this.applyMemoryResult(base, outcome);
+    await this.store.write(`${base}/context.json`, {
+      ...context,
+      history_refs: [...new Set([...(context.history_refs ?? []), ...refs])],
+    });
     const meta = await this.store.read(`${tempBase}/meta.json`);
     await this.store.write(`${tempBase}/meta.json`, {
       ...meta,
@@ -224,7 +341,21 @@ export class MaestroRuntime {
       updated_at: this.now().toISOString(),
     });
     await this.store.move(tempBase, temporaryBase(temporaryId, "archive"));
-    return { id, status: "active", path: base, memory_status: outcome.status };
+    const sourceRefMap = { [tempSource]: `${temporaryBase(temporaryId, "archive")}/current.json` };
+    await this.remapPendingSources(outcome, sourceRefMap);
+    const candidates = await this.persistLongTermCandidates(
+      outcome,
+      { task_id: id, operation: "task-bootstrap" },
+      sourceRefMap,
+    );
+    return {
+      id,
+      status: "active",
+      path: base,
+      memory_status: outcome.status,
+      memory_pending_id: outcome.pending_id ?? null,
+      candidate_ids: candidates.map((candidate) => candidate.id),
+    };
   }
 
   async recordRoleRun({ taskId, role, result }) {
@@ -274,11 +405,115 @@ export class MaestroRuntime {
       needs_user_input: Boolean(result.needs_user_input),
       recommended_next: Array.isArray(result.recommended_next) ? result.recommended_next : [],
       memory_status: outcome.status,
+      memory_pending_id: outcome.pending_id ?? null,
       created_at: this.now().toISOString(),
     };
     const handoffPath = `${base}/handoffs/${stamp}-${role}.json`;
     await this.store.write(handoffPath, handoff);
-    return { ...handoff, handoff_path: handoffPath };
+    const candidates = await this.persistLongTermCandidates(outcome, {
+      task_id: taskId,
+      role,
+      operation: "role-compress",
+    });
+    return {
+      ...handoff,
+      handoff_path: handoffPath,
+      candidate_ids: candidates.map((candidate) => candidate.id),
+    };
+  }
+
+  async completeTask({ taskId, summary }) {
+    requireNonEmptyString(summary, "summary");
+    const base = taskBase(taskId);
+    if (!(await exists(this.store.resolve(`${base}/task.json`)))) {
+      throw new NotFoundError("Active Task", taskId);
+    }
+    const task = await this.store.read(`${base}/task.json`);
+    const context = await this.store.read(`${base}/context.json`);
+    const decisions = await this.store.read(`${base}/decisions.json`);
+    const progress = await this.store.read(`${base}/progress.json`);
+    const sourceFiles = [
+      `${base}/task.json`,
+      `${base}/context.json`,
+      `${base}/decisions.json`,
+      `${base}/progress.json`,
+    ];
+    const sourceContent = {
+      [sourceFiles[0]]: task,
+      [sourceFiles[1]]: context,
+      [sourceFiles[2]]: decisions,
+      [sourceFiles[3]]: progress,
+    };
+    const outcome = await this.runMemory(
+      {
+        operation: "task-complete",
+        source_files: sourceFiles,
+        current_memory: { summary: summary.trim(), context, decisions, progress },
+        memory_hints: {
+          remember: ["outcome", "stable decisions", "verified facts", "remaining limitations"],
+          forget: ["superseded task detail", "execution narration"],
+        },
+        task_context: context,
+        source_content: sourceContent,
+      },
+      { task_id: taskId, operation: "task-complete" },
+    );
+    const now = this.now().toISOString();
+    const refs = await this.applyMemoryResult(base, outcome);
+    await this.store.write(`${base}/completion.json`, {
+      schema_version: 1,
+      task_id: taskId,
+      summary: summary.trim(),
+      memory_status: outcome.status,
+      final_memory: outcome.status === "completed" ? outcome.result.current.content : null,
+      history_refs: refs,
+      completed_at: now,
+    });
+    await this.store.write(`${base}/task.json`, { ...task, status: "completed", updated_at: now });
+    const archiveBase = archivedTaskBase(taskId);
+    await this.store.move(base, archiveBase);
+    const sourceRefMap = Object.fromEntries(
+      sourceFiles.map((source) => [source, source.replace(`${base}/`, `${archiveBase}/`)]),
+    );
+    await this.remapPendingSources(outcome, sourceRefMap);
+    const candidates = await this.persistLongTermCandidates(
+      outcome,
+      { task_id: taskId, operation: "task-complete" },
+      sourceRefMap,
+    );
+    return {
+      id: taskId,
+      status: "completed",
+      path: archiveBase,
+      memory_status: outcome.status,
+      memory_pending_id: outcome.pending_id ?? null,
+      candidate_ids: candidates.map((candidate) => candidate.id),
+    };
+  }
+
+  async listPlaybooks() {
+    const entries = await this.store.list("playbooks");
+    return entries
+      .filter((entry) => entry.isFile() && /\.(?:json|md)$/i.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+  }
+
+  async readPlaybook(name) {
+    assertSafeId(name, "playbook name");
+    if (!/\.(?:json|md)$/i.test(name)) {
+      throw new ValidationError("Playbooks must use .json or .md files.");
+    }
+    const relative = `playbooks/${name}`;
+    if (!(await exists(this.store.resolve(relative)))) {
+      throw new NotFoundError("Playbook", name);
+    }
+    const raw = await this.store.readText(relative);
+    return {
+      name,
+      format: name.toLowerCase().endsWith(".json") ? "json" : "markdown",
+      content: name.toLowerCase().endsWith(".json") ? JSON.parse(raw) : raw,
+    };
   }
 
   async readJsonFile(file) {

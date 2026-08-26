@@ -41,6 +41,21 @@ model. If both fail, preserve sources, record `memory_pending` and continue the 
 The Memory Worker organizes memory only. It does not choose roles, make architecture decisions or
 promote long-term knowledge without Old Zhou/strong-model review.
 
+Store every proposed long-term item as a pending candidate with source references. Old Zhou or a
+strong-model reviewer must explicitly approve or reject it. Preserve both outcomes as review
+receipts; only approved candidates enter Long-term Memory.
+
+## Task completion
+
+When the work and its relevant verification are finished, compress the final Task context, preserve
+any Memory Worker failure as `memory_pending`, write a completion summary and archive the Task.
+Archival is a storage lifecycle operation, not a mandatory business stage.
+
+## Playbooks
+
+Discover and read project Playbooks only when they are relevant to the current request. They are
+optional guidance and must never be interpreted by the Runtime as a required sequence or gate.
+
 ## Session handoff
 
 Perform a Context Handoff when the user explicitly asks to save or continue in a clean Session.

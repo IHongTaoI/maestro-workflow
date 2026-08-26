@@ -25,7 +25,18 @@
       }
     },
     "discarded": {},
-    "long_term_candidates": { "type": "array" },
+    "long_term_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "content"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "content": { "type": "string", "minLength": 1 },
+          "source_refs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
     "notes": {}
   }
 }

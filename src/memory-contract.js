@@ -5,6 +5,7 @@ export const MEMORY_OPERATIONS = new Set([
   "role-compress",
   "session-handoff",
   "task-bootstrap",
+  "task-complete",
   "long-term-candidate",
 ]);
 
@@ -44,6 +45,13 @@ export function normalizeMemoryResponse(response, request) {
     if (typeof reference.content !== "string") {
       throw new ValidationError(`references[${index}].content must be a string.`);
     }
+    if (
+      reference.source_refs != null
+      && (!Array.isArray(reference.source_refs)
+        || reference.source_refs.some((source) => typeof source !== "string"))
+    ) {
+      throw new ValidationError(`references[${index}].source_refs must be an array of paths.`);
+    }
     return {
       ...reference,
       source_refs: Array.isArray(reference.source_refs)
@@ -60,11 +68,32 @@ export function normalizeMemoryResponse(response, request) {
     current: response.current,
     references: normalizedReferences,
     discarded: response.discarded ?? null,
-    long_term_candidates: candidates.map((candidate) =>
-      isPlainObject(candidate) && !Array.isArray(candidate.source_refs)
-        ? { ...candidate, source_refs: [...request.source_files] }
-        : candidate,
-    ),
+    long_term_candidates: candidates.map((candidate, index) => {
+      requirePlainObject(candidate, `long_term_candidates[${index}]`);
+      if (typeof candidate.title !== "string" || candidate.title.trim() === "") {
+        throw new ValidationError(`long_term_candidates[${index}].title is required.`);
+      }
+      if (typeof candidate.content !== "string" || candidate.content.trim() === "") {
+        throw new ValidationError(`long_term_candidates[${index}].content is required.`);
+      }
+      if (
+        candidate.source_refs != null
+        && (!Array.isArray(candidate.source_refs)
+          || candidate.source_refs.some((source) => typeof source !== "string"))
+      ) {
+        throw new ValidationError(
+          `long_term_candidates[${index}].source_refs must be an array of paths.`,
+        );
+      }
+      return {
+        ...candidate,
+        title: candidate.title.trim(),
+        content: candidate.content.trim(),
+        source_refs: Array.isArray(candidate.source_refs)
+          ? candidate.source_refs
+          : [...request.source_files],
+      };
+    }),
     notes: response.notes ?? null,
   };
 }

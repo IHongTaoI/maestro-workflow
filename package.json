@@ -1,6 +1,6 @@
 {
   "name": "@maestro/runtime",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Host-neutral runtime and Skill contracts for Maestro v1.",
   "type": "module",
   "bin": {
@@ -11,7 +11,7 @@
     "./memory": "./src/memory-worker.js"
   },
   "scripts": {
-    "check": "node --check bin/maestro.js && node --check src/*.js",
+    "check": "node scripts/check.js",
     "test": "node --test"
   },
   "engines": {

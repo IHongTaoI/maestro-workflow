@@ -1,4 +1,4 @@
-import { access, mkdir, rename } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { NotInitializedError, ValidationError } from "./errors.js";
@@ -6,11 +6,15 @@ import { atomicWriteJson, ensureDir, readJson } from "./util.js";
 
 const INITIAL_DIRECTORIES = [
   "memory/long-term/decisions",
+  "memory/long-term/candidates/pending",
+  "memory/long-term/candidates/approved",
+  "memory/long-term/candidates/rejected",
   "memory/temporary/active",
   "memory/temporary/archive",
   "memory/temporary/trash",
   "memory/pending",
   "tasks",
+  "tasks/archive",
   "playbooks",
 ];
 
@@ -43,6 +47,7 @@ export class MaestroStore {
       await atomicWriteJson(longTerm, {
         schema_version: 1,
         facts: [],
+        entries: [],
         updated_at: config.created_at,
       });
     }
@@ -54,6 +59,7 @@ export class MaestroStore {
     } catch {
       throw new NotInitializedError(this.projectRoot);
     }
+    await Promise.all(INITIAL_DIRECTORIES.map((entry) => ensureDir(this.resolve(entry))));
   }
 
   async read(relativePath) {
@@ -70,5 +76,20 @@ export class MaestroStore {
     await this.requireInitialized();
     await ensureDir(path.dirname(this.resolve(toRelative)));
     await rename(this.resolve(fromRelative), this.resolve(toRelative));
+  }
+
+  async list(relativePath) {
+    await this.requireInitialized();
+    return readdir(this.resolve(relativePath), { withFileTypes: true });
+  }
+
+  async readText(relativePath) {
+    await this.requireInitialized();
+    return readFile(this.resolve(relativePath), "utf8");
+  }
+
+  async remove(relativePath) {
+    await this.requireInitialized();
+    await rm(this.resolve(relativePath));
   }
 }

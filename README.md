@@ -6,9 +6,9 @@ It intentionally does not implement a fixed delivery state machine. Old Zhou dec
 happen next; roles perform specialist work; the Runtime only provides deterministic storage,
 memory boundaries and safe contracts.
 
-## First runnable slice
+## Runtime capabilities
 
-This initial implementation includes:
+The current implementation includes:
 
 - a portable `skills/maestro/SKILL.md` controller contract;
 - Temporary, Task and Long-term memory directories;
@@ -17,6 +17,10 @@ This initial implementation includes:
 - `current + references` memory storage;
 - a host-neutral Memory Worker contract with one retry, primary-model fallback and
   `memory_pending` preservation;
+- pending long-term memory candidates with explicit approval or rejection receipts;
+- Task completion records and archive storage;
+- optional JSON and Markdown Playbook discovery;
+- host-neutral model adapters for structured or text JSON responses;
 - a zero-runtime-dependency Node.js CLI and test suite.
 
 ## Quick start
@@ -49,6 +53,48 @@ node bin/maestro.js role-record \
 
 The CLI does not choose or call a vendor model. A host can inject a Memory Worker runner through
 the JavaScript API, or pass a previously generated response with `--memory-response`.
+
+Complete and archive a Task:
+
+```bash
+node bin/maestro.js task-complete \
+  --root /path/to/project \
+  --task <task-id> \
+  --summary "Acceptance checks passed" \
+  --memory-response final-memory.json
+```
+
+Review long-term memory candidates:
+
+```bash
+node bin/maestro.js memory-candidates --root /path/to/project
+node bin/maestro.js memory-review \
+  --root /path/to/project \
+  --id <candidate-id> \
+  --reviewer old-zhou \
+  --approve \
+  --rationale "Stable, sourced project knowledge"
+```
+
+Playbooks remain optional guidance:
+
+```bash
+node bin/maestro.js playbook-list --root /path/to/project
+node bin/maestro.js playbook-read --root /path/to/project --name release.md
+```
+
+Hosts can adapt their model client without adding a vendor dependency:
+
+```js
+import { createModelRunner, MaestroRuntime } from "@maestro/runtime";
+
+const memoryRunner = createModelRunner({
+  model: "small-memory-model",
+  tier: "memory",
+  invoke: ({ model, request }) => host.generate({ model, input: request }),
+});
+const runtime = new MaestroRuntime(projectRoot, { memoryRunner });
+```
 
 ## Project data
 
