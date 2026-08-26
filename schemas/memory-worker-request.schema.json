@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/memory-worker-request.schema.json",
+  "title": "Memory Worker Request",
+  "type": "object",
+  "required": ["operation", "source_files", "current_memory", "memory_hints"],
+  "properties": {
+    "operation": {
+      "enum": ["role-compress", "session-handoff", "task-bootstrap", "long-term-candidate"]
+    },
+    "source_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "current_memory": { "type": "object" },
+    "memory_hints": { "type": "object" },
+    "task_context": { "type": "object" },
+    "source_content": { "type": "object" }
+  },
+  "additionalProperties": false
+}
