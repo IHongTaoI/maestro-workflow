@@ -93,6 +93,7 @@ function relativePath(value: string): string {
 }
 
 function below(path: string, prefix: string): boolean {
+  if (prefix === ".") return true;
   return path === prefix || path.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`);
 }
 

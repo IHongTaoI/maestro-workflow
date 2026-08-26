@@ -16,6 +16,9 @@ test("guards role effects through the five Core actions", async () => {
     await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", write: [".agents/.local/work/core-probe/meta.json"] }), /protected path/);
     await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", write: [".agents"] }), /protected path/);
     await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", write: ["src/../.agents"] }), /protected path/);
+    await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", write: ["."] }), /protected path/);
+    await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", write: ["./"] }), /protected path/);
+    await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", write: ["src/.."] }), /protected path/);
     await assert.rejects(applyPermissions({ projectRoot: root, workspaceId: "core-probe", role: "coder", execute: [".agents/.local/work/core-probe"] }), /protected path/);
     const protectedProposal = await submitProposal({ projectRoot: root, workspaceId: "core-probe", taskId: "protected-write", role: "coder", summary: "Attempt protected write.", effects: [{ action: "write", path: ".agents/.local/work/core-probe/runtime/owned.json" }], expectedOutputs: [], id: "proposal-protected" });
     const permissionDirectory = join(workspaceRoot(root, "core-probe"), "runtime", "permissions");

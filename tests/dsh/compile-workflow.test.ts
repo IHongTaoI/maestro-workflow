@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { compileTaskGraph } from "../../src/dsh/compile-workflow.ts";
 import { parseTaskGraph } from "../../src/task-graph/parse.ts";
-import { validateTaskGraph } from "../../src/task-graph/validate.ts";
+import { TaskGraphValidationError, validateTaskGraph } from "../../src/task-graph/validate.ts";
 
 test("compiles dependency layers into a deterministic DSH workflow request", () => {
   const graph = validateTaskGraph(parseTaskGraph(`
@@ -95,4 +95,36 @@ tasks:
   assert.deepEqual(request.args.layers.map((layer) => layer.tasks.map((task) => task.id)), [["first"], ["second"]]);
   assert.equal(request.args.layers[0]?.tasks[0]?.maxAttempts, 2);
   assert.match(request.script, /attempt <= task\.maxAttempts/);
+});
+
+test("normalizes dot segments before detecting write conflicts", () => {
+  const graph = validateTaskGraph(parseTaskGraph(`
+name: normalized-conflict
+tasks:
+  - id: first
+    role: coder
+    description: Change normalized file.
+    writes: [src/tmp/../foo.ts]
+  - id: second
+    role: coder
+    description: Change the same file.
+    writes: [./src/foo.ts]
+`));
+
+  assert.deepEqual(graph.tasks.map((task) => task.writes), [["src/foo.ts"], ["src/foo.ts"]]);
+  assert.deepEqual(compileTaskGraph(graph).args.layers.map((layer) => layer.tasks.map((task) => task.id)), [["first"], ["second"]]);
+});
+
+test("rejects duplicate writes after path normalization", () => {
+  assert.throws(
+    () => validateTaskGraph(parseTaskGraph(`
+name: duplicate-normalized-write
+tasks:
+  - id: task
+    role: coder
+    description: Change one file twice.
+    writes: [src/tmp/../foo.ts, src/foo.ts]
+`)),
+    (error: unknown) => error instanceof TaskGraphValidationError && error.message.includes("duplicate write path"),
+  );
 });

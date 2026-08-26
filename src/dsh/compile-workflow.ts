@@ -1,3 +1,5 @@
+import { posix } from "node:path";
+
 import type { Task, TaskGraph } from "../task-graph/types.ts";
 import type { PersistedTaskContext } from "../task-memory/contracts.ts";
 import { TASK_RESULT_SCHEMA, type CompiledLayer, type DshWorkflowRequest } from "./workflow-contract.ts";
@@ -39,9 +41,13 @@ for (const layer of args.layers) {
 }
 return { graph: args.graphName, tasks: results };`;
 
+function normalizeConflictPath(path: string): string {
+  return posix.normalize(path.replaceAll("\\", "/")).replace(/\/$/, "");
+}
+
 function pathsConflict(left: readonly string[], right: readonly string[]): boolean {
-  const normalizedLeft = left.map((path) => path.replaceAll("\\", "/").replace(/\/$/, ""));
-  const normalizedRight = right.map((path) => path.replaceAll("\\", "/").replace(/\/$/, ""));
+  const normalizedLeft = left.map(normalizeConflictPath);
+  const normalizedRight = right.map(normalizeConflictPath);
   return normalizedLeft.some((leftPath) => normalizedRight.some((rightPath) => (
     leftPath === rightPath || leftPath.startsWith(`${rightPath}/`) || rightPath.startsWith(`${leftPath}/`)
   )));
