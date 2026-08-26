@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, posix, relative, resolve, sep } from "node:path";
 
 import { atomicCreateJson } from "./atomic.ts";
 import { withTaskLock } from "./task-lock.ts";
@@ -66,8 +66,8 @@ const PROTECTED = [
   "meta.json",
   "events.jsonl",
   "input/request.md",
-  "memory/",
-  "runtime/",
+  "memory",
+  "runtime",
 ];
 
 export class CoreProtocolError extends Error {
@@ -87,13 +87,22 @@ function requireId(value: string, label: string): void {
 
 function relativePath(value: string): string {
   if (value.trim() === "" || isAbsolute(value)) throw new CoreProtocolError(`path must be project-relative: ${value}`);
-  const normalized = value.replaceAll("\\", "/").replace(/^\.\//, "");
+  const normalized = posix.normalize(value.trim().replaceAll("\\", "/").replace(/^\.\//, ""));
   if (normalized === ".." || normalized.startsWith("../")) throw new CoreProtocolError(`path escapes project root: ${value}`);
   return normalized;
 }
 
 function below(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`);
+}
+
+function overlaps(path: string, protectedPath: string): boolean {
+  return below(path, protectedPath) || below(protectedPath, path);
+}
+
+function protectedWorkspacePaths(projectRoot: string, workspaceId: string): string[] {
+  const workspacePrefix = relative(projectRoot, workspaceRoot(projectRoot, workspaceId)).split(sep).join("/");
+  return PROTECTED.map((protectedPath) => `${workspacePrefix}/${protectedPath}`);
 }
 
 function runtimePath(projectRoot: string, workspaceId: string, directory: string, id: string): string {
@@ -167,10 +176,9 @@ export async function applyPermissions(options: {
     execute: normalize(options.execute),
     appliedAt: timestamp(options.clock),
   };
-  const workspacePrefix = relative(options.projectRoot, workspaceRoot(options.projectRoot, options.workspaceId)).split(sep).join("/");
+  const protectedPaths = protectedWorkspacePaths(options.projectRoot, options.workspaceId);
   for (const path of [...grant.write, ...grant.execute]) {
-    const insideWorkspace = path.startsWith(`${workspacePrefix}/`) ? path.slice(workspacePrefix.length + 1) : undefined;
-    if (insideWorkspace !== undefined && PROTECTED.some((protectedPath) => below(insideWorkspace, protectedPath))) {
+    if (protectedPaths.some((protectedPath) => overlaps(path, protectedPath))) {
       throw new CoreProtocolError(`permission grant cannot expose protected path: ${path}`);
     }
   }
@@ -188,9 +196,14 @@ export async function validateProposal(options: {
   const proposal = await loadJson<RuntimeProposal>(runtimePath(options.projectRoot, options.workspaceId, "proposals", options.proposalId), `proposal "${options.proposalId}"`);
   const grant = await loadJson<PermissionGrant>(runtimePath(options.projectRoot, options.workspaceId, "permissions", options.permissionGrantId), `permission grant "${options.permissionGrantId}"`);
   const reasons: string[] = [];
+  const protectedPaths = protectedWorkspacePaths(options.projectRoot, options.workspaceId);
   if (proposal.role !== grant.role) reasons.push("proposal role does not match permission grant role");
   for (const effect of proposal.effects) {
     const allowed = effect.action === "read" ? grant.read : effect.action === "write" ? grant.write : grant.execute;
+    if (effect.action !== "read" && protectedPaths.some((protectedPath) => overlaps(effect.path, protectedPath))) {
+      reasons.push(`${effect.action} targets protected path ${effect.path}`);
+      continue;
+    }
     if (!allowed.some((prefix) => below(effect.path, prefix))) reasons.push(`${effect.action} is not allowed for ${effect.path}`);
   }
   const validation: ProposalValidation = {

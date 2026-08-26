@@ -255,15 +255,20 @@ export async function reviseWorkspace(options: {
     const targetIndex = sequence.indexOf(target);
     if (targetIndex < 0 || targetIndex > currentIndex) throw new WorkspaceStoreError("revision target must be a completed or current stage in this mode");
     const timestamp = now(options.clock);
+    const invalidatedStages = sequence.slice(targetIndex, currentIndex + 1).filter((stage) => stage !== "completed");
+    const stageRevisions = { ...current.stageRevisions };
+    for (const stage of invalidatedStages) {
+      stageRevisions[stage] = (stageRevisions[stage] ?? 1) + 1;
+    }
     const updated: WorkspaceMeta = {
       ...current,
       currentStage: target,
       status: "active",
-      stageRevisions: { ...current.stageRevisions, [target]: (current.stageRevisions[target] ?? 1) + 1 },
+      stageRevisions,
       updatedAt: timestamp,
     };
     await atomicWriteJson(workspaceMetaPath(options.projectRoot, current.id), updated);
-    await event(options.projectRoot, current.id, "stage.revised", timestamp, { severity: options.severity, target, reason: options.reason });
+    await event(options.projectRoot, current.id, "stage.revised", timestamp, { severity: options.severity, target, reason: options.reason, invalidatedStages });
     return updated;
   });
 }

@@ -44,6 +44,14 @@ test("enforces the full workflow lifecycle, checkpoints and delivery gates", asy
     assert.equal(revised.currentStage, "requirements");
     assert.equal(revised.status, "active");
     assert.equal(revised.stageRevisions.requirements, 2);
+    for (const stage of ["design", "architecture", "planning", "implementation", "testing", "delivery"] as const) {
+      assert.equal(revised.stageRevisions[stage], 2);
+    }
+
+    meta = await advanceWorkspace({ projectRoot, workspaceId: id });
+    assert.equal(meta.currentStage, "design");
+    meta = await advanceWorkspace({ projectRoot, workspaceId: id });
+    assert.equal(meta.currentStage, "architecture");
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
