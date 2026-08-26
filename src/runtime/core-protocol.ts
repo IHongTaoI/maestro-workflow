@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
 import { atomicCreateJson } from "./atomic.ts";
 import { withTaskLock } from "./task-lock.ts";
-import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError, resolveProjectContainedExistingPath } from "./project-path.ts";
+import { assertProjectContainedPath, normalizeProjectRelativePath, ProjectPathError, readProjectContainedRegularFile } from "./project-path.ts";
 import { writeMemoryEntry } from "../task-memory/memory-store.ts";
 import type { MemoryEntry } from "../task-memory/contracts.ts";
 import { workspaceRoot } from "../workspace/paths.ts";
@@ -263,20 +263,14 @@ export async function collectResult(options: {
     if (!expectedOutputs.some((prefix) => below(declared, prefix))) {
       throw new CoreProtocolError(`result artifact was not declared by proposal: ${declared}`);
     }
-    const lexical = resolve(options.projectRoot, declared);
-    const declaredStat = await lstat(lexical);
-    if (!declaredStat.isFile() || declaredStat.isSymbolicLink()) throw new CoreProtocolError(`result artifact must be a regular file: ${declared}`);
-    let absolute: string;
+    let file;
     try {
-      absolute = await resolveProjectContainedExistingPath(options.projectRoot, declared, "result artifact");
+      file = await readProjectContainedRegularFile(options.projectRoot, declared, "result artifact");
     } catch (error) {
       if (error instanceof ProjectPathError) throw new CoreProtocolError(error.message);
       throw error;
     }
-    const stat = await lstat(absolute);
-    if (!stat.isFile()) throw new CoreProtocolError(`result artifact must be a regular file: ${declared}`);
-    const contents = await readFile(absolute);
-    artifacts.push({ path: declared, sha256: createHash("sha256").update(contents).digest("hex"), byteLength: contents.length });
+    artifacts.push({ path: declared, sha256: createHash("sha256").update(file.contents).digest("hex"), byteLength: file.contents.length });
   }
   const result: CollectedResult = {
     schemaVersion: 1,

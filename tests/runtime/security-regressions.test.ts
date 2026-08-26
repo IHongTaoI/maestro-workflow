@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -80,6 +80,24 @@ test("serializes stale-lock reclamation before exposing the task lock", async ()
     await assert.rejects(withTaskLock(lock, async () => undefined), TaskLockConflictError);
     releaseResolve();
     await first;
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("recovers a stale empty acquisition guard instead of deadlocking forever", async () => {
+  const root = await mkdtemp(join(tmpdir(), "maestro-guard-recovery-"));
+  try {
+    const lock = join(root, "locks", "task.lock");
+    const guard = `${lock}.acquire`;
+    await mkdir(join(root, "locks"), { recursive: true });
+    await writeFile(guard, "");
+    const old = new Date("2026-08-25T00:00:00.000Z");
+    await utimes(guard, old, old);
+
+    let entered = false;
+    await withTaskLock(lock, async () => { entered = true; });
+    assert.equal(entered, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

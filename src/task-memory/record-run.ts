@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import type { Stats } from "node:fs";
-import { dirname, relative, resolve, sep } from "node:path";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 
 import {
   TASK_MEMORY_SCHEMA_VERSION,
@@ -15,10 +14,10 @@ import {
 } from "./contracts.ts";
 import { writeMemoryEntry } from "./memory-store.ts";
 import { artifactContentPath, artifactDirectory, artifactMetadataPath, runCommitPath, runResultPath, taskLockPath } from "./paths.ts";
-import { loadPreparedRun, TaskRunConflictError } from "./task-run.ts";
+import { finalRoleStates, loadPreparedRun, TaskRunConflictError } from "./task-run.ts";
 import { type Clock, loadTask, persistTask } from "./task-store.ts";
 import { atomicCreateJson } from "../runtime/atomic.ts";
-import { normalizeProjectRelativePath, ProjectPathError, resolveProjectContainedExistingPath } from "../runtime/project-path.ts";
+import { normalizeProjectRelativePath, ProjectPathError, readProjectContainedRegularFile } from "../runtime/project-path.ts";
 import { withTaskLock } from "../runtime/task-lock.ts";
 import { writeRoleState } from "../memory/three-layer-store.ts";
 
@@ -137,7 +136,7 @@ function validateWorkflowResult(value: unknown, task: StoredTask): WorkflowResul
   };
 }
 
-async function requireArtifactFile(projectRoot: string, declaredPath: string): Promise<{ sourcePath: string; sourceRelativePath: string; stat: Stats; contents: Buffer }> {
+async function requireArtifactFile(projectRoot: string, declaredPath: string): Promise<{ sourceRelativePath: string; byteLength: number; contents: Buffer }> {
   let normalized: string;
   try {
     normalized = normalizeProjectRelativePath(declaredPath, "Artifact path");
@@ -145,34 +144,21 @@ async function requireArtifactFile(projectRoot: string, declaredPath: string): P
     if (error instanceof ProjectPathError) throw new TaskRunRecordError(error.message);
     throw error;
   }
-  const lexicalPath = resolve(projectRoot, normalized);
 
-  let declaredStat: Stats;
+  let file;
   try {
-    declaredStat = await lstat(lexicalPath);
-  } catch {
-    throw new TaskRunRecordError(`Artifact file does not exist: ${declaredPath}`);
-  }
-  if (!declaredStat.isFile() || declaredStat.isSymbolicLink()) {
-    throw new TaskRunRecordError(`Artifact must be a regular project file: ${declaredPath}`);
-  }
-  let sourcePath: string;
-  try {
-    sourcePath = await resolveProjectContainedExistingPath(projectRoot, normalized, "Artifact path");
+    file = await readProjectContainedRegularFile(projectRoot, normalized, "Artifact path");
   } catch (error) {
     if (error instanceof ProjectPathError) throw new TaskRunRecordError(error.message);
     throw error;
   }
-  const stat = await lstat(sourcePath);
-  if (!stat.isFile()) throw new TaskRunRecordError(`Artifact must be a regular project file: ${declaredPath}`);
-  if (stat.size > MAX_ARTIFACT_BYTES) {
+  if (file.stat.size > MAX_ARTIFACT_BYTES) {
     throw new TaskRunRecordError(`Artifact exceeds the ${MAX_ARTIFACT_BYTES} byte snapshot limit: ${declaredPath}`);
   }
   return {
-    sourcePath,
-    sourceRelativePath: relative(projectRoot, sourcePath).split(sep).join("/"),
-    stat,
-    contents: await readFile(sourcePath),
+    sourceRelativePath: file.projectRelativePath,
+    byteLength: file.contents.length,
+    contents: file.contents,
   };
 }
 
@@ -196,7 +182,7 @@ async function prepareArtifactSnapshots(projectRoot: string, task: StoredTask, r
           description: declared.description,
           snapshotPath: `.maestro/artifacts/${id}/content`,
           sha256: createHash("sha256").update(source.contents).digest("hex"),
-          byteLength: source.stat.size,
+          byteLength: source.byteLength,
           recordedAt,
         },
         contents: source.contents,
@@ -344,21 +330,8 @@ export async function recordTaskRun(options: RecordTaskRunOptions): Promise<Reco
       memoryEntryId: memory.id,
     };
     await writeRecordedRun(options.projectRoot, task.id, run);
-    for (const node of task.graph.tasks) {
-      const state = result.tasks[node.id]?.roleState;
-      if (state !== undefined) {
-        await writeRoleState({
-          projectRoot: options.projectRoot,
-          state: {
-            schemaVersion: 1,
-            taskId: task.id,
-            role: node.role,
-            ...state,
-            sourceRunId: prepared.id,
-            updatedAt: recordedAt,
-          },
-        });
-      }
+    for (const state of finalRoleStates(task, result, prepared.id, recordedAt)) {
+      await writeRoleState({ projectRoot: options.projectRoot, state });
     }
     const updatedTask: StoredTask = {
       ...task,

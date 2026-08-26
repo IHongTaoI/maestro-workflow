@@ -10,6 +10,7 @@ import {
   type PreparedRun,
   type RecordedRun,
   type StoredTask,
+  type WorkflowResult,
 } from "./contracts.ts";
 import { queryProjectMemory } from "./memory-store.ts";
 import { runDirectory, runReceiptPath, runResultPath, taskLockPath } from "./paths.ts";
@@ -60,6 +61,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Gives a persisted workflow request an integrity marker for recovery and audit. */
 export function workflowDigest(workflow: DshWorkflowRequest): string {
   return createHash("sha256").update(JSON.stringify(workflow)).digest("hex");
+}
+
+/** Returns only the final state emitted by each role in graph order. */
+export function finalRoleStates(task: StoredTask, result: WorkflowResult, sourceRunId: string, updatedAt: string): RoleState[] {
+  const states = new Map<string, RoleState>();
+  for (const node of task.graph.tasks) {
+    const state = result.tasks[node.id]?.roleState;
+    if (state === undefined) continue;
+    states.set(node.role, {
+      schemaVersion: 1,
+      taskId: task.id,
+      role: node.role,
+      ...state,
+      sourceRunId,
+      updatedAt,
+    });
+  }
+  return [...states.values()];
 }
 
 function parseMemoryExcerpt(value: unknown, path: string): MemoryExcerpt {
@@ -340,20 +359,8 @@ export async function resumeTaskRun(options: ResumeTaskRunOptions): Promise<Prep
 }
 
 async function replayRecordedRoleStates(projectRoot: string, task: StoredTask, recorded: RecordedRun): Promise<void> {
-  for (const node of task.graph.tasks) {
-    const state = recorded.result.tasks[node.id]?.roleState;
-    if (state === undefined) continue;
-    await writeRoleState({
-      projectRoot,
-      state: {
-        schemaVersion: 1,
-        taskId: task.id,
-        role: node.role,
-        ...state,
-        sourceRunId: recorded.id,
-        updatedAt: recorded.recordedAt,
-      },
-    });
+  for (const state of finalRoleStates(task, recorded.result, recorded.id, recorded.recordedAt)) {
+    await writeRoleState({ projectRoot, state });
   }
 }
 
