@@ -1,7 +1,7 @@
-node_modules/
-coverage/
-*.tsbuildinfo
 .maestro/
 .dsh/
 .agents/.local/
+node_modules/
 *.log
+__pycache__/
+*.pyc

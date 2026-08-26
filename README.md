@@ -1,102 +1,72 @@
-# Maestro v1
+# Maestro
 
-Maestro v1 is a host-neutral, multi-role collaboration system built from scratch.
+Maestro is an installable Codex Skill for dynamic multi-role software collaboration.
 
-It intentionally does not implement a fixed delivery state machine. Old Zhou decides what should
-happen next; roles perform specialist work; the Runtime only provides deterministic storage,
-memory boundaries and safe contracts.
+The user works primarily with **Old Zhou**, who decides whether to handle a request directly or
+delegate TPM, Laborer, Architect, Orchestrator, Coder, Test Designer, Test Runner, or Delivery.
+Maestro preserves continuity through Temporary, Task, and Long-term project memory without forcing
+every request through a fixed workflow.
 
-## Runtime capabilities
+## Install
 
-The current implementation includes:
+The complete Skill is the [`maestro/`](maestro/) directory.
 
-- a portable `skills/maestro/SKILL.md` controller contract;
-- Temporary, Task and Long-term memory directories;
-- explicit confirmation before a formal Task is created;
-- Detailed Result, per-role Current State and lightweight Handoff receipts;
-- `current + references` memory storage;
-- a host-neutral Memory Worker contract with one retry, primary-model fallback and
-  `memory_pending` preservation;
-- pending long-term memory candidates with explicit approval or rejection receipts;
-- Task completion records and archive storage;
-- optional JSON and Markdown Playbook discovery;
-- host-neutral model adapters for structured or text JSON responses;
-- a zero-runtime-dependency Node.js CLI and test suite.
+Copy it into the Codex skills directory:
 
-## Quick start
-
-```bash
-npm test
-node bin/maestro.js init --root /path/to/project
-node bin/maestro.js temp-create --root /path/to/project --title "Investigate startup performance"
+```text
+~/.codex/skills/maestro/
 ```
 
-Create a formal Task only after user confirmation:
+The installed directory must contain:
 
-```bash
-node bin/maestro.js task-create \
-  --root /path/to/project \
-  --temp <temporary-id> \
-  --objective "Improve startup performance" \
-  --confirmed
+```text
+~/.codex/skills/maestro/SKILL.md
+~/.codex/skills/maestro/references/
 ```
 
-Record one role run:
+Alternatively, package the contents of `maestro/` as a ZIP and upload/install it as one Skill.
+There is no npm installation, background service, CLI, or JavaScript Runtime.
 
-```bash
-node bin/maestro.js role-record \
-  --root /path/to/project \
-  --task <task-id> \
-  --role laborer \
-  --file role-result.json
+## Use
+
+Start naturally in a project:
+
+```text
+使用 Maestro 帮我分析这个项目的启动性能问题。
 ```
 
-The CLI does not choose or call a vendor model. A host can inject a Memory Worker runner through
-the JavaScript API, or pass a previously generated response with `--memory-response`.
+Or address Old Zhou:
 
-Complete and archive a Task:
-
-```bash
-node bin/maestro.js task-complete \
-  --root /path/to/project \
-  --task <task-id> \
-  --summary "Acceptance checks passed" \
-  --memory-response final-memory.json
+```text
+老周，我想先讨论一下新架构，暂时不要正式开工。
 ```
 
-Review long-term memory candidates:
+Direct role calls are supported:
 
-```bash
-node bin/maestro.js memory-candidates --root /path/to/project
-node bin/maestro.js memory-review \
-  --root /path/to/project \
-  --id <candidate-id> \
-  --reviewer old-zhou \
-  --approve \
-  --rationale "Stable, sourced project knowledge"
+```text
+老陈帮我 review 这个设计。
+阿强调查一下当前调用链，先不要改代码。
+大春实现这个已经确认的修改。
 ```
 
-Playbooks remain optional guidance:
+Maestro creates project-owned state under `.maestro/` only when the request needs persistence. It
+asks for confirmation before turning exploratory discussion into a formal Task.
 
-```bash
-node bin/maestro.js playbook-list --root /path/to/project
-node bin/maestro.js playbook-read --root /path/to/project --name release.md
+## Package contents
+
+```text
+maestro/
+  SKILL.md
+  references/
+    coordination.md
+    storage.md
+    memory.md
+    handoffs.md
+    playbooks.md
+    roles/
+    schemas/
 ```
 
-Hosts can adapt their model client without adding a vendor dependency:
-
-```js
-import { createModelRunner, MaestroRuntime } from "@maestro/runtime";
-
-const memoryRunner = createModelRunner({
-  model: "small-memory-model",
-  tier: "memory",
-  invoke: ({ model, request }) => host.generate({ model, input: request }),
-});
-const runtime = new MaestroRuntime(projectRoot, { memoryRunner });
-```
-
-## Project data
-
-Runtime data is created below `.maestro/` in the target project. It is project-owned and can be
-restored without relying on an earlier Agent session.
+All orchestration behavior is expressed through the Skill and its references. The host's native
+filesystem and sub-agent capabilities provide the mechanical operations described by the original
+Maestro v1 initialization plan.

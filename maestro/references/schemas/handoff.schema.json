@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/handoff.schema.json",
+  "title": "Maestro Role Handoff",
+  "type": "object",
+  "required": [
+    "status",
+    "summary",
+    "result_path",
+    "role_state_path",
+    "needs_user_input",
+    "recommended_next"
+  ],
+  "properties": {
+    "status": { "enum": ["completed", "blocked", "failed", "cancelled"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "result_path": { "type": "string", "minLength": 1 },
+    "role_state_path": { "type": "string", "minLength": 1 },
+    "needs_user_input": { "type": "boolean" },
+    "recommended_next": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "reason"],
+        "properties": {
+          "role": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
