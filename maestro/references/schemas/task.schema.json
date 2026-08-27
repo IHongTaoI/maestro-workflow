@@ -20,7 +20,12 @@
     "updated_at": { "type": "string", "format": "date-time" },
     "updated_by": { "type": "string", "minLength": 1 },
     "revision": { "type": "integer", "minimum": 0 },
-    "source_temporary": { "type": "string", "minLength": 1 }
+    "source_temporary": { "type": "string", "minLength": 1 },
+    "promotion_transaction": { "type": "string", "minLength": 1 }
+  },
+  "dependentRequired": {
+    "source_temporary": ["promotion_transaction"],
+    "promotion_transaction": ["source_temporary"]
   },
   "additionalProperties": false
 }

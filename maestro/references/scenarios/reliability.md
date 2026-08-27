@@ -45,14 +45,53 @@ USER: 按这个方案改，正式开始优化。
 
 EXPECT:
 - Treat the instruction as unambiguous execution intent.
-- Create a recoverable promotion transaction and a Task with source_temporary.
+- Create a recoverable promotion transaction and Task metadata with source_temporary and
+  promotion_transaction.
 - Preserve relevant Temporary sources and revisions in Task context or References.
-- Activate the resumable Task before archiving the source Temporary and clearing its binding.
+- Publish the commit marker as the single logical switch from active Temporary to active Task.
+- Materialize the Task and archive the Temporary after the logical switch.
 
 MUST NOT:
 - Delete the Temporary or its References.
 - Expose a preparing partial Task as active.
 - Add unrelated optimization work to the objective.
+```
+
+## Promotion stops before commit
+
+```text
+GIVEN:
+- A promotion transaction has complete before snapshots and only part of its staged content.
+- No committed.yaml exists.
+WHEN: the writer stops unexpectedly
+
+EXPECT:
+- Treat the source Temporary as the only active destination.
+- Keep every staged or preparing Task hidden and non-runnable.
+- Reacquire locks, verify before hashes, and publish failed.yaml or restart preparation.
+
+MUST NOT:
+- Route to the staged Task.
+- Apply only the staged files that happened to finish.
+```
+
+## Promotion stops after commit
+
+```text
+GIVEN:
+- committed.yaml exists for a promotion.
+- Two of four canonical operations have applied events.
+WHEN: a later Session resumes the project
+
+EXPECT:
+- Treat the staged Task as active and exclude the source Temporary immediately.
+- For each remaining path, compare canonical content with before and staged hashes.
+- Apply staged content when the before hash matches and reconstruct an event when staged matches.
+
+MUST NOT:
+- Resume the source Temporary.
+- Roll back the committed promotion.
+- Guess when a canonical hash matches neither snapshot.
 ```
 
 ## Ambiguous promotion intent
@@ -91,12 +130,13 @@ GIVEN: Architect cannot choose between two designs without knowing whether initi
 USER: 保存一下，我换个 Session 继续。
 
 EXPECT:
-- Persist a lightweight Handoff with needs_user_input=true.
+- Persist a lightweight Handoff with status=blocked and needs_user_input=true.
 - Include the exact question and reason needed by Old Zhou.
 - Let the next Session ask the question without opening the Detailed Result first.
 
 MUST NOT:
 - Persist a blocking Handoff with no questions.
+- Combine needs_user_input=true with completed, failed, or cancelled status.
 - Copy the full Detailed Result into the Handoff.
 ```
 

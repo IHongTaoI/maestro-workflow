@@ -55,10 +55,11 @@ When a role is blocked on the user, the Handoff carries the exact prompt Old Zho
 }
 ```
 
-`needs_user_input: true` requires at least one concise question and its decision context. Old Zhou
-may ask it directly from the Handoff and reads the Detailed Result only when the answer requires
-supporting detail. When `needs_user_input` is false, omit `questions` or use an empty array; do not
-carry stale questions forward.
+`needs_user_input: true` requires `status: blocked` plus at least one concise question and its
+decision context. Old Zhou may ask it directly from the Handoff and reads the Detailed Result only
+when the answer requires supporting detail. `blocked` does not imply user input: a role may instead
+be waiting on another dependency. When `needs_user_input` is false, omit `questions` or use an empty
+array; do not carry stale questions forward.
 
 Validate machine-produced Handoffs against [handoff.schema.json](schemas/handoff.schema.json) before
 persisting them under the Task's `handoffs/` directory.

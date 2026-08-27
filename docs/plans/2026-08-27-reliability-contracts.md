@@ -73,3 +73,30 @@
 1. Inspect staged and unstaged diffs for scope and consistency.
 2. Stage only the issue #6 files.
 3. Commit with a focused documentation/schema message.
+
+### Task 7: Address transaction and schema review findings
+
+**Files:**
+- Modify: `docs/plans/2026-08-27-reliability-contracts-design.md`
+- Modify: `maestro/references/storage.md`
+- Modify: `maestro/references/coordination.md`
+- Modify: `maestro/references/handoffs.md`
+- Modify: `maestro/references/schemas/handoff.schema.json`
+- Modify: `maestro/references/scenarios/reliability.md`
+- Create: `maestro/references/scenarios/schema-fixtures/handoff-completed-with-input-invalid.json`
+
+1. Make the immutable transaction commit marker the logical visibility boundary.
+2. Require before snapshots, staged replacements, hashes, and per-file applied events so recovery
+   can deterministically discard or finish a transaction.
+3. Require `status: blocked` whenever `needs_user_input` is true and add a failing fixture.
+
+### Task 8: Automate contract verification
+
+**Files:**
+- Create: `scripts/verify-contracts.ps1`
+- Create: `.github/workflows/contracts.yml`
+
+1. Move schema positive/negative checks, JSON parsing, contract markers, and local-link checks into
+   one repeatable script.
+2. Run the script locally.
+3. Add a minimal pull-request and master-push workflow that runs the same script.

@@ -106,11 +106,13 @@ updated_at: 2026-08-27T12:03:00Z
 updated_by: old-zhou/session-or-run-id
 revision: 1
 source_temporary: 20260827T103000Z-a1b2c3
+promotion_transaction: 20260827T120000Z-p7q8r9
 ```
 
 `source_temporary` is present only when the Task was promoted from Temporary Memory. A Task created
-directly from an explicit execution request omits it. Validate parsed Task metadata against
-[task.schema.json](schemas/task.schema.json).
+directly from an explicit execution request omits it. A promoted Task also records
+`promotion_transaction`, which identifies the transaction whose commit marker controls its initial
+visibility. Validate parsed Task metadata against [task.schema.json](schemas/task.schema.json).
 
 ## Mutable-state write protocol
 
@@ -150,13 +152,54 @@ through one writer. If neither exclusive locking nor single-writer serialization
 report that concurrent mutation is unsupported and do not perform the write.
 
 For an operation that changes several mutable files, acquire every lock in lexical order of the
-normalized state paths, recheck every base revision under those locks, and write
-`.maestro/transactions/<transaction-id>/intent.yaml` before publishing replacements. The immutable
-intent lists operation, actor, source and target paths, base and intended revisions, and
-`status: preparing`. Publish one immutable `committed.yaml` or `failed.yaml` terminal event. On
-interruption, use these records to finish or roll back to the last complete replacements without
-guessing. Release locks in reverse order. Prefer a single-file update when no invariant requires a
-group.
+normalized state paths, recheck every base revision under those locks, and prepare this immutable
+transaction bundle before changing canonical state:
+
+```text
+.maestro/transactions/<transaction-id>/
+  intent.yaml
+  before/<state-key>
+  staged/<state-key>
+  applied/<sequence>.yaml
+  committed.yaml | failed.yaml
+```
+
+`intent.yaml` records the operation and actor plus, for every create, replacement, or lifecycle
+move: normalized source and target paths, base and intended revisions, before and staged snapshot
+paths, and SHA-256 hashes. Store the complete bytes under `before/` and `staged/`; a reference may
+replace copied bytes only when it addresses immutable, reachable content with the same recorded
+hash. A path that did not exist uses an explicit `before: absent` value. Validate every staged file
+and make the whole bundle durable before publishing a terminal event.
+
+The terminal event is the logical visibility boundary:
+
+- With only `intent.yaml`, the before view remains authoritative. Staged creates and preparing
+  Tasks are non-runnable and invisible to normal routing or resumption.
+- Atomically creating `committed.yaml` switches the complete logical view to all staged content at
+  once. A lifecycle move is effective at that point even if canonical directories have not yet
+  been rearranged.
+- `failed.yaml` may be published only before commit and leaves the before view authoritative. Once
+  committed, the operation must be finished rather than rolled back.
+
+Create a terminal marker exclusively. If both markers are ever present, treat the transaction as
+corrupt and stop for explicit recovery rather than choosing one by timestamp.
+
+After commit, materialize staged content into canonical paths using the normal atomic replacement
+rules. After each file replacement or move, append an immutable event under `applied/` with its
+path, staged hash, actor, and timestamp. Keep locks until normal materialization completes and
+release them in reverse order. If interrupted, a recovery writer reacquires the same locks and
+compares each canonical path with the intent:
+
+- A before hash or expected absence means the operation is still pending and the staged content can
+  be applied.
+- A staged hash means it was already applied and an absent applied event may be reconstructed.
+- A hash matching neither snapshot is a concurrent conflict; stop and report it without guessing.
+
+Readers and writers must resolve an incomplete transaction affecting requested state before normal
+routing, resumption, or mutation. They may read the transaction overlay directly or finish its
+materialization. A committed promotion therefore exposes its Task and excludes its source
+Temporary even during cleanup; an uncommitted promotion does the reverse. Prefer a single-file
+update when no invariant requires a group.
 
 ## File rules
 

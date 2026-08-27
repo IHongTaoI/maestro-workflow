@@ -50,7 +50,10 @@
       },
       "then": {
         "required": ["questions"],
-        "properties": { "questions": { "type": "array", "minItems": 1 } }
+        "properties": {
+          "status": { "const": "blocked" },
+          "questions": { "type": "array", "minItems": 1 }
+        }
       },
       "else": {
         "properties": { "questions": { "type": "array", "maxItems": 0 } }

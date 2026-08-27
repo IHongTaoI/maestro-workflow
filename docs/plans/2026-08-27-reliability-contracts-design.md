@@ -32,6 +32,14 @@ safety. Locks are coordination artifacts, not business workflow. Abandoned locks
 only after their owner is known inactive and the recorded lease has expired; reclamation is itself
 recorded.
 
+Multi-file changes add a staged transaction overlay. The transaction stores immutable before
+snapshots, complete staged replacements, hashes and revisions in its intent, and one applied event
+per materialized file. Publishing `committed.yaml` is the only logical visibility switch: before
+that marker, readers use the before state and ignore staged targets; after it, readers use the
+staged state even while canonical files are still being materialized. An uncommitted transaction
+may be discarded; a committed transaction must be finished. If a canonical file matches neither
+its before nor staged hash, recovery reports a conflict instead of guessing.
+
 ## Key decisions and trade-offs
 
 ### ADR: exclusive lock plus optimistic revision
@@ -45,10 +53,11 @@ recorded.
 ### Task promotion
 
 Investigation, evidence collection, and reversible experiments stay Temporary. An explicit command
-to implement or execute promotes the selected Temporary into a Task. Promotion first snapshots
-relevant Temporary sources into Task references, records `source_temporary`, creates Task metadata,
-then archives the Temporary and clears its Session binding. Ambiguous intent remains Temporary and
-requires one concise confirmation.
+to implement or execute promotes the selected Temporary into a Task. The target remains
+non-runnable while its transaction is preparing. The transaction atomically changes the logical
+view from active Temporary to active Task when its commit marker is published; physical Task
+materialization and Temporary archival may finish afterward from staged content. Ambiguous intent
+remains Temporary and requires one concise confirmation.
 
 ### Authorization
 
@@ -70,7 +79,9 @@ entry remains auditable but is marked non-current and linked to its replacement 
 - Revision mismatch preserves both sources and delegates reconciliation to one writer.
 - Invalid Handoffs are rejected before persistence; a blocking Handoff without exact questions is
   invalid.
-- Promotion failure leaves the Temporary active and does not expose a partial Task as runnable.
+- Promotion failure before commit leaves the Temporary active and does not expose the staged Task.
+  Failure after commit preserves the staged Task as authoritative and resumes materialization; it
+  never makes both source Temporary and target Task logically active.
 - Missing authority pauses only the risky action; safe analysis and preparation may continue.
 - Contradictory Long-term Memory is not deleted or trusted while its review is pending.
 
@@ -79,4 +90,5 @@ entry remains auditable but is marked non-current and linked to its replacement 
 Schema checks cover valid and invalid Handoffs plus Temporary and Task examples. Behavioral
 scenarios cover exploration, promotion, direct role invocation, Session Handoff, authorization,
 stale revisions, and Long-term supersession. Repository checks also verify that normative terms and
-schema fields remain aligned.
+schema fields remain aligned. The same checks run locally and in a lightweight pull-request and
+master-branch GitHub Actions workflow.

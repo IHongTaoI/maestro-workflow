@@ -1,0 +1,9 @@
+{
+  "status": "completed",
+  "summary": "The investigation completed without a blocking question.",
+  "result_path": ".maestro/tasks/example/roles/laborer/runs/result.md",
+  "role_state_path": ".maestro/tasks/example/roles/laborer/current-state.md",
+  "needs_user_input": false,
+  "questions": [],
+  "recommended_next": []
+}

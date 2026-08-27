@@ -27,15 +27,21 @@ that the user wants more investigation, keep the Temporary active and ask one co
 Promotion is a recoverable storage transition, not a mandatory workflow stage:
 
 1. Resolve the source Temporary and restate the execution objective. Do not silently broaden it.
-2. Acquire the source and target state locks and create a `preparing` transaction using the
-   multi-file protocol in [storage.md](storage.md).
-3. Create Task metadata with `source_temporary`, then copy or reference the relevant `current.md`
-   facts and reachable source files into Task context and References. Preserve original source
-   paths and revisions.
-4. Validate that the Task can resume independently, set it to `active`, then mark and move the
-   source Temporary to `archive/` and clear its Session binding.
-5. Mark the transaction `committed`. If any step fails before the Task is active, leave the
-   Temporary active and keep the partial Task non-runnable as `preparing` for recovery.
+2. Acquire the source and target state locks and prepare the transaction bundle defined in
+   [storage.md](storage.md). Snapshot every before value and stage every complete replacement.
+3. Keep the target Task transaction-owned and non-runnable while preparing. Stage Task metadata
+   with `source_temporary` and `promotion_transaction`, relevant Temporary facts and reachable
+   source files, and the final `active` status. Preserve original source paths and revisions.
+4. Stage the source Temporary's `archive` lifecycle state. After every staged file is validated and
+   durable, atomically publish `committed.yaml`. This one marker makes the Task logically active,
+   excludes the source Temporary from active routing, and invalidates its Session binding.
+5. Materialize staged Task files and the Temporary move into canonical paths, append each applied
+   event, and release locks. Physical cleanup after commit must not change logical visibility.
+
+If promotion stops before commit, the Temporary remains active and the staged Task stays hidden;
+recovery may publish `failed.yaml` and discard it. If it stops after commit, the Task is already the
+only logical active destination and recovery must finish materialization from staged content. Never
+roll back a committed promotion or resume its source Temporary.
 
 The promoted Task owns future execution state. Its archived source Temporary remains auditable and
 must not be deleted, merged with unrelated Temporaries, or treated as another active candidate.
