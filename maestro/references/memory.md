@@ -29,6 +29,26 @@ On an explicit Session Handoff, compress the current discussion into this format
 the discussion has lasting value but is paused; move it to Trash only when the user has rejected it
 and it has no continuing value.
 
+### Temporary routing context
+
+During candidate selection, load only each active Temporary's `meta.yaml` and these sections from
+`current.md`: Topic, Current goal, Confirmed, and Open questions. Do not load candidate
+`references/` trees, rejected-history detail, or full conversation material until after selection.
+
+Maintain a current-Session binding after a Temporary is explicitly selected, uniquely resolved, or
+created. The binding is conversational state, not a requirement for a host-specific API. When the
+host exposes a stable Session identifier, `last_session_id` may persist the association; otherwise
+keep it only in the current Session context. Treat persisted `last_session_id` as a recovery hint,
+not an override: it establishes a binding only when exactly one active candidate claims that ID.
+
+Replace or clear the binding when the user explicitly switches topics, the bound Temporary leaves
+`active`, or a formal Task is created from it. A clear request that uniquely identifies another
+active Temporary may replace the binding. Vague continuation language must not switch it.
+
+Switching bindings changes only which context is loaded. It must not merge, archive, rename, or
+otherwise modify the previous Temporary. Never combine two Temporaries automatically because their
+topics appear similar.
+
 ## Task Memory
 
 Task Memory contains public Task context plus each invoked role's Current State. A role state answers:

@@ -12,6 +12,48 @@ For exploration worth preserving, create or update Temporary Memory. Before form
 briefly state the proposed objective and ask for confirmation unless the user has already given an
 unambiguous start instruction.
 
+## Select active Temporary Memory
+
+When a request may continue earlier exploratory work, resolve the active Temporary before reading
+its detailed References or writing new state. Apply this precedence in order and stop at the first
+decisive rule:
+
+1. **Explicit reference.** Select an active Temporary when the user supplies its exact ID, uses a
+   topic or alias unique among active candidates, or chooses it from a candidate list. This always
+   overrides inference and the current Session binding. If an explicitly supplied ID does not
+   exist, report that it is unavailable; do not silently fall back to another candidate.
+2. **Current Session binding.** Continue the active Temporary already associated with this Session
+   when the request is compatible with it or uses only generic continuation language. If the user
+   clearly leaves the bound topic, the binding does not decide the route: evaluate the other active
+   candidates, ask when the new target is ambiguous, or apply the new-topic rule when none matches.
+3. **Unique relevant candidate.** With no valid binding, compare the request with lightweight
+   routing context for each active candidate. Auto-select only when one candidate has specific,
+   explainable routing evidence and no other candidate remains plausibly relevant.
+4. **Ambiguous candidates.** If two or more candidates remain plausible, do not guess. Present two
+   to four short candidates, ordered for readability, and ask the user to choose by number, ID, or
+   topic.
+5. **No relevant candidate.** Treat the request as a new topic. Create a Temporary only when the
+   discussion is worth preserving under the normal persistence rules; otherwise handle it as a
+   one-off request.
+
+Specific routing evidence includes a matching module, page, API, feature, failure, goal, unique
+alias, or an Open question directly continued by the request. Generic words such as “performance,”
+“the issue,” “the earlier plan,” or “continue” are insufficient by themselves. Do not use a numeric
+semantic threshold: the automatic-routing gate is whether the match is uniquely explainable and a
+second reasonable candidate can be excluded.
+
+Candidate-count handling is explicit:
+
+- With no active Temporary, apply the new-topic persistence rule.
+- With one active Temporary, select it only when it is explicitly referenced, bound to the Session,
+  or meaningfully related. A sole but unrelated candidate is not a default destination.
+- With multiple active Temporaries, auto-select only through explicit reference, a valid binding,
+  or a unique relevant match. Otherwise ask or start a new topic as described above.
+
+Recency may order the candidate list or provide supporting context after relevance is established.
+It must not override an explicit reference or Session binding, establish relevance by itself, or
+resolve two otherwise plausible candidates.
+
 ## Dynamic delegation
 
 Choose the smallest useful role set. Common paths are examples, not required sequences:
@@ -40,7 +82,8 @@ Do not pass the complete conversation or every historical Reference.
 
 ## Resumption
 
-To resume a role, load:
+Resolve the active Temporary with the rules above before resuming exploratory work. To resume a
+role in a formal Task, load:
 
 ```text
 Long-term Memory
