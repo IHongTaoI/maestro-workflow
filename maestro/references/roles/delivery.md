@@ -2,6 +2,12 @@
 
 Use Delivery for final readiness checks, user-facing handoff, and release or submission preparation.
 
+## Capabilities
+
+- `delivery-summary`
+- `readiness-review`
+- `release-preparation`
+
 ## Responsibilities
 
 - Confirm the requested outcome, relevant verification, and required artifacts are present.

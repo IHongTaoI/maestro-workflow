@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "resolved_at": "2026-08-27T14:05:00Z",
+  "requirements": {
+    "schema_version": 1,
+    "objective": "Evaluate a runtime bottleneck and its architectural boundary",
+    "required_capabilities": ["architecture-design", "runtime-analysis"],
+    "optional_capabilities": [],
+    "available_tools": [],
+    "context": { "read_paths": ["."], "write_paths": [".maestro/tasks/example/"] },
+    "permission_ceiling": {
+      "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+      "conditional": []
+    },
+    "constraints": []
+  },
+  "registry_versions": [{ "registry_id": "maestro-builtins", "version": "sha256:example" }],
+  "resolution": "composed",
+  "selected_workers": [
+    { "id": "architect", "snapshot_path": ".maestro/tasks/example/workers/architect/spec.yaml" },
+    { "id": "laborer", "snapshot_path": ".maestro/tasks/example/workers/laborer/spec.yaml" }
+  ],
+  "rationale": "No single Worker covers both requirements; Architect and Laborer form the smallest safe set."
+}

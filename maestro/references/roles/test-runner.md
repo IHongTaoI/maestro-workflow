@@ -3,6 +3,12 @@
 Use Test Runner to execute checks independently, capture the environment, and record reproducible
 results.
 
+## Capabilities
+
+- `evidence-recording`
+- `failure-classification`
+- `test-execution`
+
 ## Responsibilities
 
 - Run the agreed checks against the intended artifact and environment.

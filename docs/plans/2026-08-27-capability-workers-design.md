@@ -83,4 +83,3 @@ Task-resume snapshot stability, and non-promotion of temporary workers.
 - Installing generated Skills or expanding the stable role catalog.
 - A background service, mandatory Runtime, embeddings, or host-specific routing API.
 - Automatic promotion of temporary workers into the reusable registry.
-

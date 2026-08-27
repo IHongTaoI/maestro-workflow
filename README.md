@@ -2,8 +2,8 @@
 
 Maestro is an installable Codex Skill for dynamic multi-role software collaboration.
 
-The user works primarily with **Old Zhou**, who decides whether to handle a request directly or
-delegate TPM, Laborer, Architect, Orchestrator, Coder, Test Designer, Test Runner, or Delivery.
+The user works primarily with **Old Zhou**, who decides whether to handle a request directly,
+delegate a stable role, or resolve a Worker from the current task's required capabilities.
 Maestro preserves continuity through Temporary, Task, and Long-term project memory without forcing
 every request through a fixed workflow.
 
@@ -49,6 +49,10 @@ Direct role calls are supported:
 大春实现这个已经确认的修改。
 ```
 
+Capability routing can reuse or compose registered Workers and can create a bounded Task-scoped
+Worker when no safe reusable match exists. Generated Workers expire with the Task, cannot grant
+themselves permissions, and never become permanent roles automatically.
+
 Maestro creates project-owned state under `.maestro/` only when the request needs persistence. It
 asks for confirmation before turning exploratory discussion into a formal Task.
 
@@ -63,6 +67,8 @@ maestro/
     memory.md
     handoffs.md
     playbooks.md
+    workers.md
+    workers/
     roles/
     schemas/
 ```

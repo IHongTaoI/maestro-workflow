@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "id": "maestro-builtins",
+  "source": "builtin",
+  "aliases": {},
+  "workers": [
+    {
+      "schema_version": 1,
+      "id": "architect",
+      "name": "Architect",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["architecture-design", "interface-design", "migration-planning", "risk-analysis"],
+      "scope": ["selected-project"],
+      "responsibility": "Define system boundaries, interfaces, trade-offs, migration strategy, and risk.",
+      "inputs": ["confirmed current-state evidence", "constraints", "bounded design objective"],
+      "outputs": ["reviewable design or architecture decision", "risk analysis", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "coder",
+      "name": "Coder",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["code-implementation", "configuration-change", "reversible-experiment"],
+      "scope": ["selected-project", "authorized-task-objective"],
+      "responsibility": "Implement bounded project changes and reversible experiments with proportionate verification.",
+      "inputs": ["authorized implementation objective", "relevant project context", "acceptance checks"],
+      "outputs": ["reviewable project changes", "verification evidence", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".", ".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "conditional": ["edit-project-files"]
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "delivery",
+      "name": "Delivery",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["delivery-summary", "readiness-review", "release-preparation"],
+      "scope": ["selected-task"],
+      "responsibility": "Assess delivery readiness and prepare a truthful final handoff without publishing autonomously.",
+      "inputs": ["requested outcome", "verification evidence", "delivery constraints"],
+      "outputs": ["readiness verdict", "delivery summary", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "laborer",
+      "name": "Laborer",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["codebase-investigation", "evidence-collection", "runtime-analysis"],
+      "scope": ["selected-project", "read-only-investigation"],
+      "responsibility": "Investigate current behavior and return evidence-backed findings without implementing fixes.",
+      "inputs": ["investigation question", "relevant project paths", "available evidence"],
+      "outputs": ["verified findings", "evidence paths", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["conflict-management", "dependency-planning", "parallel-work-coordination", "recovery-planning"],
+      "scope": ["selected-task", "coordination-state"],
+      "responsibility": "Plan bounded dependent work, ownership, safe parallelism, integration, and recovery.",
+      "inputs": ["clear task objective", "dependencies", "write sets and constraints"],
+      "outputs": ["smallest useful execution map", "ownership decisions", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "test-designer",
+      "name": "Test Designer",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["fixture-design", "risk-coverage", "test-strategy"],
+      "scope": ["selected-task", "verification-design"],
+      "responsibility": "Map requirements and risks to observable, proportionate verification.",
+      "inputs": ["requirements", "risk analysis", "available test surfaces"],
+      "outputs": ["verification plan", "risk coverage", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "test-runner",
+      "name": "Test Runner",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["evidence-recording", "failure-classification", "test-execution"],
+      "scope": ["selected-task", "non-destructive-verification"],
+      "responsibility": "Run agreed checks independently and record reproducible evidence and failures.",
+      "inputs": ["verification plan", "intended artifact", "test environment"],
+      "outputs": ["check results", "reproduction evidence", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
+      "id": "tpm",
+      "name": "TPM",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["acceptance-criteria", "requirements-analysis", "scope-definition"],
+      "scope": ["selected-request", "requirements"],
+      "responsibility": "Clarify requirements, scope, constraints, acceptance criteria, and material choices.",
+      "inputs": ["user goal", "known constraints", "open product choices"],
+      "outputs": ["scoped brief", "observable acceptance criteria", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    }
+  ]
+}

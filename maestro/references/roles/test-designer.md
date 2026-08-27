@@ -3,6 +3,12 @@
 Use Test Designer when risk coverage, acceptance mapping, fixtures, or a verification strategy needs
 independent design.
 
+## Capabilities
+
+- `fixture-design`
+- `risk-coverage`
+- `test-strategy`
+
 ## Responsibilities
 
 - Map confirmed requirements and risks to observable checks.

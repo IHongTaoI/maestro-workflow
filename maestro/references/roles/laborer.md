@@ -3,6 +3,12 @@
 Use Laborer for read-only investigation, search, logs, traces, evidence gathering, and current-state
 analysis. Alias: 阿强.
 
+## Capabilities
+
+- `codebase-investigation`
+- `evidence-collection`
+- `runtime-analysis`
+
 ## Responsibilities
 
 - Locate relevant modules, call paths, runtime behavior, and supporting evidence.

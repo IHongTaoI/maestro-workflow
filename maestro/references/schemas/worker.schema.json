@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/worker.schema.json",
+  "title": "Maestro Worker Specification",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "source",
+    "status",
+    "capabilities",
+    "scope",
+    "responsibility",
+    "inputs",
+    "outputs",
+    "tools",
+    "context",
+    "permissions",
+    "lifecycle"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/slug" },
+    "name": { "type": "string", "minLength": 1 },
+    "source": { "enum": ["builtin", "project", "learned", "temporary"] },
+    "status": { "enum": ["active", "disabled"] },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/slug" }
+    },
+    "scope": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "responsibility": { "type": "string", "minLength": 1 },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "preferred_model": { "type": ["string", "null"], "minLength": 1 },
+    "tools": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "context": { "$ref": "#/$defs/context" },
+    "permissions": { "$ref": "#/$defs/permissions" },
+    "lifecycle": {
+      "type": "object",
+      "required": ["scope", "expires_at"],
+      "properties": {
+        "scope": { "enum": ["reusable", "task"] },
+        "task_id": { "type": "string", "minLength": 1 },
+        "expires_at": { "enum": ["never", "task-completion"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "scope": { "const": "task" } }, "required": ["scope"] },
+          "then": {
+            "required": ["task_id"],
+            "properties": { "expires_at": { "const": "task-completion" } }
+          },
+          "else": {
+            "properties": {
+              "task_id": false,
+              "expires_at": { "const": "never" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "source": { "const": "temporary" } }, "required": ["source"] },
+      "then": {
+        "properties": {
+          "status": { "const": "active" },
+          "lifecycle": {
+            "type": "object",
+            "properties": { "scope": { "const": "task" } },
+            "required": ["scope"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "source": { "enum": ["builtin", "project", "learned"] } },
+        "required": ["source"]
+      },
+      "then": {
+        "properties": {
+          "lifecycle": {
+            "type": "object",
+            "properties": { "scope": { "const": "reusable" } },
+            "required": ["scope"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "context": {
+      "type": "object",
+      "required": ["read_paths", "write_paths"],
+      "properties": {
+        "read_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/path" }
+        },
+        "write_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/path" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["autonomous", "conditional"],
+      "properties": {
+        "autonomous": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "inspect-project",
+              "run-nondestructive-checks",
+              "write-maestro-state",
+              "write-task-artifacts"
+            ]
+          }
+        },
+        "conditional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "edit-project-files",
+              "external-action",
+              "destructive-action",
+              "secrets-operation",
+              "permissions-change",
+              "scope-expansion"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

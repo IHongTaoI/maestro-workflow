@@ -66,4 +66,3 @@
 1. Inspect staged and unstaged changes and commit only #7 files.
 2. Push `codex/issue-7-capability-workers`.
 3. Open a Draft PR targeting `master` with `Closes #7` and verification evidence.
-

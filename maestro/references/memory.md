@@ -57,7 +57,8 @@ topics appear similar.
 
 ## Task Memory
 
-Task Memory contains public Task context plus each invoked role's Current State. A role state answers:
+Task Memory contains public Task context plus each invoked role's or Worker's Current State. An
+execution-unit state answers:
 
 - `objective`
 - `work_done`
@@ -132,7 +133,8 @@ transient or invalid-output failure, then fall back to the primary model. If no 
 available, the current agent may perform the same bounded compression. If all attempts fail, write
 the complete request and sources under `memory/pending/` and continue the business task.
 
-The Memory Worker organizes memory. It must not select roles, make architecture decisions, change
+The Memory Worker organizes memory. It must not select roles or Workers, make architecture
+decisions, change
 Task scope, or approve its own long-term candidates.
 
 Validate structured input/output against:
