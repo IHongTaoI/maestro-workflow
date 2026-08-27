@@ -1,118 +1,72 @@
-# Maestro V3 for DeepSeek Harness
+# Maestro
 
-Maestro V3 is a project-owned, recoverable software-delivery workflow for DeepSeek Harness (DSH).
-Maestro owns lifecycle gates, role contracts, Task Graph validation, durable state, permissions,
-memory and delivery evidence. DSH owns child-Agent execution and the live `workflow` call.
+Maestro is an installable Codex Skill for dynamic multi-role software collaboration.
 
-## Install and verify
+The user works primarily with **Old Zhou**, who decides whether to handle a request directly or
+delegate TPM, Laborer, Architect, Orchestrator, Coder, Test Designer, Test Runner, or Delivery.
+Maestro preserves continuity through Temporary, Task, and Long-term project memory without forcing
+every request through a fixed workflow.
 
-The package now exposes a real `maestro` executable. Install the package in the target project,
-then initialize the DSH adapter; copying the Skill alone is not a complete installation.
+## Install
 
-```powershell
-npm install --save-dev @maestro/v3-dsh
-npx --no-install maestro init --host dsh
-npx --no-install maestro verify-host
-npx --no-install maestro probe-host
-```
+The complete Skill is the [`maestro/`](maestro/) directory.
 
-`probe-host` runs P01-P07 and fails closed: atomic state writes, exclusive locking, memory IO,
-protected-path denial, role assets, the DSH executable contract and workspace-only recovery.
-
-For repository development:
-
-```powershell
-npm install
-npm run typecheck
-npm test
-```
-
-## Work modes and lifecycle
-
-Old Zhou selects a mode with the user, then creates a workspace below
-`.agents/.local/work/<workspace-id>/`.
-
-| Mode | Stages |
-|---|---|
-| Lite | intake → implementation → testing → delivery |
-| Plan | intake → planning → implementation → testing → delivery |
-| Workflow | intake → requirements → design → architecture → planning → implementation → testing → delivery |
-
-```powershell
-npx --no-install maestro create-workspace --workspace 202608260900-health --mode workflow --identity "Health endpoint" --file request.md
-npx --no-install maestro advance-workspace --workspace 202608260900-health
-npx --no-install maestro revise-workspace --workspace 202608260900-health --severity major --stage design --reason "API boundary changed"
-```
-
-Every stage transition validates required artifacts and creates an immutable checkpoint. Revision
-severity is explicit: Minor, Major or Critical. Testing advances only when
-`testing/test-report.md` contains `status: passed`; delivery completes only with
-`delivery/report.md` containing `status: accepted`.
-
-## Task Graph and execution
-
-The architecture stage freezes `planning/task-graph.yaml`. Tasks declare dependencies, acceptance
-criteria, intended write sets and at most three attempts. The compiler never places overlapping
-write sets in the same parallel layer.
-
-```yaml
-name: health-delivery
-tasks:
-  - id: implement-api
-    role: coder
-    description: Implement the approved endpoint.
-    writes: [src/api]
-    maxAttempts: 3
-    acceptance:
-      - Unit tests pass.
-```
-
-```powershell
-npx --no-install maestro compile-task-graph --file planning/task-graph.yaml
-npx --no-install maestro compile-execution --file planning/task-graph.yaml
-npx --no-install maestro create-task --task health-delivery --file planning/task-graph.yaml
-npx --no-install maestro prepare-task-run --task health-delivery --memory "health api"
-```
-
-`prepare-task-run` persists an immutable prepared receipt before returning the exact
-`{ script, meta, args }` for one DSH `workflow` call. `record-task-run` stores a separate,
-immutable result receipt. Commits are idempotent and can be repaired without a session:
-
-```powershell
-npx --no-install maestro resume-task-run --task health-delivery
-npx --no-install maestro recover-task --task health-delivery
-npx --no-install maestro record-task-run --task health-delivery --file workflow-result.json
-```
-
-## Core protocol and permissions
-
-Role effects use five guarded actions:
+Copy it into the Codex skills directory:
 
 ```text
-submit_proposal → apply_permissions → validate_proposal → collect_result → commit_memory
+~/.codex/skills/maestro/
 ```
 
-Permissions default to deny. Roles cannot receive write or execute grants for protected workspace
-metadata, events, the original request, memory, or Runtime records. Result Artifacts must have been
-declared by an approved proposal and are hashed during collection.
+The installed directory must contain:
 
-## Three memory layers
+```text
+~/.codex/skills/maestro/SKILL.md
+~/.codex/skills/maestro/references/
+```
 
-1. Temporary drafts hold unconfirmed discussion. Confirmation or discard is explicit.
-2. Task memory holds immutable runs, Artifact evidence and per-role `current-state.md` plus history.
-3. Project LLM Wiki holds promoted, versioned knowledge linked to source Memory IDs.
+Alternatively, package the contents of `maestro/` as a ZIP and upload/install it as one Skill.
+There is no npm installation, background service, CLI, or JavaScript Runtime.
 
-Explicit queries are bounded. During run preparation, Wiki excerpts and task memory are selected
-per role; the same ambient context is not broadcast to every Agent. `memory/current-summary.md`
-contains the compact goal, decisions, constraints, frozen versions, open questions, coverage
-cursor and source hash.
+## Use
 
-## V3 roles
+Start naturally in a project:
 
-The DSH Skill ships Old Zhou plus TPM, Laborer, Architect, Orchestrator, Coder, Test Designer,
-Test Runner and Delivery. Legacy `planner` and `tester` role names remain accepted for old graphs.
-Roles can return `needsUserInput`, `needsDelegation` and a bounded `roleState`.
+```text
+使用 Maestro 帮我分析这个项目的启动性能问题。
+```
 
-See [the implementation contract](docs/maestro-v3-implementation.md), the
-[DSH ownership decision](docs/decisions/0001-dsh-owns-agent-execution.md), and the
-[three-layer memory decision](docs/decisions/0003-three-layer-memory.md).
+Or address Old Zhou:
+
+```text
+老周，我想先讨论一下新架构，暂时不要正式开工。
+```
+
+Direct role calls are supported:
+
+```text
+老陈帮我 review 这个设计。
+阿强调查一下当前调用链，先不要改代码。
+大春实现这个已经确认的修改。
+```
+
+Maestro creates project-owned state under `.maestro/` only when the request needs persistence. It
+asks for confirmation before turning exploratory discussion into a formal Task.
+
+## Package contents
+
+```text
+maestro/
+  SKILL.md
+  references/
+    coordination.md
+    storage.md
+    memory.md
+    handoffs.md
+    playbooks.md
+    roles/
+    schemas/
+```
+
+All orchestration behavior is expressed through the Skill and its references. The host's native
+filesystem and sub-agent capabilities provide the mechanical operations described by the original
+Maestro v1 initialization plan.
