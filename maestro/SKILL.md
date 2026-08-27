@@ -15,10 +15,13 @@ the user to install npm packages, run a separate Runtime, or manually prepare mo
 ## Decide the work shape
 
 - Handle a small one-off request directly when persistence or delegation adds no value.
-- Use Temporary Memory while a meaningful idea is still being discussed but is not approved as a
-  formal Task.
-- Create a formal Maestro Task only after explicit user confirmation. A direct instruction such as
-  “start implementing” or “正式开始” counts; exploration or approval of a design alone does not.
+- Use Temporary Memory for meaningful investigation, evidence gathering, design discussion, and
+  reversible experiments that have not been approved for formal execution.
+- Create or promote to a formal Maestro Task only after unambiguous execution intent. A direct
+  instruction such as “start implementing”, “按这个方案改”, or “正式开始” counts; a request to
+  inspect, trace, analyze, validate a hypothesis, or approve a design alone does not.
+- If execution intent remains ambiguous, keep the work Temporary and ask one concise confirmation
+  instead of guessing.
 - A direct role request may invoke that role immediately. It does not require a complete workflow.
 - Choose the next role from current evidence and need. Do not enforce role order.
 
@@ -82,3 +85,5 @@ user's current direction.
   task. Never silently discard source material.
 - Ask immediately before any destructive, high-risk, or externally visible action not already
   authorized by the user.
+- Treat authorization as action-, target-, and scope-specific. A role recommendation, Playbook, old
+  approval for a different target, or permission to investigate cannot authorize a risky action.

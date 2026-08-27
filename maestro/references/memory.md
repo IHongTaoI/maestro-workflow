@@ -7,6 +7,12 @@ Use memory to preserve continuity, not to reproduce the conversation or executio
 Temporary Memory represents valuable discussion before a formal Task. Keep `current.md` short:
 
 ```markdown
+---
+revision: 12
+updated_at: 2026-08-27T11:05:00Z
+updated_by: old-zhou/session-or-run-id
+---
+
 # Topic
 
 ## Current goal
@@ -63,7 +69,8 @@ Task Memory contains public Task context plus each invoked role's Current State.
 
 Keep current state immediately useful for the next invocation. Move older but still valuable detail
 into `references/`; do not create a Reference for routine searches, repeated output, or discarded
-noise.
+noise. Mutable Task and role Markdown uses the revision front matter and write protocol in
+[storage.md](storage.md).
 
 ## Long-term Memory
 
@@ -74,6 +81,36 @@ Memory Worker output is only a candidate. Before promotion, Old Zhou or a strong
 verify that it is stable, useful beyond the current Task, and supported by reachable `source_refs`.
 Record approval or rejection under `memory/long-term/decisions/`; retain rejected candidates so the
 same weak claim is not repeatedly reconsidered.
+
+### Evidence precedence and conflicts
+
+Resolve factual conflicts in this order:
+
+```text
+current code or runtime evidence
+> current Task verified findings
+> Long-term Memory
+> historical References
+```
+
+Higher-priority evidence does not make lower-priority history disappear. When current evidence
+contradicts a Long-term entry, stop using the old entry as current truth and create a review record
+with:
+
+- a stable entry or candidate ID and the exact claim under review;
+- outcome: `approved`, `rejected`, or `superseded`;
+- reachable `source_refs` for both the earlier claim and the contradicting evidence;
+- reviewer, timestamp, rationale, and replacement entry ID when superseded.
+
+After review, update Long-term `current.md` through the mutable-state write protocol. Replace the
+current summary with the newly approved claim or remove the rejected claim. Publish an immutable
+decision that marks the preserved candidate/entry `superseded` or `rejected` and links its
+replacement when one exists. Never silently edit the old claim into new wording, delete its
+sources, or continue presenting it as current while a known contradiction is unresolved.
+
+If the contradiction has not yet been verified, label the old entry disputed in current context and
+prefer the higher-priority evidence for the present decision. A Memory Worker may propose the
+supersession, but Old Zhou or a strong-model reviewer must approve it.
 
 ## Current + References
 

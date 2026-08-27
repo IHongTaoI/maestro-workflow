@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "summary": "Work completed, but a stale question remained.",
+  "result_path": ".maestro/tasks/example/roles/laborer/runs/result.md",
+  "role_state_path": ".maestro/tasks/example/roles/laborer/current-state.md",
+  "needs_user_input": false,
+  "questions": [
+    {
+      "question": "Is more input needed?",
+      "reason": "This stale question must be rejected."
+    }
+  ],
+  "recommended_next": []
+}
