@@ -81,3 +81,7 @@ try {
 finally {
     Pop-Location
 }
+
+# Expected-invalid Ajv fixtures leave a native exit code of 1 even though the assertions passed.
+# Return success explicitly; any thrown validation error exits before reaching this line.
+exit 0
