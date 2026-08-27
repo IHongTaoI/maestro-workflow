@@ -1,0 +1,23 @@
+name: Contracts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify schemas and behavioral contracts
+        shell: pwsh
+        run: ./scripts/verify-contracts.ps1

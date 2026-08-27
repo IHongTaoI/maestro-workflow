@@ -1,0 +1,14 @@
+{
+  "status": "blocked",
+  "summary": "A user decision is required.",
+  "result_path": ".maestro/tasks/example/roles/architect/runs/result.md",
+  "role_state_path": ".maestro/tasks/example/roles/architect/current-state.md",
+  "needs_user_input": true,
+  "questions": [
+    {
+      "question": "May initialization order change?",
+      "reason": "The answer selects the implementation boundary."
+    }
+  ],
+  "recommended_next": []
+}

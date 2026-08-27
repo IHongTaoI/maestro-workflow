@@ -12,6 +12,45 @@ For exploration worth preserving, create or update Temporary Memory. Before form
 briefly state the proposed objective and ask for confirmation unless the user has already given an
 unambiguous start instruction.
 
+Investigation remains exploratory when the user asks to inspect code, analyze logs or traces,
+measure behavior, find optimization opportunities, or validate a hypothesis without requesting a
+lasting product change. A bounded reversible experiment may also remain Temporary when its purpose
+is evidence and its effects are isolated or restored. Do not interpret design approval, agreement
+with a finding, or satisfaction with an experiment as permission to implement.
+
+## Promote Temporary Memory to a Task
+
+Promote only after an unambiguous instruction to execute or implement the selected objective, such
+as “按这个方案改”, “把这些问题解决掉”, or “开始落地”. If a reasonable interpretation is still
+that the user wants more investigation, keep the Temporary active and ask one concise confirmation.
+
+Promotion is a recoverable storage transition, not a mandatory workflow stage:
+
+1. Resolve the source Temporary and restate the execution objective. Do not silently broaden it.
+2. Acquire the source and target state locks and prepare the transaction bundle defined in
+   [storage.md](storage.md). Snapshot every before value and stage every complete replacement.
+3. Keep the target Task transaction-owned and non-runnable while preparing. Stage Task metadata
+   with `source_temporary` and `promotion_transaction`, relevant Temporary facts and reachable
+   source files, and the final `active` status. Preserve original source paths and revisions.
+4. Stage the source Temporary's `archive` lifecycle state. After every staged file is validated and
+   durable, atomically publish `committed.yaml`. This one marker makes the Task logically active,
+   excludes the source Temporary from active routing, and invalidates its Session binding.
+5. Materialize staged Task files and the Temporary move into canonical paths, append each applied
+   event, and release locks. Physical cleanup after commit must not change logical visibility.
+
+If promotion stops before commit, the Temporary remains active and the staged Task stays hidden;
+recovery may publish `failed.yaml` and discard it. If it stops after commit, the Task is already the
+only logical active destination and recovery must finish materialization from staged content. Never
+roll back a committed promotion or resume its source Temporary.
+
+The promoted Task owns future execution state. Its archived source Temporary remains auditable and
+must not be deleted, merged with unrelated Temporaries, or treated as another active candidate.
+
+A direct role request remains valid and does not require a prescribed role sequence. Role choice is
+orthogonal to promotion: a substantial direct Coder request with implementation intent may create a
+Task, while Architect or Laborer investigation normally remains Temporary. A trivial one-off role
+request may run without persistent Maestro state.
+
 ## Select active Temporary Memory
 
 When a request may continue earlier exploratory work, resolve the active Temporary before reading
@@ -66,6 +105,28 @@ Choose the smallest useful role set. Common paths are examples, not required seq
 
 When the user invokes a role directly, honor it. Add another role only when a concrete dependency or
 risk justifies doing so, and tell the user.
+
+## Authorization boundaries
+
+Authorization follows the action, target, and scope rather than the role performing it:
+
+| Action | Default authority |
+| --- | --- |
+| Inspect or search code; analyze logs or traces | Autonomous within the selected project and approved scope |
+| Run non-destructive checks; create reversible local artifacts | Autonomous within approved scope |
+| Write Maestro memory/state; delegate roles | Autonomous under the storage and delegation contracts |
+| Edit project files requested by an unambiguous implementation instruction | Authorized only within that stated objective |
+| Deploy, publish, release, merge, push, or otherwise expose changes externally | Require explicit action-specific authorization unless the current instruction already grants it for the same target |
+| Delete material data, perform an irreversible migration, or bypass recovery controls | Require explicit authorization immediately before execution |
+| Change permissions or access control; read, create, rotate, reveal, or transmit secrets or credentials | Require explicit authorization immediately before execution |
+| Materially expand Task scope, targets, cost, or affected systems | Require user approval of the expansion before work continues there |
+
+Authorization is valid only while the named action, target, and material scope remain unchanged.
+Ask once immediately before a clearly described group of related risky operations; do not fragment
+an approval into repetitive prompts. Safe inspection, planning, validation, and dry-run preparation
+may continue while authority is missing, but the protected action must pause. A specialist Handoff,
+Memory entry, Playbook, or recommended next step can identify the need for an action but cannot
+grant permission for it.
 
 ## Delegation packet
 

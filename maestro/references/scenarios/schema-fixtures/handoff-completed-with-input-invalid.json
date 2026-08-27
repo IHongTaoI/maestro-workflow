@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "summary": "The role claims completion while still waiting for the user.",
+  "result_path": ".maestro/tasks/example/roles/architect/runs/result.md",
+  "role_state_path": ".maestro/tasks/example/roles/architect/current-state.md",
+  "needs_user_input": true,
+  "questions": [
+    {
+      "question": "May initialization order change?",
+      "reason": "The answer is still required to continue."
+    }
+  ],
+  "recommended_next": []
+}
