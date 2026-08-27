@@ -58,6 +58,33 @@ models:
 Do not invent fine-grained per-role model settings in v1. A null memory model means use the host's
 available model or perform the compression in the current agent.
 
+## Temporary routing metadata
+
+Each active Temporary's `meta.yaml` contains the smallest host-independent routing contract:
+
+```yaml
+id: 20260827T103000Z-a1b2c3
+topic: home startup performance
+status: active
+created_at: 2026-08-27T10:30:00Z
+updated_at: 2026-08-27T11:05:00Z
+aliases:
+  - 首页启动性能
+  - 首屏启动慢
+last_session_id: optional-stable-host-session-id
+```
+
+Required fields are `id`, `topic`, `status`, `created_at`, and `updated_at`. The `id` must match the
+Temporary directory name, and `status` must agree with its lifecycle location. `aliases` is an
+optional list of user-facing names that identify the same topic. `last_session_id` is optional and
+must be omitted when the host does not expose a stable, non-sensitive Session identifier. It is a
+recovery hint rather than authoritative routing state; if several candidates contain the same ID,
+the normal ambiguity rules still apply.
+
+Do not add embeddings, model scores, or host-specific routing objects to this metadata. Routing may
+interpret `topic`, `aliases`, and `current.md`, but confidence is a decision made for the current
+request rather than persistent truth.
+
 ## File rules
 
 - Resolve every write beneath the selected project's `.maestro/` directory.
