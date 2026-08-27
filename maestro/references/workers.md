@@ -1,7 +1,7 @@
 # Capability-based Workers
 
-Use this reference when describing task capabilities, resolving an execution unit, composing
-workers, generating a Task-scoped worker, or resuming work delegated to a worker.
+Use this reference when describing work capabilities, resolving an execution unit, composing
+workers, generating a bounded worker, or resuming work delegated to a worker.
 
 ## Roles and workers
 
@@ -44,14 +44,15 @@ Load the immutable built-in registry plus `.maestro/workers/registry.yaml` when 
 both before use. A reusable Worker's context paths are its maximum supported boundary; the
 delegation may narrow them but cannot expand beyond them. Exclude a candidate when it is disabled,
 its tools are unavailable, the delegation context exceeds that boundary, its requested actions
-exceed the permission ceiling, or its lifecycle is incompatible with the current Task.
+exceed the permission ceiling, or its lifecycle is incompatible with the current work context.
 
 Choose in this order:
 
 1. **exact** — one Worker covers every required and optional capability;
 2. **compatible** — one Worker covers every required capability;
 3. **composed** — the smallest set of Workers whose union covers every required capability;
-4. **generated** — one bounded Task-scoped Worker when no safe reusable match exists;
+4. **generated** — one bounded Task-, Temporary-, or Session-scoped Worker when no safe reusable
+   match exists;
 5. **no-match** — generation cannot produce a valid, safe specification.
 
 For composition, every member must independently pass tool, context, lifecycle, and permission
@@ -59,26 +60,30 @@ checks. Do not combine permissions into a larger authority envelope. Prefer fewe
 fewer unrelated capabilities, then lexical Worker ID order. These are deterministic tie-breaks,
 not a score or leaderboard.
 
-Record the requirements, registry versions, resolution class, selected Worker IDs, immutable
-snapshot paths, rationale, and any blocker. Validate it against
-[worker-selection.schema.json](schemas/worker-selection.schema.json) and publish it as an immutable
-`.maestro/tasks/<task-id>/worker-selections/<timestamp>.yaml` event. The result guides Old Zhou's
-dynamic delegation; it does not create a mandatory workflow state.
+Record the requirements, registry versions, resolution class, selected Worker IDs, snapshot paths
+or ephemeral markers, rationale, and any blocker. Validate it against
+[worker-selection.schema.json](schemas/worker-selection.schema.json). Publish a persisted result as
+an immutable event under the Task or Temporary's `worker-selections/` directory. A Session-scoped
+one-off result remains in the current Session and does not create project state. Resolver output
+guides Old Zhou's dynamic delegation; it does not create a mandatory workflow state.
 
 ## Snapshot before execution
 
-Before executing a selected reusable Worker, copy its complete validated specification to:
+Before executing a selected reusable Worker in persisted work, copy its complete validated
+specification to the matching state layer:
 
 ```text
 .maestro/tasks/<task-id>/workers/<worker-id>/spec.yaml
+.maestro/memory/temporary/active/<temporary-id>/workers/<worker-id>/spec.yaml
 ```
 
 Treat the snapshot as immutable. Store Current State and Detailed Results beside it as defined in
-[handoffs.md](handoffs.md). Task resumption uses this snapshot rather than a newer registry entry.
-If a required snapshot is missing or invalid, stop that delegation and report recovery work; do not
-silently substitute the current registry version.
+[handoffs.md](handoffs.md). Task or Temporary resumption uses this snapshot rather than a newer
+registry entry. If a required snapshot is missing or invalid, stop that delegation and report
+recovery work; do not silently substitute the current registry version. A Session-scoped Worker is
+ephemeral and has no snapshot or cross-Session recovery contract.
 
-## Generate a Task-scoped Worker
+## Generate a bounded Worker
 
 When no reusable Worker safely covers the requirements, generate one specification with:
 
@@ -88,21 +93,32 @@ When no reusable Worker safely covers the requirements, generate one specificati
 - only available tools;
 - project-relative readable and writable context paths;
 - autonomous and conditional requested actions within the requirements' ceiling;
-- `source: temporary`, `lifecycle.scope: task`, the current Task ID, and
-  `expires_at: task-completion`.
+- `source: temporary` and a lifecycle matching the existing work shape.
 
-Validate it against [worker.schema.json](schemas/worker.schema.json), publish it directly as the
-Task snapshot, and record `resolution: generated`. A temporary Worker expires when its Task
-completes, is cancelled, or is archived. Repeated use may justify a future human-reviewed project
-registry entry, but use count or model preference must never promote it automatically.
+Use exactly one lifecycle:
+
+- Formal execution: `scope: task`, the Task ID, and `expires_at: task-completion`.
+- Preserved exploration: `scope: temporary`, the Temporary ID, and
+  `expires_at: temporary-archive`.
+- Trivial one-off work: `scope: session` and `expires_at: session-end`; include `session_id` only
+  when the host exposes a stable, non-sensitive ID.
+
+Validate it against [worker.schema.json](schemas/worker.schema.json). Publish Task- and
+Temporary-scoped specifications directly as immutable snapshots and record
+`resolution: generated`; do not persist Session-scoped specifications. A temporary Worker expires
+with its declared Task, Temporary, or Session lifecycle. Promoting a Temporary to a Task expires
+its Temporary-scoped Workers; resolve fresh Task requirements and snapshot any newly selected
+Workers. Repeated use may justify a future human-reviewed project registry entry, but use count or
+model preference must never promote it automatically.
 
 ## Permission intersection
 
 Worker permissions are requested action categories, never grants. Effective permission is the
-intersection of the validated Worker specification, the current Task objective and scope, the
-host's available tools, and current user authorization. The narrowest boundary wins.
+intersection of the validated Worker specification, the current Task, Temporary, or Session scope,
+the host's available tools, and current user authorization. The narrowest boundary wins.
 
-Only inspection, non-destructive checks, Maestro state maintenance, and Task artifact writes may
+Only inspection, non-destructive checks, Maestro state maintenance, and bounded work artifact
+writes may
 be declared autonomous. Editing project files is conditional on unambiguous implementation intent.
 External, destructive, secret, access-control, and scope-expanding actions remain conditional and
 require the action-, target-, and scope-specific authorization in [coordination.md](coordination.md)
@@ -119,5 +135,5 @@ one capability.
 An explicitly reviewed promotion may publish a reusable entry with `source: learned`; frequency,
 model confidence, and prior success are evidence only and cannot perform that transition. Ignore
 and report an invalid registry entry rather than repairing or selecting it silently. If a registry
-changes during selection, restart from the new revision. A completed selection remains stable
-because execution uses immutable Task snapshots.
+changes during selection, restart from the new revision. A completed persisted selection remains
+stable because execution uses immutable Task or Temporary snapshots.

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add host-independent capability routing that reuses, composes, or creates bounded Task-scoped Workers without replacing stable roles.
+**Goal:** Add host-independent capability routing that reuses, composes, or creates bounded Workers without replacing stable roles or changing the existing work lifecycle.
 
 **Architecture:** Express Worker selection as Skill contracts, immutable snapshots, small JSON Schemas, and behavioral fixtures. Reuse the existing revision, lock, transaction, Handoff, and authorization protocols rather than introducing an executable Runtime.
 
@@ -20,7 +20,7 @@
 
 1. Define canonical capability requirements and stable-role versus Worker boundaries.
 2. Define deterministic exact, compatible, composed, and generated resolution.
-3. Define registry mutation, immutable Task snapshots, recovery, and failure behavior.
+3. Define registry mutation, immutable persisted snapshots, recovery, and failure behavior.
 4. State that Worker permission declarations never grant authority.
 
 ### Task 2: Make built-in roles capability-addressable
@@ -56,7 +56,8 @@
 - Modify: `scripts/verify-contracts.ps1`
 - Modify: `README.md`
 
-1. Add valid fixtures for built-in reuse, composition, and generated Task-scoped Workers.
+1. Add valid fixtures for built-in reuse, composition, and generated Task-, Temporary-, and
+   Session-scoped Workers.
 2. Add invalid fixtures for lifecycle, Handoff ambiguity, and permission-boundary violations.
 3. Add custom checks for duplicate IDs and canonical capability identifiers.
 4. Run the verifier standalone, check Markdown links/fences, and run `git diff --check`.

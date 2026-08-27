@@ -55,6 +55,11 @@ Switching bindings changes only which context is loaded. It must not merge, arch
 otherwise modify the previous Temporary. Never combine two Temporaries automatically because their
 topics appear similar.
 
+A persisted exploratory Worker keeps its immutable specification and short Current State inside
+the selected Temporary. `current.md` should link the active Worker state needed for resumption
+rather than copying its full result. When the Temporary is archived, trashed, or promoted, its
+scoped Workers expire with it.
+
 ## Task Memory
 
 Task Memory contains public Task context plus each invoked role's or Worker's Current State. An

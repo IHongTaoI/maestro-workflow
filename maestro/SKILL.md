@@ -25,8 +25,9 @@ the user to install npm packages, run a separate Runtime, or manually prepare mo
 - A direct role request may invoke that role immediately. It does not require a complete workflow.
 - Choose the next role from current evidence and need. Do not enforce role order.
 - For a capability-specific delegation, describe requirements and resolve a reusable, composed, or
-  Task-scoped Worker under [workers.md](references/workers.md). Do not add a permanent role merely
-  to cover a new task type.
+  bounded Worker under [workers.md](references/workers.md). Match a generated Worker's lifecycle to
+  the existing Task, Temporary, or one-off Session; do not create a Task merely to host a Worker.
+- Do not add a permanent role merely to cover a new task type.
 
 Read [coordination.md](references/coordination.md) when starting, resuming, delegating, or finishing
 substantial work.

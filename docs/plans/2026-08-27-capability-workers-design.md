@@ -3,14 +3,14 @@
 ## Context
 
 Issue #7 asks Maestro to preserve a small set of stable organizational roles while selecting or
-creating execution workers from the capabilities required by the current task. The mechanism must
+creating execution workers from the capabilities required by the current work. The mechanism must
 remain Skill-first and host-independent, preserve direct role calls, and respect the reliability
 and authorization boundaries established by issue #6.
 
 The first release implements the complete routing loop without automatic learning: describe
 requirements, resolve a reusable worker, compose a small compatible set when necessary, or create a
-Task-scoped worker. Promotion of repeated temporary workers into reusable workers remains a reviewed
-future action.
+bounded worker aligned with the existing Task, Temporary, or one-off Session. Promotion of repeated
+temporary workers into reusable workers remains a reviewed future action.
 
 ## Decisions
 
@@ -35,7 +35,8 @@ matching. It then chooses in this order:
 1. One worker covering every required and optional capability (`exact`).
 2. One worker covering every required capability (`compatible`).
 3. The smallest compatible set whose union covers every required capability (`composed`).
-4. One generated Task-scoped worker when no safe match exists (`generated`).
+4. One generated Task-, Temporary-, or Session-scoped worker when no safe match exists
+   (`generated`).
 
 Within a class, fewer workers, fewer unrelated capabilities, and lexical worker ID order provide a
 deterministic tie-break. The resolver records its rationale; it is guidance to Old Zhou rather than
@@ -45,13 +46,15 @@ a mandatory workflow state.
 
 Maestro ships an immutable built-in registry. Projects may add a small mutable registry under
 `.maestro/workers/registry.yaml`; it uses the revision, lock, and atomic replacement protocol from
-issue #6. Every selected worker is copied as an immutable Task snapshot before execution. Resuming a
-Task uses the snapshot, not the current registry, so later registry edits cannot change in-flight or
-historical behavior.
+issue #6. Every persisted selected worker is copied as an immutable Task or Temporary snapshot
+before execution. Resumption uses the snapshot, not the current registry, so later registry edits
+cannot change in-flight or historical behavior.
 
-Task-scoped workers live under `.maestro/tasks/<task-id>/workers/<worker-id>/`. Their specification
-states responsibility, capabilities, inputs, outputs, tools, context paths, requested permissions,
-and lifecycle. They expire with the Task and never enter the reusable registry automatically.
+Persisted workers live under the matching Task or Temporary state. Their specification states
+responsibility, capabilities, inputs, outputs, tools, context paths, requested permissions, and
+lifecycle. Task workers expire with the Task, Temporary workers expire when their Temporary leaves
+the active lifecycle, and one-off Session workers are not persisted. None enters the reusable
+registry automatically.
 
 ### Authorization
 
@@ -73,9 +76,9 @@ only when a bounded, valid specification can be produced.
 
 JSON Schemas validate capability requirements, worker specifications, registries, resolver
 selections, and both role and worker Handoffs. Fixtures cover exact reuse, composition, generated
-Task scope, invalid lifetime, permission bypass, duplicate registry IDs, and incompatible Handoff
-state paths. Behavioral scenarios prove direct role compatibility, deterministic matching,
-Task-resume snapshot stability, and non-promotion of temporary workers.
+Task, Temporary, and Session scope, invalid lifetime, permission bypass, duplicate registry IDs,
+and incompatible Handoff state paths. Behavioral scenarios prove direct role compatibility,
+deterministic matching, snapshot stability, and non-promotion of temporary workers.
 
 ## Non-goals
 

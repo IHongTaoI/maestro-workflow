@@ -17,6 +17,12 @@ Create directories lazily as the current work needs them:
         meta.yaml
         current.md
         references/
+        worker-selections/
+        workers/<worker-id>/
+          spec.yaml
+          current-state.md
+          references/
+          runs/
       archive/
       trash/
     pending/
@@ -152,13 +158,14 @@ Mutable state includes Temporary `meta.yaml` and `current.md`, Task `task.yaml`,
 mutable YAML file carries `revision`, `updated_at`, and `updated_by`. Each listed mutable Markdown
 file carries the same fields in YAML front matter. New state starts at revision `0`; each successful
 replacement increments exactly once. Handoffs, Detailed Results, source
-References, Evidence, decision records, Worker selections under `worker-selections/`, and
-transaction events are immutable once published; add a new linked record instead of replacing
-them.
+References, Evidence, decision records, Worker selections under a Task or Temporary's
+`worker-selections/`, and transaction events are immutable once published; add a new linked record
+instead of replacing them.
 
-Worker `spec.yaml` files under a Task are immutable snapshots. Publish each complete validated
-snapshot atomically before its first run. A project registry update cannot replace a Task snapshot,
-and Task resumption must not substitute a current registry entry for a missing snapshot.
+Worker `spec.yaml` files under a Task or Temporary are immutable snapshots. Publish each complete
+validated snapshot atomically before its first run. A project registry update cannot replace a
+snapshot, and resumption must not substitute a current registry entry for a missing snapshot.
+Session-scoped Workers are not project state and leave no snapshot.
 
 Atomic replacement protects readers from partial file contents but does not prevent stale writers.
 For every replacement, use this complete protocol:

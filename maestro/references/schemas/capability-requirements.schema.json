@@ -72,7 +72,7 @@
         "inspect-project",
         "run-nondestructive-checks",
         "write-maestro-state",
-        "write-task-artifacts"
+        "write-work-artifacts"
       ]
     },
     "conditional-action": {

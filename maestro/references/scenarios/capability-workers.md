@@ -64,6 +64,50 @@ FORBID:
 - Write into the installed Maestro Skill or add a permanent role.
 - Automatically add the Worker to the project registry after completion.
 
+## Generate a Temporary-scoped exploratory Worker
+
+GIVEN: the user asks to analyze React startup performance without requesting implementation, and
+the investigation is worth preserving
+
+EXPECT:
+
+- Keep the work exploratory under the selected active Temporary.
+- Generate a Worker with `lifecycle.scope: temporary`, that Temporary's ID, and
+  `expires_at: temporary-archive`.
+- Store its selection, snapshot, Current State, and results inside the Temporary.
+
+FORBID:
+
+- Create or promote to a formal Task merely because no reusable Worker matches.
+
+## Generate a Session-scoped one-off Worker
+
+GIVEN: a trivial log-parsing request needs one missing capability and no persistence
+
+EXPECT:
+
+- Generate an ephemeral Worker with `lifecycle.scope: session` and `expires_at: session-end`.
+- Return the result directly without creating `.maestro/` state.
+
+FORBID:
+
+- Claim that the Worker can resume in another Session.
+
+## Promote exploration after explicit implementation intent
+
+GIVEN: a Temporary contains a generated exploratory Worker and the user explicitly starts
+implementation
+
+EXPECT:
+
+- Promote Temporary Memory under the recoverable transaction contract.
+- Expire the Temporary-scoped Worker with its source lifecycle.
+- Resolve the formal Task's capabilities again and snapshot newly selected Workers.
+
+FORBID:
+
+- Re-label the old Temporary Worker as Task-scoped or carry its authority forward implicitly.
+
 ## Permission ceiling rejects a candidate
 
 GIVEN: a registry Worker requests `external-action`, but the capability requirements do not include
@@ -135,7 +179,7 @@ FORBID:
 
 ## Repeated temporary Worker
 
-GIVEN: similar Task-scoped Workers appeared in several completed Tasks
+GIVEN: similar bounded temporary Workers appeared in several completed Tasks or Temporaries
 
 EXPECT:
 

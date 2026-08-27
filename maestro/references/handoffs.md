@@ -16,6 +16,10 @@ For a capability Worker, use:
 .maestro/tasks/<task-id>/workers/<worker-id>/runs/<timestamp>-result.md
 ```
 
+For a persisted exploratory Worker, use the corresponding
+`.maestro/memory/temporary/active/<temporary-id>/workers/<worker-id>/` paths. A Session-scoped
+one-off returns its result directly and does not claim a resumable state path.
+
 Include the performed work, evidence, analysis, conclusions, risks, open questions, and relevant
 Artifact paths. For a temporary direct role call, use the corresponding Temporary Memory directory.
 

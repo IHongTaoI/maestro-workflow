@@ -51,7 +51,11 @@ try {
     Invoke-AjvCase $requirementsSchema "$fixtureRoot/capability-requirements-valid.json" 0
     Invoke-AjvCase $requirementsSchema "$fixtureRoot/capability-requirements-overlap-invalid.json" 0
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-valid.json" 0
+    Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-memory-valid.json" 0
+    Invoke-AjvCase $workerSchema "$fixtureRoot/worker-session-valid.json" 0
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-lifecycle-invalid.json" 1
+    Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-memory-lifecycle-invalid.json" 1
+    Invoke-AjvCase $workerSchema "$fixtureRoot/worker-session-lifecycle-invalid.json" 1
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-permission-invalid.json" 1
     Invoke-AjvCase $registrySchema "maestro/references/workers/builtin-registry.json" 0 `
         @($workerSchema)
@@ -65,6 +69,10 @@ try {
     Invoke-AjvCase $selectionSchema "$fixtureRoot/worker-selection-composed-valid.json" 0 `
         @($requirementsSchema)
     Invoke-AjvCase $selectionSchema "$fixtureRoot/worker-selection-generated-valid.json" 0 `
+        @($requirementsSchema)
+    Invoke-AjvCase $selectionSchema "$fixtureRoot/worker-selection-temporary-valid.json" 0 `
+        @($requirementsSchema)
+    Invoke-AjvCase $selectionSchema "$fixtureRoot/worker-selection-session-valid.json" 0 `
         @($requirementsSchema)
     Invoke-AjvCase $handoffSchema "$fixtureRoot/worker-handoff-valid.json" 0
     Invoke-AjvCase $handoffSchema "$fixtureRoot/worker-handoff-both-paths-invalid.json" 1
@@ -208,15 +216,67 @@ try {
         throw "Generated selection has a reusable match and should not generate a Worker"
     }
 
+    $temporarySelection = Get-Content -Raw `
+        "$fixtureRoot/worker-selection-temporary-valid.json" | ConvertFrom-Json
+    $temporaryWorker = Get-Content -Raw `
+        "$fixtureRoot/worker-temporary-memory-valid.json" | ConvertFrom-Json
+    if ($temporaryWorker.id -ne $temporarySelection.selected_workers[0].id -or
+        $temporaryWorker.lifecycle.scope -ne "temporary" -or
+        $temporaryWorker.lifecycle.expires_at -ne "temporary-archive") {
+        throw "Temporary selection and exploratory Worker lifecycle disagree"
+    }
+    if (-not (Test-ContainsEvery $temporarySelection.requirements.available_tools `
+        $temporaryWorker.tools) -or
+        -not (Test-ContainsEvery $temporarySelection.requirements.context.read_paths `
+            $temporaryWorker.context.read_paths) -or
+        -not (Test-ContainsEvery $temporarySelection.requirements.context.write_paths `
+            $temporaryWorker.context.write_paths) -or
+        -not (Test-ContainsEvery `
+            $temporarySelection.requirements.permission_ceiling.autonomous `
+            $temporaryWorker.permissions.autonomous) -or
+        -not (Test-ContainsEvery `
+            $temporarySelection.requirements.permission_ceiling.conditional `
+            $temporaryWorker.permissions.conditional)) {
+        throw "Temporary-scoped Worker exceeds its exploratory requirements"
+    }
+    if ($temporarySelection.selected_workers[0].snapshot_path -notmatch
+        "/temporary/active/$($temporaryWorker.lifecycle.temporary_id)/") {
+        throw "Temporary Worker snapshot is not stored under its lifecycle owner"
+    }
+
+    $sessionSelection = Get-Content -Raw `
+        "$fixtureRoot/worker-selection-session-valid.json" | ConvertFrom-Json
+    $sessionWorker = Get-Content -Raw "$fixtureRoot/worker-session-valid.json" | ConvertFrom-Json
+    if ($sessionWorker.id -ne $sessionSelection.selected_workers[0].id -or
+        $sessionWorker.lifecycle.scope -ne "session" -or
+        $sessionWorker.lifecycle.expires_at -ne "session-end" -or
+        $sessionSelection.selected_workers[0].ephemeral -ne $true) {
+        throw "Session selection and ephemeral Worker lifecycle disagree"
+    }
+    if ($sessionWorker.tools.Count -gt 0 -or
+        $sessionWorker.permissions.autonomous.Count -gt 0 -or
+        $sessionWorker.permissions.conditional.Count -gt 0) {
+        throw "Session Worker fixture exceeds its one-off requirements"
+    }
+
     foreach ($selectionPath in @(
         "$fixtureRoot/worker-selection-exact-valid.json",
         "$fixtureRoot/worker-selection-composed-valid.json",
-        "$fixtureRoot/worker-selection-generated-valid.json"
+        "$fixtureRoot/worker-selection-generated-valid.json",
+        "$fixtureRoot/worker-selection-temporary-valid.json",
+        "$fixtureRoot/worker-selection-session-valid.json"
     )) {
         $selection = Get-Content -Raw $selectionPath | ConvertFrom-Json
         foreach ($selected in $selection.selected_workers) {
+            if ($selected.ephemeral -eq $true) {
+                if ($null -ne $selected.snapshot_path) {
+                    throw "Ephemeral Worker '$($selected.id)' unexpectedly has a snapshot path"
+                }
+                continue
+            }
             $expectedSuffix = "/workers/$($selected.id)/spec.yaml"
-            if (-not $selected.snapshot_path.EndsWith($expectedSuffix)) {
+            if ($null -eq $selected.snapshot_path -or
+                -not $selected.snapshot_path.EndsWith($expectedSuffix)) {
                 throw "Selection snapshot path does not match Worker ID '$($selected.id)'"
             }
         }
@@ -232,7 +292,9 @@ try {
         @{ Path = "maestro/references/handoffs.md"; Text = 'requires `status: blocked`' },
         @{ Path = "maestro/references/memory.md"; Text = "current code or runtime evidence" },
         @{ Path = "maestro/references/workers.md"; Text = "Worker permissions are requested action categories, never grants" },
-        @{ Path = "maestro/references/workers.md"; Text = "Task resumption uses this snapshot" },
+        @{ Path = "maestro/references/workers.md"; Text = "Task or Temporary resumption uses this snapshot" },
+        @{ Path = "maestro/references/coordination.md"; Text = "Worker resolution must not promote exploratory work into a Task" },
+        @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
         @{ Path = "maestro/references/workers.md"; Text = "must never promote it automatically" },
         @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" }
     )

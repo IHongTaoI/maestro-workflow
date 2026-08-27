@@ -35,14 +35,19 @@
       "uniqueItems": true,
       "items": {
         "type": "object",
-        "required": ["id", "snapshot_path"],
+        "required": ["id"],
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
           "snapshot_path": {
             "type": "string",
-            "pattern": "^\\.maestro/tasks/[^/]+/workers/[^/]+/spec\\.yaml$"
-          }
+            "pattern": "^\\.maestro/(?:tasks/[^/]+|memory/temporary/active/[^/]+)/workers/[^/]+/spec\\.yaml$"
+          },
+          "ephemeral": { "const": true }
         },
+        "oneOf": [
+          { "required": ["snapshot_path"], "not": { "required": ["ephemeral"] } },
+          { "required": ["ephemeral"], "not": { "required": ["snapshot_path"] } }
+        ],
         "additionalProperties": false
       }
     },

@@ -9,7 +9,7 @@
     "available_tools": [],
     "context": { "read_paths": ["."], "write_paths": [".maestro/tasks/example/"] },
     "permission_ceiling": {
-      "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+      "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-work-artifacts"],
       "conditional": []
     },
     "constraints": ["Do not edit project files"]

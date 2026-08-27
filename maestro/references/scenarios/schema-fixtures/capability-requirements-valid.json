@@ -9,7 +9,7 @@
     "write_paths": [".maestro/tasks/example/artifacts/"]
   },
   "permission_ceiling": {
-    "autonomous": ["inspect-project", "run-nondestructive-checks", "write-task-artifacts"],
+    "autonomous": ["inspect-project", "run-nondestructive-checks", "write-work-artifacts"],
     "conditional": []
   },
   "constraints": ["Do not change visible behavior"]

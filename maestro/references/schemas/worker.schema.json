@@ -62,20 +62,54 @@
       "type": "object",
       "required": ["scope", "expires_at"],
       "properties": {
-        "scope": { "enum": ["reusable", "task"] },
+        "scope": { "enum": ["reusable", "task", "temporary", "session"] },
         "task_id": { "type": "string", "minLength": 1 },
-        "expires_at": { "enum": ["never", "task-completion"] }
+        "temporary_id": { "type": "string", "minLength": 1 },
+        "session_id": { "type": "string", "minLength": 1 },
+        "expires_at": {
+          "enum": ["never", "task-completion", "temporary-archive", "session-end"]
+        }
       },
       "allOf": [
         {
           "if": { "properties": { "scope": { "const": "task" } }, "required": ["scope"] },
           "then": {
             "required": ["task_id"],
-            "properties": { "expires_at": { "const": "task-completion" } }
-          },
-          "else": {
+            "properties": {
+              "temporary_id": false,
+              "session_id": false,
+              "expires_at": { "const": "task-completion" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "scope": { "const": "temporary" } }, "required": ["scope"] },
+          "then": {
+            "required": ["temporary_id"],
             "properties": {
               "task_id": false,
+              "session_id": false,
+              "expires_at": { "const": "temporary-archive" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "scope": { "const": "session" } }, "required": ["scope"] },
+          "then": {
+            "properties": {
+              "task_id": false,
+              "temporary_id": false,
+              "expires_at": { "const": "session-end" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "scope": { "const": "reusable" } }, "required": ["scope"] },
+          "then": {
+            "properties": {
+              "task_id": false,
+              "temporary_id": false,
+              "session_id": false,
               "expires_at": { "const": "never" }
             }
           }
@@ -92,7 +126,7 @@
           "status": { "const": "active" },
           "lifecycle": {
             "type": "object",
-            "properties": { "scope": { "const": "task" } },
+            "properties": { "scope": { "enum": ["task", "temporary", "session"] } },
             "required": ["scope"]
           }
         }
@@ -150,7 +184,7 @@
               "inspect-project",
               "run-nondestructive-checks",
               "write-maestro-state",
-              "write-task-artifacts"
+              "write-work-artifacts"
             ]
           }
         },

@@ -110,12 +110,14 @@ risk justifies doing so, and tell the user.
 When the work is better described by concrete capabilities than one stable role, use the resolver
 in [workers.md](workers.md). Convert the bounded delegation into capability requirements before
 selection. Reuse one safe Worker where possible, compose only when no single Worker covers every
-required capability, and generate a Task-scoped Worker only when reusable matches are insufficient.
+required capability, and generate a bounded Worker only when reusable matches are insufficient.
+Use Task scope for formal execution, Temporary scope for preserved exploration, and Session scope
+for a trivial one-off. Worker resolution must not promote exploratory work into a Task.
 
 The resolver proposes an execution unit; Old Zhou still owns task judgment, authorization,
 delegation, and result integration. Resolver output must not force a role sequence or override a
-direct role request. Snapshot every selected Worker before execution so Task resumption is
-independent of later registry changes.
+direct role request. Snapshot every persisted Worker before execution so Task or Temporary
+resumption is independent of later registry changes. Do not persist a Session-scoped Worker.
 
 ## Authorization boundaries
 
@@ -145,7 +147,7 @@ Give a role or Worker:
 
 1. A bounded objective and completion condition.
 2. Relevant long-term project memory.
-3. The current Task context, if a formal Task exists.
+3. The current Task or selected Temporary context, when persistent work exists.
 4. That role's or Worker's `current-state.md`, if it exists, plus the Worker's immutable Task
    snapshot.
 5. Relevant source, Evidence, Artifact, or earlier Detailed Result paths.
@@ -156,7 +158,17 @@ Do not pass the complete conversation or every historical Reference.
 ## Resumption
 
 Resolve the active Temporary with the rules above before resuming exploratory work. To resume a
-role or Worker in a formal Task, load:
+Temporary-scoped Worker, load:
+
+```text
+Long-term Memory
++ Temporary current state
++ Worker spec snapshot
++ Worker current-state
++ new delegation
+```
+
+To resume a role or Worker in a formal Task, load:
 
 ```text
 Long-term Memory

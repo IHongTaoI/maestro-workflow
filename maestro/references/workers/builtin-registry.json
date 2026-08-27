@@ -19,7 +19,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -39,7 +39,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".", ".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-work-artifacts"],
         "conditional": ["edit-project-files"]
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -59,7 +59,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -79,7 +79,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -99,7 +99,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -119,7 +119,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -139,7 +139,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "run-nondestructive-checks", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
@@ -159,7 +159,7 @@
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
-        "autonomous": ["inspect-project", "write-maestro-state", "write-task-artifacts"],
+        "autonomous": ["inspect-project", "write-maestro-state", "write-work-artifacts"],
         "conditional": []
       },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
