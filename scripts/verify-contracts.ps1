@@ -443,11 +443,35 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = "Anti-resurrection of superseded/rejected memory" },
         @{ Path = "maestro/references/storage.md"; Text = "Team Shared Memory (Tracked in Git)" },
         @{ Path = "maestro/references/storage.md"; Text = "Local Runtime State (Excluded from Git)" },
-        @{ Path = "maestro/references/roles/memory-merger.md"; Text = '`conflict-resolution`' }
+        @{ Path = "maestro/references/roles/memory-merger.md"; Text = '`conflict-resolution`' },
+        @{ Path = "README.md"; Text = "The CLI is only an installer, updater, and diagnostic tool" },
+        @{ Path = "README.md"; Text = "It never schedules roles" },
+        @{ Path = "maestro/SKILL.md"; Text = "it never performs orchestration" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {
             throw "Missing contract '$($contract.Text)' in $($contract.Path)"
+        }
+    }
+
+    $packageManifest = Get-Content -Raw "package.json" | ConvertFrom-Json
+    if ($packageManifest.name -ne "maestro-ai-workflow" -or
+        $packageManifest.bin.maestro -ne "bin/maestro.js") {
+        throw "npm package metadata does not expose the expected Maestro CLI"
+    }
+    if ($null -ne $packageManifest.dependencies -and
+        @($packageManifest.dependencies.PSObject.Properties).Count -gt 0) {
+        throw "The multi-host installer CLI must remain runtime-dependency free"
+    }
+
+    $hostRegistryContracts = @(
+        "'.agents/skills/maestro'",
+        "'.claude/skills/maestro'",
+        "'.opencode/skills/maestro'"
+    )
+    foreach ($hostContract in $hostRegistryContracts) {
+        if (-not (Select-String -LiteralPath "cli/hosts.js" -SimpleMatch $hostContract -Quiet)) {
+            throw "Missing host registry destination $hostContract"
         }
     }
 
