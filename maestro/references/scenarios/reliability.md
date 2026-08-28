@@ -215,3 +215,48 @@ MUST NOT:
 - Trust Long-term Memory over current evidence.
 - Silently rewrite or delete the old claim and its provenance.
 ```
+
+## Long-term candidate duplicates an existing entry
+
+```text
+GIVEN:
+- A Task produces a durable claim with reachable evidence.
+- An indexed Long-term entry already covers the same claim.
+
+EXPECT:
+- Classify the match as duplicate and propose SKIP with the matching entry ID.
+- Retain the reviewed SKIP decision so unchanged evidence is not reconsidered repeatedly.
+
+MUST NOT:
+- CREATE another Long-term entry for the same claim.
+- Drop the candidate without a rationale or provenance.
+```
+
+## Long-term candidate overlaps existing experience
+
+```text
+GIVEN:
+- New verified evidence expands one existing Long-term experience.
+- The existing entry remains substantially correct.
+
+EXPECT:
+- Propose UPDATE against the stable existing entry ID.
+- Preserve both old and new reachable source references after approval.
+
+MUST NOT:
+- CREATE a parallel entry merely because the wording differs.
+- Apply the proposal before independent review.
+```
+
+## Temporary output has no durable value
+
+```text
+GIVEN: Temporary Memory contains routine logs, discarded hypotheses, and a one-off command result
+
+EXPECT:
+- Classify the material as low-value and propose SKIP with no target entry IDs.
+- Keep the source Temporary subject to its normal lifecycle rather than promoting its raw content.
+
+MUST NOT:
+- Copy Temporary contents directly into Long-term Memory.
+```

@@ -112,14 +112,30 @@ try {
         "$validatorFixtureRoot/memory-response-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-action-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-conflict-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-date-time-invalid.json" 1
 
     Invoke-ProtocolValidatorCase "handoff" `
         "$validatorFixtureRoot/handoff-traversal-invalid.json" 1
     Invoke-ProtocolValidatorCase "handoff" "$validatorFixtureRoot/invalid-json.json" 1
     Invoke-ProtocolValidatorCase "memory-request" `
         "$validatorFixtureRoot/memory-request-missing-reference-invalid.json" 1
+    Invoke-AjvCase $memoryRequestSchema `
+        "$validatorFixtureRoot/memory-request-duplicate-id-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-request" `
+        "$validatorFixtureRoot/memory-request-duplicate-id-invalid.json" `
+        '$.current_memory.long_term_entries[1].entry_id' "must be unique"
     Invoke-ProtocolValidatorCase "memory-response" `
         "$validatorFixtureRoot/memory-response-missing-reference-invalid.json" 1
+    Invoke-AjvCase $memoryResponseSchema `
+        "$validatorFixtureRoot/memory-response-duplicate-id-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-duplicate-id-invalid.json" `
+        '$.long_term_candidates[1].candidate_id' "must be unique"
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -389,9 +405,14 @@ try {
         @{ Path = "maestro/references/coordination.md"; Text = "matching Task or Temporary" },
         @{ Path = "maestro/references/storage.md"; Text = "copied into the matching Task or Temporary" },
         @{ Path = "maestro/references/handoffs.md"; Text = ".maestro/memory/temporary/active/<temporary-id>/handoffs/" },
-        @{ Path = "maestro/references/workers.md"; Text = 'must use `/` separators' }
-        @{ Path = "maestro/references/handoffs.md"; Text = "artifact-triggered protocol guard" }
-        @{ Path = "maestro/references/memory.md"; Text = "must not create or transition" }
+        @{ Path = "maestro/references/workers.md"; Text = 'must use `/` separators' },
+        @{ Path = "maestro/references/handoffs.md"; Text = "artifact-triggered protocol guard" },
+        @{ Path = "maestro/references/memory.md"; Text = "must not create or transition" },
+        @{ Path = "maestro/references/memory.md"; Text = "UPDATE → MERGE → CREATE" },
+        @{ Path = "maestro/references/memory.md"; Text = "These actions are proposals, not writes" },
+        @{ Path = "maestro/references/memory.md"; Text = "does not replace" },
+        @{ Path = "maestro/references/memory.md"; Text = "Never copy Temporary" },
+        @{ Path = "maestro/references/storage.md"; Text = 'including `SKIP`' }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Quiet)) {

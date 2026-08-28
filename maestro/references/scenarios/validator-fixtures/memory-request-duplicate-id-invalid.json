@@ -1,0 +1,29 @@
+{
+  "operation": "task-complete",
+  "source_files": [
+    "maestro/references/scenarios/validator-fixtures/files/source.md"
+  ],
+  "current_memory": {
+    "long_term_entries": [
+      {
+        "entry_id": "lt-repeated",
+        "title": "First entry",
+        "memory_kind": "fact",
+        "content": "First indexed claim.",
+        "source_refs": [
+          "maestro/references/scenarios/validator-fixtures/files/source.md"
+        ]
+      },
+      {
+        "entry_id": "lt-repeated",
+        "title": "Second entry",
+        "memory_kind": "experience",
+        "content": "Second indexed claim.",
+        "source_refs": [
+          "maestro/references/scenarios/validator-fixtures/files/source.md"
+        ]
+      }
+    ]
+  },
+  "memory_hints": {}
+}

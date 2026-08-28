@@ -11,12 +11,49 @@
     "source_files": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
-      "minItems": 1
+      "minItems": 1,
+      "uniqueItems": true
     },
-    "current_memory": { "type": "object" },
+    "current_memory": {
+      "type": "object",
+      "required": ["long_term_entries"],
+      "properties": {
+        "long_term_entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/longTermEntry" }
+        }
+      },
+      "additionalProperties": true
+    },
     "memory_hints": { "type": "object" },
     "task_context": { "type": "object" },
     "source_content": { "type": "object" }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "longTermEntry": {
+      "type": "object",
+      "required": ["entry_id", "title", "memory_kind", "content", "source_refs"],
+      "properties": {
+        "entry_id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "memory_kind": {
+          "enum": ["fact", "experience", "principle", "decision", "constraint", "other"]
+        },
+        "content": { "type": "string", "minLength": 1 },
+        "source_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
 }

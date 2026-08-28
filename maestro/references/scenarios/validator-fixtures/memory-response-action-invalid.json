@@ -1,0 +1,41 @@
+{
+  "status": "completed",
+  "current": { "content": {} },
+  "long_term_candidates": [
+    {
+      "candidate_id": "candidate-invalid-update",
+      "title": "Invalid update proposal",
+      "memory_kind": "fact",
+      "action": "UPDATE",
+      "match": {
+        "classification": "overlap",
+        "entry_ids": ["lt-existing", "lt-second"]
+      },
+      "conflict_status": "none",
+      "content": "This update incorrectly targets two entries.",
+      "rationale": "Fixture for update target cardinality.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-28T00:00:00Z"
+      },
+      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+    },
+    {
+      "candidate_id": "candidate-invalid-merge",
+      "title": "Invalid merge proposal",
+      "memory_kind": "experience",
+      "action": "MERGE",
+      "match": { "classification": "overlap", "entry_ids": ["lt-existing"] },
+      "conflict_status": "none",
+      "content": "This merge incorrectly targets only one entry.",
+      "rationale": "Fixture for merge target cardinality.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-28T00:01:00Z"
+      },
+      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+    }
+  ]
+}

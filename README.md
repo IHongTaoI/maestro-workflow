@@ -57,6 +57,10 @@ automatically.
 Maestro creates project-owned state under `.maestro/` only when the request needs persistence. It
 asks for confirmation before turning exploratory discussion into a formal Task.
 
+At durable boundaries, the Memory Worker compares sourced Temporary or Task findings with current
+Long-term entries and proposes reviewed `UPDATE`, `MERGE`, `CREATE`, or `SKIP` actions. It never
+copies execution logs directly into Long-term Memory or approves its own proposal.
+
 ## Package contents
 
 ```text
