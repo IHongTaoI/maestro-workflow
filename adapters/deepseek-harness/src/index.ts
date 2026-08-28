@@ -52,7 +52,12 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     const fs = ctx.get('fs') as FileSystem
     const store = new MaestroStateStore(fs)
     const validator = new MaestroSchemaValidator()
-    await validator.loadAll(path.join(coreDir, 'references', 'schemas'))
+    const schemaCount = await validator.loadAll(path.join(coreDir, 'references', 'schemas'))
+    if (schemaCount === 0) {
+      ctx.logger.warn(
+        'maestro-adapter: no JSON Schemas loaded from references/schemas; validation stays disabled',
+      )
+    }
     // TODO(next): expose `store`/`validator` to the runtime — either register a
     // model-facing tool on `ctx.tools` (so the Core's storage protocol runs
     // through this CAS implementation) or provide them as a Cordis service.

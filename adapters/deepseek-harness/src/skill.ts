@@ -22,7 +22,7 @@ import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SkillRegistration } from '@deepseek-ai/dsh-skill'
-import type { AdapterConfig, SkillFrontmatter } from './types'
+import { DEFAULT_CORE_DIRS, type AdapterConfig, type SkillFrontmatter } from './types'
 
 const SKILL_FILE = 'SKILL.md'
 const PROVIDER = 'maestro-adapter'
@@ -42,7 +42,9 @@ export async function resolveCoreDir(config: AdapterConfig, cwd: string): Promis
   if (config.coreDir !== undefined) {
     candidates.push(path.resolve(cwd, config.coreDir))
   } else {
-    candidates.push(path.resolve(cwd, '.dsh/skills/maestro'), path.resolve(cwd, 'maestro'))
+    for (const dir of DEFAULT_CORE_DIRS) {
+      candidates.push(path.resolve(cwd, dir))
+    }
   }
   for (const candidate of candidates) {
     try {

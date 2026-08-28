@@ -30,19 +30,30 @@ export class MaestroSchemaValidator {
    * Load every `*.json` schema from the Core's `schemas/` directory and
    * register it under its `$id` so {@link validate} can address it.
    *
+   * A missing directory is not fatal: the adapter's graceful-fallback
+   * contract means validation simply reports "schema not loaded" later,
+   * while the rest of the storage path keeps working.
+   *
    * @param schemasDir - absolute path to `maestro/references/schemas/`.
+   * @returns the number of schemas registered.
    */
-  async loadAll(schemasDir: string): Promise<void> {
-    const entries = await readdir(schemasDir)
+  async loadAll(schemasDir: string): Promise<number> {
+    let entries: string[]
+    try {
+      entries = await readdir(schemasDir)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0
+      throw error
+    }
+    let loaded = 0
     for (const entry of entries) {
       if (!entry.endsWith('.json')) continue
       const raw = await readFile(path.join(schemasDir, entry), 'utf8')
       const schema = JSON.parse(raw) as { $id?: string }
       this.ajv.addSchema(schema)
-      if (typeof schema.$id === 'string') {
-        this.ajv.getSchema(schema.$id)
-      }
+      loaded += 1
     }
+    return loaded
   }
 
   /**

@@ -101,37 +101,158 @@ export class MaestroStateStore {
    * Derive the stable lock path for a state path. Mirrors `storage.md`: a
    * normalized project-relative state key maps to a dedicated lock entry.
    *
+   * The state path is normalized (backslashes, leading `./`, `.maestro/`
+   * prefix) before mapping, and traversal is rejected outright per the File
+   * rules in `storage.md` — a `..` segment must never silently collapse into
+   * a lock name.
+   *
    * @param statePath - project-relative path under `.maestro/`.
+   * @throws when the path escapes the project root or is absolute.
    */
   lockPathFor(statePath: string): string {
-    const key = statePath.replace(/[\\/]+/g, '-').replace(/^\.maestro-/, '')
+    const normalized = statePath.replace(/\\/g, '/').replace(/^(\.\/)+/, '')
+    const segments = normalized.split('/')
+    if (
+      normalized.startsWith('/') ||
+      /^[A-Za-z]:/.test(normalized) ||
+      segments.some((segment) => segment === '..')
+    ) {
+      throw new Error(
+        `@maestro-ai/dsh-adapter: invalid state path "${statePath}" — absolute paths and ` +
+          '`..` traversal are rejected per storage.md File rules.',
+      )
+    }
+    const key = normalized.replace(/^\.maestro\//, '').replace(/\/+/g, '-')
     return `${LOCK_ROOT}/${key}.lock`
   }
+}
+
+/** Lease metadata recorded inside a lock file. */
+export interface LockLease {
+  owner: string
+  acquiredAt: string
+  expiresAt: string
+}
+
+/** Tunables for {@link acquireLock}. */
+export interface AcquireLockOptions {
+  /** Lease lifetime in milliseconds (default 5 minutes). */
+  leaseMs?: number
+  /** Bounded contention window in milliseconds (default 30 seconds). */
+  timeoutMs?: number
+  /** Delay between contention retries in milliseconds (default 250). */
+  retryDelayMs?: number
+}
+
+const DEFAULT_LEASE_MS = 5 * 60 * 1000
+const DEFAULT_TIMEOUT_MS = 30 * 1000
+const DEFAULT_RETRY_DELAY_MS = 250
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Best-effort check for the seam's "already exists" signal. */
+function isAlreadyExists(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: unknown }).code === 'FS_NOT_OBSERVED'
+  )
+}
+
+function parseLease(content: string): LockLease | undefined {
+  try {
+    const parsed = JSON.parse(content) as Partial<LockLease>
+    if (
+      typeof parsed.owner === 'string' &&
+      typeof parsed.acquiredAt === 'string' &&
+      typeof parsed.expiresAt === 'string'
+    ) {
+      return parsed as LockLease
+    }
+  } catch {
+    // Unparseable lock content is treated as reclaimable below.
+  }
+  return undefined
 }
 
 /**
  * Acquire an exclusive lock for a state path, returning a release function.
  *
- * NOTE: dsh's `FileSystem` seam currently exposes no delete/remove primitive,
- * so a lock file cannot be cleanly removed on release. Until that primitive
- * lands (or the adapter switches the lock to `ctx.storage`), callers should
- * treat locks as lease-based: write an owner + expiry into the lock file and
- * reclaim only after confirming the recorded owner is inactive, per
- * `storage.md` ("clock age alone is insufficient proof").
+ * dsh's `FileSystem` seam currently exposes no delete/remove primitive, so a
+ * lock file cannot be cleanly removed on release. The lock is therefore
+ * lease-based: every acquisition writes `owner` + `expiresAt`, and an
+ * existing lock is reclaimed only after its recorded lease has expired. The
+ * reclaim itself is a compare-and-swap ({@link MaestroStateStore.writeGuarded})
+ * against the exact snapshot that was read, so two concurrent reclaimers
+ * cannot both win — the loser's `FS_STALE_VERSION` sends it back to retry.
+ *
+ * Per `storage.md`, "clock age alone is insufficient proof that an owner is
+ * inactive": the caller remains responsible for confirming the prior owner is
+ * gone before relying on a reclaimed lock, and for recording the reclaim in a
+ * transaction or Evidence record.
  *
  * @param store - the state store.
  * @param statePath - project-relative path under `.maestro/`.
  * @param owner - the acquiring actor's identifier.
+ * @param options - lease/contention tunables.
+ * @throws on lock contention past the bounded timeout.
  */
 export async function acquireLock(
   store: MaestroStateStore,
   statePath: string,
   owner: string,
+  options: AcquireLockOptions = {},
 ): Promise<() => void> {
+  const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS
+  const deadline = Date.now() + (options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS
   const lockPath = store.lockPathFor(statePath)
-  const payload = JSON.stringify({ owner, acquiredAt: new Date().toISOString() })
-  await store.createIfAbsent(lockPath, payload)
-  // Release is a no-op here for the reason documented above; a future revision
-  // deletes the lock file once `ctx.fs` exposes a remove operation.
-  return () => {}
+
+  for (;;) {
+    const now = Date.now()
+    const payload = JSON.stringify({
+      owner,
+      acquiredAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + leaseMs).toISOString(),
+    } satisfies LockLease)
+
+    try {
+      await store.createIfAbsent(lockPath, payload)
+      // Release stays a no-op until `ctx.fs` exposes a remove operation; an
+      // expired lease is what makes the lock reusable.
+      return () => {}
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error
+    }
+
+    // The lock file exists. Reclaim it only when the recorded lease expired.
+    const snapshot = await store.readSnapshot(lockPath)
+    if (snapshot !== undefined) {
+      const lease = parseLease(snapshot.content)
+      const expired = lease === undefined || Date.parse(lease.expiresAt) <= now
+      if (expired) {
+        try {
+          await store.writeGuarded(snapshot, payload)
+          return () => {}
+        } catch (error) {
+          // A concurrent reclaimer beat us to it; fall through to retry.
+          if (!isAlreadyExists(error)) {
+            const code = (error as { code?: unknown })?.code
+            if (code !== 'FS_STALE_VERSION') throw error
+          }
+        }
+      }
+    }
+
+    if (Date.now() + retryDelayMs > deadline) {
+      throw new Error(
+        `@maestro-ai/dsh-adapter: lock contention on "${statePath}" — still held after ` +
+          `${options.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms. Never force the write; surface the conflict per storage.md.`,
+      )
+    }
+    await sleep(retryDelayMs)
+  }
 }

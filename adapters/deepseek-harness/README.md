@@ -65,8 +65,17 @@ export function apply(ctx, config) {
 | `revision`（`storage.md`） | `ctx.fs` 的 `FsVersion`（`stat()` 返回的不透明版本 token） |
 | 原子替换 + 冲突检测 | `ctx.fs.writeText(target, content, { kind: 'replaceIfVersion', version })`；冲突抛 `FS_STALE_VERSION` |
 | 独占锁 create-if-absent | `ctx.fs.writeText(lockTarget, owner, { kind: 'createIfAbsent' })`；已存在抛 `FS_NOT_OBSERVED` |
-| 路径遍历防护 | `ctx.fs.contains(parent, child)` |
+| 路径遍历防护 | `ctx.fs.contains(parent, child)`；`lockPathFor` 额外拒绝 `..` 与绝对路径 |
 | schema 校验 | 复用 `maestro/references/schemas/*.json`（JSON Schema draft 2020-12），用 `ajv` 校验 |
+
+## 与 `storage.md` 的已知偏差
+
+- **锁是文件而非目录**：`storage.md` 规定锁是 `.maestro/locks/<key>.lock/` 目录，但 dsh `ctx.fs`
+  目前没有"创建目录"原语，适配层用同名**文件** + `createIfAbsent` 实现，排他语义等价。
+- **租约式锁**：dsh `ctx.fs` 暂无 delete/remove 原语，锁文件无法在 release 时删除。`acquireLock`
+  因此写入 `owner` + `expiresAt` 租约；已存在的锁只有在租约过期后才可被回收，回收本身走
+  `replaceIfVersion` CAS（并发回收者只有一个能赢）。调用方仍需按 `storage.md` 确认原 owner 已
+  不活跃，并在 transaction / Evidence 里记录回收行为。
 
 ## 目录结构
 
