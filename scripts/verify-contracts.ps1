@@ -305,7 +305,7 @@ try {
         @{ Path = "maestro/references/coordination.md"; Text = "matching Task or Temporary" },
         @{ Path = "maestro/references/storage.md"; Text = "copied into the matching Task or Temporary" },
         @{ Path = "maestro/references/handoffs.md"; Text = ".maestro/memory/temporary/active/<temporary-id>/handoffs/" },
-        @{ Path = "maestro/references/workers.md"; Text = 'must use `/` separators on every host' }
+        @{ Path = "maestro/references/workers.md"; Text = 'must use `/` separators' }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Quiet)) {
