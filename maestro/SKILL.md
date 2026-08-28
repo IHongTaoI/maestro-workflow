@@ -52,7 +52,8 @@ Load only the role reference needed for the current delegation:
 Stable roles describe organizational responsibility. Capability-based Workers are bounded execution
 units and may reuse a role, compose several reusable Workers, or exist only for one Task. Before
 delegating a dynamic Worker, read [workers.md](references/workers.md), validate its specification,
-and snapshot it into the Task.
+and persist its snapshot in the matching Task or Temporary when required. Session-scoped Workers
+remain ephemeral. Do not create a Task merely to host a Worker.
 
 ## Maintain project memory
 

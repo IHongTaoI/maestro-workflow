@@ -24,6 +24,20 @@ try {
         }
     }
 
+    function Invoke-WorkerSemanticCase {
+        param(
+            [Parameter(Mandatory = $true)][string]$Kind,
+            [Parameter(Mandatory = $true)][string]$Data,
+            [Parameter(Mandatory = $true)][int]$ExpectedExit
+        )
+
+        & node "scripts/validate-worker-semantics.mjs" $Kind $Data
+        $actualExit = $LASTEXITCODE
+        if ($actualExit -ne $ExpectedExit) {
+            throw "Worker semantic case failed for $Data`: expected exit $ExpectedExit, got $actualExit"
+        }
+    }
+
     Get-ChildItem "maestro/references/schemas" -Filter "*.json" | ForEach-Object {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
@@ -49,7 +63,11 @@ try {
     $registrySchema = "maestro/references/schemas/worker-registry.schema.json"
     $selectionSchema = "maestro/references/schemas/worker-selection.schema.json"
     Invoke-AjvCase $requirementsSchema "$fixtureRoot/capability-requirements-valid.json" 0
-    Invoke-AjvCase $requirementsSchema "$fixtureRoot/capability-requirements-overlap-invalid.json" 0
+    Invoke-WorkerSemanticCase "requirements" "$fixtureRoot/capability-requirements-valid.json" 0
+    Invoke-WorkerSemanticCase "requirements" `
+        "$fixtureRoot/capability-requirements-overlap-invalid.json" 1
+    Invoke-AjvCase $requirementsSchema `
+        "$fixtureRoot/capability-requirements-windows-path-invalid.json" 1
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-valid.json" 0
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-memory-valid.json" 0
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-session-valid.json" 0
@@ -57,11 +75,13 @@ try {
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-temporary-memory-lifecycle-invalid.json" 1
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-session-lifecycle-invalid.json" 1
     Invoke-AjvCase $workerSchema "$fixtureRoot/worker-permission-invalid.json" 1
+    Invoke-AjvCase $workerSchema "$fixtureRoot/worker-windows-path-invalid.json" 1
     Invoke-AjvCase $registrySchema "maestro/references/workers/builtin-registry.json" 0 `
         @($workerSchema)
+    Invoke-WorkerSemanticCase "registry" "maestro/references/workers/builtin-registry.json" 0
     Invoke-AjvCase $registrySchema "$fixtureRoot/worker-registry-valid.json" 0 @($workerSchema)
-    Invoke-AjvCase $registrySchema "$fixtureRoot/worker-registry-duplicate-invalid.json" 0 `
-        @($workerSchema)
+    Invoke-WorkerSemanticCase "registry" "$fixtureRoot/worker-registry-valid.json" 0
+    Invoke-WorkerSemanticCase "registry" "$fixtureRoot/worker-registry-duplicate-invalid.json" 1
     Invoke-AjvCase $registrySchema "$fixtureRoot/worker-registry-source-invalid.json" 1 `
         @($workerSchema)
     Invoke-AjvCase $selectionSchema "$fixtureRoot/worker-selection-exact-valid.json" 0 `
@@ -76,21 +96,6 @@ try {
         @($requirementsSchema)
     Invoke-AjvCase $handoffSchema "$fixtureRoot/worker-handoff-valid.json" 0
     Invoke-AjvCase $handoffSchema "$fixtureRoot/worker-handoff-both-paths-invalid.json" 1
-
-    $duplicateRegistry = Get-Content -Raw "$fixtureRoot/worker-registry-duplicate-invalid.json" |
-        ConvertFrom-Json
-    $duplicateIds = @($duplicateRegistry.workers | Group-Object id | Where-Object Count -gt 1)
-    if ($duplicateIds.Count -eq 0) {
-        throw "Duplicate registry fixture did not contain duplicate Worker IDs"
-    }
-
-    $overlapRequirements = Get-Content -Raw `
-        "$fixtureRoot/capability-requirements-overlap-invalid.json" | ConvertFrom-Json
-    $overlap = @($overlapRequirements.required_capabilities |
-        Where-Object { $overlapRequirements.optional_capabilities -contains $_ })
-    if ($overlap.Count -eq 0) {
-        throw "Overlap requirements fixture did not reuse a required capability as optional"
-    }
 
     $builtinRegistry = Get-Content -Raw "maestro/references/workers/builtin-registry.json" |
         ConvertFrom-Json
