@@ -18,6 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Verify multi-host CLI
+        run: npm test
       - name: Verify schemas and behavioral contracts
         shell: pwsh
         run: ./scripts/verify-contracts.ps1
+      - name: Verify npm package contents
+        run: npm pack --dry-run

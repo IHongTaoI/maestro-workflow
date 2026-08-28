@@ -1,0 +1,43 @@
+{
+  "name": "maestro-ai-workflow",
+  "version": "0.1.0",
+  "description": "Portable multi-role AI workflow skill with a multi-host installer CLI",
+  "type": "module",
+  "bin": {
+    "maestro": "bin/maestro.js"
+  },
+  "files": [
+    "bin/",
+    "cli/",
+    "maestro/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:contracts": "pwsh -File scripts/verify-contracts.ps1",
+    "verify": "npm test && npm run test:contracts && npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IHongTaoI/maestro-workflow.git"
+  },
+  "homepage": "https://github.com/IHongTaoI/maestro-workflow#readme",
+  "bugs": {
+    "url": "https://github.com/IHongTaoI/maestro-workflow/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "skill",
+    "workflow",
+    "codex",
+    "claude-code",
+    "opencode"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
