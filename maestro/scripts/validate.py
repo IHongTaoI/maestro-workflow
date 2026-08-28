@@ -8,6 +8,7 @@ import json
 import re
 import sys
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
@@ -15,6 +16,10 @@ from typing import Any, Callable
 Validator = Callable[[Any, str, list["Diagnostic"]], None]
 CAPABILITY_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:")
+STABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+RFC3339_DATE_TIME_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
+)
 
 
 @dataclass(frozen=True)
@@ -122,6 +127,47 @@ def check_array(
 
 def check_plain_object(value: Any, path: str, errors: list[Diagnostic]) -> None:
     require_object(value, path, errors)
+
+
+def check_stable_id(value: Any, path: str, errors: list[Diagnostic]) -> bool:
+    if not check_string(value, path, errors, min_length=1):
+        return False
+    assert isinstance(value, str)
+    if not STABLE_ID_PATTERN.fullmatch(value):
+        add_error(errors, path, "must be a stable ID using letters, digits, '.', '_' or '-'")
+        return False
+    return True
+
+
+def check_date_time(value: Any, path: str, errors: list[Diagnostic]) -> bool:
+    if not check_string(value, path, errors, min_length=1):
+        return False
+    assert isinstance(value, str)
+    if not RFC3339_DATE_TIME_PATTERN.fullmatch(value):
+        add_error(errors, path, "must be an RFC 3339 date-time")
+        return False
+    try:
+        normalized = value[:-1] + "+00:00" if value[-1] in "Zz" else value
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        add_error(errors, path, "must be an RFC 3339 date-time")
+        return False
+    if parsed.tzinfo is None:
+        add_error(errors, path, "must include a timezone offset")
+        return False
+    return True
+
+
+def check_unique_strings(value: Any, path: str, errors: list[Diagnostic]) -> None:
+    if not is_array(value):
+        return
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, str):
+            continue
+        if item in seen:
+            add_error(errors, f"{path}[{index}]", "must be unique")
+        seen.add(item)
 
 
 def make_string_validator(*, min_length: int = 0) -> Validator:
@@ -316,16 +362,82 @@ def validate_memory_request(
             {"role-compress", "session-handoff", "task-bootstrap", "task-complete"},
         )
     if "source_files" in value:
-        check_array(
+        if check_array(
             value["source_files"],
             "$.source_files",
             errors,
             file_reference,
             min_items=1,
-        )
-    for key in ("current_memory", "memory_hints", "task_context", "source_content"):
+        ):
+            check_unique_strings(value["source_files"], "$.source_files", errors)
+    if "current_memory" in value:
+        current_memory = value["current_memory"]
+        if require_object(current_memory, "$.current_memory", errors):
+            if "long_term_entries" not in current_memory:
+                add_error(
+                    errors,
+                    "$.current_memory.long_term_entries",
+                    "is required",
+                )
+            else:
+                entries = current_memory["long_term_entries"]
+                if check_array(
+                    entries,
+                    "$.current_memory.long_term_entries",
+                    errors,
+                    lambda item, item_path, item_errors: validate_long_term_entry(
+                        item, item_path, item_errors, file_reference
+                    ),
+                ):
+                    seen_entry_ids: set[str] = set()
+                    for index, entry in enumerate(entries):
+                        if not is_object(entry):
+                            continue
+                        entry_id = entry.get("entry_id")
+                        if not isinstance(entry_id, str):
+                            continue
+                        if entry_id in seen_entry_ids:
+                            add_error(
+                                errors,
+                                f"$.current_memory.long_term_entries[{index}].entry_id",
+                                "must be unique within current memory",
+                            )
+                        seen_entry_ids.add(entry_id)
+    for key in ("memory_hints", "task_context", "source_content"):
         if key in value:
             check_plain_object(value[key], f"$.{key}", errors)
+
+
+def validate_long_term_entry(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {"entry_id", "title", "memory_kind", "content", "source_refs"}
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    if "entry_id" in value:
+        check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
+    for key in ("title", "content"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "memory_kind" in value:
+        check_enum(
+            value["memory_kind"],
+            f"{path}.memory_kind",
+            errors,
+            {"fact", "experience", "principle", "decision", "constraint", "other"},
+        )
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
 
 
 def validate_memory_item(
@@ -350,13 +462,184 @@ def validate_memory_item(
             min_length=content_min_length,
         )
     if "source_refs" in value:
-        check_array(
+        if check_array(
             value["source_refs"],
             f"{path}.source_refs",
             errors,
             file_reference,
             min_items=1,
+        ):
+            check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+
+
+def validate_long_term_candidate(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+
+    required = {
+        "candidate_id",
+        "title",
+        "memory_kind",
+        "action",
+        "match",
+        "conflict_status",
+        "content",
+        "rationale",
+        "source",
+        "source_refs",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+
+    if "candidate_id" in value:
+        check_stable_id(value["candidate_id"], f"{path}.candidate_id", errors)
+    if "title" in value:
+        check_string(value["title"], f"{path}.title", errors, min_length=1)
+    if "memory_kind" in value:
+        check_enum(
+            value["memory_kind"],
+            f"{path}.memory_kind",
+            errors,
+            {"fact", "experience", "principle", "decision", "constraint", "other"},
         )
+    action_valid = False
+    if "action" in value:
+        action_valid = check_enum(
+            value["action"],
+            f"{path}.action",
+            errors,
+            {"UPDATE", "MERGE", "CREATE", "SKIP"},
+        )
+    if "conflict_status" in value:
+        check_enum(
+            value["conflict_status"],
+            f"{path}.conflict_status",
+            errors,
+            {"none", "pending-confirmation", "confirmed"},
+        )
+    for key in ("content", "rationale"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+
+    classification: str | None = None
+    entry_ids: list[Any] | None = None
+    if "match" in value and require_object(value["match"], f"{path}.match", errors):
+        match = value["match"]
+        check_object_shape(
+            match,
+            f"{path}.match",
+            errors,
+            required={"classification", "entry_ids"},
+            allowed={"classification", "entry_ids"},
+        )
+        if "classification" in match and check_enum(
+            match["classification"],
+            f"{path}.match.classification",
+            errors,
+            {"novel", "duplicate", "overlap", "conflict", "low-value"},
+        ):
+            classification = match["classification"]
+        if "entry_ids" in match and check_array(
+            match["entry_ids"],
+            f"{path}.match.entry_ids",
+            errors,
+            lambda item, item_path, item_errors: check_stable_id(
+                item, item_path, item_errors
+            ),
+        ):
+            entry_ids = match["entry_ids"]
+            check_unique_strings(entry_ids, f"{path}.match.entry_ids", errors)
+
+    if action_valid and classification is not None and entry_ids is not None:
+        action = value["action"]
+        if action == "CREATE" and (classification != "novel" or entry_ids):
+            add_error(
+                errors,
+                f"{path}.match",
+                "CREATE requires classification 'novel' and no entry IDs",
+            )
+        elif action == "UPDATE" and (
+            classification not in {"overlap", "conflict"} or len(entry_ids) != 1
+        ):
+            add_error(
+                errors,
+                f"{path}.match",
+                "UPDATE requires overlap or conflict with exactly one entry ID",
+            )
+        elif action == "MERGE" and (
+            classification not in {"overlap", "conflict"} or len(entry_ids) < 2
+        ):
+            add_error(
+                errors,
+                f"{path}.match",
+                "MERGE requires overlap or conflict with at least two entry IDs",
+            )
+        elif action == "SKIP":
+            valid_skip = (
+                classification == "duplicate" and len(entry_ids) >= 1
+            ) or (classification == "low-value" and len(entry_ids) == 0)
+            if not valid_skip:
+                add_error(
+                    errors,
+                    f"{path}.match",
+                    "SKIP requires a duplicate with targets or low-value with no targets",
+                )
+
+    if classification is not None and "conflict_status" in value:
+        conflict_status = value["conflict_status"]
+        if classification == "conflict" and conflict_status not in {
+            "pending-confirmation",
+            "confirmed",
+        }:
+            add_error(
+                errors,
+                f"{path}.conflict_status",
+                "must be pending-confirmation or confirmed for a conflict",
+            )
+        elif classification != "conflict" and conflict_status != "none":
+            add_error(
+                errors,
+                f"{path}.conflict_status",
+                "must be none when the match is not a conflict",
+            )
+
+    if "source" in value and require_object(value["source"], f"{path}.source", errors):
+        source = value["source"]
+        check_object_shape(
+            source,
+            f"{path}.source",
+            errors,
+            required={"type", "id", "created_at"},
+            allowed={"type", "id", "workspace_id", "created_at"},
+        )
+        if "type" in source:
+            check_enum(
+                source["type"],
+                f"{path}.source.type",
+                errors,
+                {"temporary", "task"},
+            )
+        if "id" in source:
+            check_stable_id(source["id"], f"{path}.source.id", errors)
+        if "workspace_id" in source:
+            check_stable_id(
+                source["workspace_id"], f"{path}.source.workspace_id", errors
+            )
+        if "created_at" in source:
+            check_date_time(source["created_at"], f"{path}.source.created_at", errors)
+
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
 
 
 def validate_memory_response(
@@ -402,18 +685,32 @@ def validate_memory_response(
             ),
         )
     if "long_term_candidates" in value:
-        check_array(
-            value["long_term_candidates"],
+        candidates = value["long_term_candidates"]
+        if check_array(
+            candidates,
             "$.long_term_candidates",
             errors,
-            lambda item, item_path, item_errors: validate_memory_item(
+            lambda item, item_path, item_errors: validate_long_term_candidate(
                 item,
                 item_path,
                 item_errors,
                 file_reference,
-                content_min_length=1,
             ),
-        )
+        ):
+            seen_candidate_ids: set[str] = set()
+            for index, candidate in enumerate(candidates):
+                if not is_object(candidate):
+                    continue
+                candidate_id = candidate.get("candidate_id")
+                if not isinstance(candidate_id, str):
+                    continue
+                if candidate_id in seen_candidate_ids:
+                    add_error(
+                        errors,
+                        f"$.long_term_candidates[{index}].candidate_id",
+                        "must be unique within the response",
+                    )
+                seen_candidate_ids.add(candidate_id)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

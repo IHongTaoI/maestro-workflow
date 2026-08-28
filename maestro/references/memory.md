@@ -83,10 +83,58 @@ noise. Mutable Task and role Markdown uses the revision front matter and write p
 Long-term Memory contains project knowledge likely to matter across future Tasks: architecture,
 stable module responsibilities, verified facts, API boundaries, conventions, and durable decisions.
 
+Long-term Memory is a maintained experience base, not a Task record archive. Never copy Temporary
+or Task contents directly into it. Trace data, routine command output, discarded hypotheses,
+process logs, and one-off implementation detail remain in their source layer unless a reusable,
+verified claim is extracted from them.
+
+Every current Long-term entry has a stable `entry_id`, a `memory_kind` (`fact`, `experience`,
+`principle`, `decision`, `constraint`, or `other`), concise content, and reachable `source_refs`.
+Expose those fields as `current_memory.long_term_entries` in every Memory Worker request. An empty
+Long-term store is represented by an empty array, not by omitting the index. Stable IDs let a
+candidate name the entries it compared without coupling the protocol to Markdown headings or a
+host API.
+
 Memory Worker output is only a candidate. Before promotion, Old Zhou or a strong-model reviewer must
 verify that it is stable, useful beyond the current Task, and supported by reachable `source_refs`.
 Record approval or rejection under `memory/long-term/decisions/`; retain rejected candidates so the
 same weak claim is not repeatedly reconsidered.
+
+### Evolution proposals
+
+For each extracted Long-term candidate, compare its durable claim with the indexed entries and emit
+one proposal under `long_term_candidates`. The proposal records a stable `candidate_id`, its
+`memory_kind`, a match classification, an action, conflict status, rationale, structured source
+metadata, and reachable `source_refs`.
+
+Classify the comparison before choosing an action:
+
+- `novel`: no entry covers the claim;
+- `duplicate`: an entry already covers the same claim;
+- `overlap`: existing entries should absorb or consolidate the new evidence;
+- `conflict`: current evidence contradicts an entry;
+- `low-value`: the material is temporary, one-off, or not reusable.
+
+Prefer maintenance over proliferation. For a candidate that is eligible for Long-term Memory, use
+this order:
+
+```text
+UPDATE → MERGE → CREATE
+```
+
+`UPDATE` targets exactly one overlapping or conflicting entry. `MERGE` targets at least two.
+`CREATE` is allowed only when the claim is novel and targets none. Emit `SKIP` for a duplicate or
+low-value candidate; a duplicate names the entries that already cover it, while a low-value
+candidate targets none. Do not use `CREATE` to avoid comparing with an existing topic.
+
+The `source` metadata contains `type: temporary | task`, the source ID, creation time, and an
+optional host-provided `workspace_id`. It helps route and audit the proposal, but does not replace
+`source_refs`; reachable source files are the authoritative evidence.
+
+These actions are proposals, not writes. The Memory Worker cannot apply or approve them. Old Zhou
+or a strong-model reviewer verifies usefulness, stability, matching targets, and provenance, may
+change the proposed action, and publishes an immutable decision before any approved update uses the
+mutable-state write protocol.
 
 ### Evidence precedence and conflicts
 
@@ -118,6 +166,11 @@ If the contradiction has not yet been verified, label the old entry disputed in 
 prefer the higher-priority evidence for the present decision. A Memory Worker may propose the
 supersession, but Old Zhou or a strong-model reviewer must approve it.
 
+A conflict proposal uses `conflict_status: pending-confirmation` until its evidence has been
+verified, or `confirmed` once the contradiction itself is verified. Both states still require
+review before mutation. Non-conflict proposals use `none`. Never relabel a conflict as overlap or
+novel merely to pass validation.
+
 ## Current + References
 
 Load `current.md` or `current-state.md` by default. References are historical anchors and are loaded
@@ -141,6 +194,16 @@ the complete request and sources under `memory/pending/` and continue the busine
 The Memory Worker organizes memory. It must not select roles or Workers, make architecture
 decisions, change
 Task scope, or approve its own long-term candidates.
+
+Its consolidation flow is bounded and ordered:
+
+1. Extract reusable facts, experiences, principles, decisions, or constraints from the supplied
+   source files.
+2. Compare every extracted claim with `current_memory.long_term_entries` by content, applicability,
+   evidence, and stable ID.
+3. Classify it as novel, duplicate, overlap, conflict, or low-value.
+4. Propose `UPDATE`, `MERGE`, `CREATE`, or `SKIP` using the evolution rules above.
+5. Return the proposals for validation and independent review; do not mutate Long-term Memory.
 
 Validate structured input/output against:
 

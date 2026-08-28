@@ -68,6 +68,10 @@ The three memory layers are:
 - Task: formal execution context, evidence, artifacts, and per-role or Worker state.
 - Long-term: stable, sourced project knowledge approved by Old Zhou or a strong-model review.
 
+Temporary and Task contents never enter Long-term Memory by direct copy. At a Memory Worker
+boundary, compare durable candidates with current Long-term entries and propose `UPDATE`, `MERGE`,
+`CREATE`, or `SKIP`; apply no proposal until Old Zhou or a strong-model reviewer approves it.
+
 Do not load all historical References by default. Load current state first and follow a Reference
 only when the current decision needs its detail.
 

@@ -84,6 +84,13 @@ promoted from historical Task evidence uses `source: learned`; it remains an ord
 entry and receives no extra authority. Validate parsed registries against
 [worker-registry.schema.json](schemas/worker-registry.schema.json).
 
+Long-term `current.md` is the current view of approved entries. Each entry exposes a stable
+`entry_id`, `memory_kind`, concise content, and reachable `source_refs`; IDs survive wording updates
+and are retired only through an immutable decision. Persist every validated Memory Worker proposal,
+including `SKIP`, under `memory/long-term/candidates/pending/` until review records it as approved or
+rejected. A `SKIP` decision does not mutate `current.md`, but retaining it prevents the same
+duplicate or low-value claim from being reconsidered without new evidence.
+
 ## Configuration
 
 Use a small `config.yaml`:
@@ -266,6 +273,11 @@ Storage transitions do not define business workflow. Allowed lifecycle moves are
 - Temporary `active` → formal Task after explicit confirmation, then Temporary → `archive`.
 - Task active → `archive` after completion.
 - Long-term candidate `pending` → `approved` or `rejected` after review.
+
+An approved `UPDATE`, `MERGE`, or `CREATE` changes Long-term `current.md` through the mutable-state
+write protocol. `UPDATE` preserves its target entry ID. `MERGE` preserves one target ID as the
+replacement and marks the other targets superseded in the immutable decision. `CREATE` allocates a
+new stable entry ID. `SKIP` records only a decision and never creates a current entry.
 
 Record the transition, timestamp, actor/reviewer, rationale when relevant, and source paths before
 moving the directory or file.
