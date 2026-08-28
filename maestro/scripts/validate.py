@@ -177,6 +177,24 @@ def make_string_validator(*, min_length: int = 0) -> Validator:
     return validate
 
 
+def check_canonical_path(value: Any, path: str, errors: list[Diagnostic]) -> bool:
+    if not check_string(value, path, errors, min_length=1):
+        return False
+    if "\\" in value:
+        add_error(errors, path, "must use '/' separators")
+        return False
+    if value.startswith("/") or WINDOWS_DRIVE_PATTERN.match(value):
+        add_error(errors, path, "must be project-relative")
+        return False
+    if any(ord(character) < 32 for character in value):
+        add_error(errors, path, "must not contain control characters")
+        return False
+    if any(part == ".." for part in value.split("/")):
+        add_error(errors, path, "must not contain '..' segments")
+        return False
+    return True
+
+
 class FileReferenceValidator:
     def __init__(self, project_root: Path):
         self.project_root = project_root.resolve(strict=True)
@@ -417,7 +435,8 @@ def validate_long_term_entry(
     if not require_object(value, path, errors):
         return
     required = {"entry_id", "title", "memory_kind", "content", "source_refs"}
-    check_object_shape(value, path, errors, required=required, allowed=required)
+    allowed = required | {"status"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
     if "entry_id" in value:
         check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
     for key in ("title", "content"):
@@ -429,6 +448,13 @@ def validate_long_term_entry(
             f"{path}.memory_kind",
             errors,
             {"fact", "experience", "principle", "decision", "constraint", "other"},
+        )
+    if "status" in value:
+        check_enum(
+            value["status"],
+            f"{path}.status",
+            errors,
+            {"active", "superseded", "rejected"},
         )
     if "source_refs" in value and check_array(
         value["source_refs"],
@@ -713,12 +739,315 @@ def validate_memory_response(
                 seen_candidate_ids.add(candidate_id)
 
 
+def validate_provenance(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "author",
+        "branch",
+        "commit",
+        "task_id",
+        "memory_path",
+        "claim",
+        "source_refs",
+        "created_at",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    for key in ("author", "branch", "commit", "claim"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "task_id" in value:
+        check_stable_id(value["task_id"], f"{path}.task_id", errors)
+    if "memory_path" in value:
+        check_canonical_path(value["memory_path"], f"{path}.memory_path", errors)
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+    if "created_at" in value:
+        check_date_time(value["created_at"], f"{path}.created_at", errors)
+
+
+def validate_conflict_record(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "conflict_id",
+        "topic",
+        "status",
+        "reason",
+        "ours",
+        "theirs",
+    }
+    allowed = required | {"resolution"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
+    if "conflict_id" in value:
+        check_stable_id(value["conflict_id"], f"{path}.conflict_id", errors)
+    for key in ("topic", "reason"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "status" in value:
+        check_enum(
+            value["status"],
+            f"{path}.status",
+            errors,
+            {"pending-confirmation", "resolved"},
+        )
+    if "ours" in value:
+        validate_provenance(value["ours"], f"{path}.ours", errors, file_reference)
+    if "theirs" in value:
+        validate_provenance(value["theirs"], f"{path}.theirs", errors, file_reference)
+    if "resolution" in value and require_object(
+        value["resolution"], f"{path}.resolution", errors
+    ):
+        res = value["resolution"]
+        res_req = {"strategy", "resolved_by", "resolved_at"}
+        res_allowed = res_req | {"notes"}
+        check_object_shape(
+            res, f"{path}.resolution", errors, required=res_req, allowed=res_allowed
+        )
+        for res_key in ("strategy", "resolved_by"):
+            if res_key in res:
+                check_string(
+                    res[res_key], f"{path}.resolution.{res_key}", errors, min_length=1
+                )
+        if "resolved_at" in res:
+            check_date_time(
+                res["resolved_at"], f"{path}.resolution.resolved_at", errors
+            )
+        if "notes" in res:
+            check_string(res["notes"], f"{path}.resolution.notes", errors)
+
+
+def validate_merged_long_term_entry(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "entry_id",
+        "title",
+        "memory_kind",
+        "content",
+        "source_refs",
+        "action_taken",
+    }
+    allowed = required | {"status", "superseded_entry_ids"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
+    if "entry_id" in value:
+        check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
+    for key in ("title", "content"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "memory_kind" in value:
+        check_enum(
+            value["memory_kind"],
+            f"{path}.memory_kind",
+            errors,
+            {"fact", "experience", "principle", "decision", "constraint", "other"},
+        )
+    if "action_taken" in value:
+        check_enum(
+            value["action_taken"],
+            f"{path}.action_taken",
+            errors,
+            {"kept_ours", "kept_theirs", "merged", "novel_ours", "novel_theirs"},
+        )
+    if "status" in value:
+        check_enum(
+            value["status"],
+            f"{path}.status",
+            errors,
+            {"active", "superseded", "rejected"},
+        )
+    if "superseded_entry_ids" in value and check_array(
+        value["superseded_entry_ids"],
+        f"{path}.superseded_entry_ids",
+        errors,
+        lambda item, item_path, item_errors: check_stable_id(
+            item, item_path, item_errors
+        ),
+    ):
+        check_unique_strings(
+            value["superseded_entry_ids"], f"{path}.superseded_entry_ids", errors
+        )
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+
+
+def validate_memory_merge_request(
+    value: Any, errors: list[Diagnostic], file_reference: FileReferenceValidator
+) -> None:
+    path = "$"
+    if not require_object(value, path, errors):
+        return
+    required = {"file_path", "base_entries", "ours_entries", "theirs_entries"}
+    allowed = required | {"merge_hints"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
+
+    if "file_path" in value:
+        check_canonical_path(value["file_path"], "$.file_path", errors)
+
+    for key in ("base_entries", "ours_entries", "theirs_entries"):
+        if key in value:
+            entries = value[key]
+            if check_array(
+                entries,
+                f"$.{key}",
+                errors,
+                lambda item, item_path, item_errors: validate_long_term_entry(
+                    item, item_path, item_errors, file_reference
+                ),
+            ):
+                seen_ids: set[str] = set()
+                for index, entry in enumerate(entries):
+                    if not is_object(entry):
+                        continue
+                    entry_id = entry.get("entry_id")
+                    if not isinstance(entry_id, str):
+                        continue
+                    if entry_id in seen_ids:
+                        add_error(
+                            errors,
+                            f"$.{key}[{index}].entry_id",
+                            f"must be unique within {key}",
+                        )
+                    seen_ids.add(entry_id)
+
+    if "merge_hints" in value:
+        check_plain_object(value["merge_hints"], "$.merge_hints", errors)
+
+
+def validate_memory_merge_response(
+    value: Any, errors: list[Diagnostic], file_reference: FileReferenceValidator
+) -> None:
+    path = "$"
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "status",
+        "merged_entries",
+        "resolved",
+        "unresolved_conflicts",
+        "requires_human_review",
+    }
+    allowed = required | {"notes"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
+
+    if "status" in value and value["status"] != "completed":
+        add_error(errors, "$.status", "must equal 'completed'")
+
+    if "merged_entries" in value:
+        merged = value["merged_entries"]
+        if check_array(
+            merged,
+            "$.merged_entries",
+            errors,
+            lambda item, item_path, item_errors: validate_merged_long_term_entry(
+                item, item_path, item_errors, file_reference
+            ),
+        ):
+            seen_entry_ids: set[str] = set()
+            for index, entry in enumerate(merged):
+                if not is_object(entry):
+                    continue
+                entry_id = entry.get("entry_id")
+                if not isinstance(entry_id, str):
+                    continue
+                if entry_id in seen_entry_ids:
+                    add_error(
+                        errors,
+                        f"$.merged_entries[{index}].entry_id",
+                        "must be unique within merged_entries",
+                    )
+                seen_entry_ids.add(entry_id)
+
+    if "resolved" in value:
+        check_array(
+            value["resolved"],
+            "$.resolved",
+            errors,
+            lambda item, item_path, item_errors: check_string(
+                item, item_path, item_errors, min_length=1
+            ),
+        )
+
+    has_unresolved_conflicts = False
+    if "unresolved_conflicts" in value:
+        conflicts = value["unresolved_conflicts"]
+        if check_array(
+            conflicts,
+            "$.unresolved_conflicts",
+            errors,
+            lambda item, item_path, item_errors: validate_conflict_record(
+                item, item_path, item_errors, file_reference
+            ),
+        ):
+            if len(conflicts) > 0:
+                has_unresolved_conflicts = True
+            seen_conflict_ids: set[str] = set()
+            for index, conflict in enumerate(conflicts):
+                if not is_object(conflict):
+                    continue
+                conflict_id = conflict.get("conflict_id")
+                if not isinstance(conflict_id, str):
+                    continue
+                if conflict_id in seen_conflict_ids:
+                    add_error(
+                        errors,
+                        f"$.unresolved_conflicts[{index}].conflict_id",
+                        "must be unique within unresolved_conflicts",
+                    )
+                seen_conflict_ids.add(conflict_id)
+
+    if "requires_human_review" in value:
+        check_boolean(
+            value["requires_human_review"], "$.requires_human_review", errors
+        )
+        if has_unresolved_conflicts and value["requires_human_review"] is not True:
+            add_error(
+                errors,
+                "$.requires_human_review",
+                "must be true when unresolved conflicts exist",
+            )
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Validate a Maestro protocol artifact without changing workflow state."
     )
     parser.add_argument(
-        "kind", choices=("handoff", "memory-request", "memory-response")
+        "kind",
+        choices=(
+            "handoff",
+            "memory-request",
+            "memory-response",
+            "memory-merge-request",
+            "memory-merge-response",
+        ),
     )
     parser.add_argument("file", type=Path)
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -785,8 +1114,12 @@ def main(argv: list[str] | None = None) -> int:
         validate_handoff(value, errors, file_reference)
     elif args.kind == "memory-request":
         validate_memory_request(value, errors, file_reference)
-    else:
+    elif args.kind == "memory-response":
         validate_memory_response(value, errors, file_reference)
+    elif args.kind == "memory-merge-request":
+        validate_memory_merge_request(value, errors, file_reference)
+    else:
+        validate_memory_merge_response(value, errors, file_reference)
 
     emit_result(args, errors, output_file=output_file)
     return 1 if errors else 0

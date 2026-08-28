@@ -99,6 +99,8 @@ try {
     $handoffSchema = "maestro/references/schemas/handoff.schema.json"
     $memoryRequestSchema = "maestro/references/schemas/memory-worker-request.schema.json"
     $memoryResponseSchema = "maestro/references/schemas/memory-worker-response.schema.json"
+    $memoryMergeRequestSchema = "maestro/references/schemas/memory-merge-request.schema.json"
+    $memoryMergeResponseSchema = "maestro/references/schemas/memory-merge-response.schema.json"
 
     Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
         "$validatorFixtureRoot/handoff-valid.json" 0
@@ -118,12 +120,36 @@ try {
         "$validatorFixtureRoot/memory-response-conflict-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-date-time-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
+        "$validatorFixtureRoot/memory-merge-request-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
+        "$validatorFixtureRoot/memory-merge-request-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryMergeResponseSchema "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryMergeResponseSchema "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryMergeResponseSchema "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-conflict-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryMergeResponseSchema "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-date-time-invalid.json" 1
 
     Invoke-ProtocolValidatorCase "handoff" `
         "$validatorFixtureRoot/handoff-traversal-invalid.json" 1
     Invoke-ProtocolValidatorCase "handoff" "$validatorFixtureRoot/invalid-json.json" 1
     Invoke-ProtocolValidatorCase "memory-request" `
         "$validatorFixtureRoot/memory-request-missing-reference-invalid.json" 1
+    Invoke-ProtocolValidatorCase "memory-merge-request" `
+        "$validatorFixtureRoot/memory-merge-request-missing-reference-invalid.json" 1
+    Invoke-ProtocolValidatorCase "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-missing-reference-invalid.json" 1
+    Invoke-AjvCase $memoryMergeResponseSchema `
+        "$validatorFixtureRoot/memory-merge-response-duplicate-id-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-duplicate-id-invalid.json" `
+        '$.merged_entries[1].entry_id' "must be unique"
+    Invoke-ProtocolDiagnosticCase "memory-merge-response" `
+        "$validatorFixtureRoot/memory-merge-response-duplicate-id-invalid.json" `
+        '$.unresolved_conflicts[1].conflict_id' "must be unique"
     Invoke-AjvCase $memoryRequestSchema `
         "$validatorFixtureRoot/memory-request-duplicate-id-invalid.json" 0
     Invoke-ProtocolDiagnosticCase "memory-request" `
@@ -408,21 +434,26 @@ try {
         @{ Path = "maestro/references/workers.md"; Text = 'must use `/` separators' },
         @{ Path = "maestro/references/handoffs.md"; Text = "artifact-triggered protocol guard" },
         @{ Path = "maestro/references/memory.md"; Text = "must not create or transition" },
-        @{ Path = "maestro/references/memory.md"; Text = "UPDATE → MERGE → CREATE" },
+        @{ Path = "maestro/references/memory.md"; Text = "UPDATE $([char]0x2192) MERGE $([char]0x2192) CREATE" },
         @{ Path = "maestro/references/memory.md"; Text = "These actions are proposals, not writes" },
         @{ Path = "maestro/references/memory.md"; Text = "does not replace" },
         @{ Path = "maestro/references/memory.md"; Text = "Never copy Temporary" },
-        @{ Path = "maestro/references/storage.md"; Text = 'including `SKIP`' }
+        @{ Path = "maestro/references/storage.md"; Text = 'including `SKIP`' },
+        @{ Path = "maestro/references/memory.md"; Text = "conflict detected $([char]0x2192) pending-confirmation $([char]0x2192) resolved" },
+        @{ Path = "maestro/references/memory.md"; Text = "Anti-resurrection of superseded/rejected memory" },
+        @{ Path = "maestro/references/storage.md"; Text = "Team Shared Memory (Tracked in Git)" },
+        @{ Path = "maestro/references/storage.md"; Text = "Local Runtime State (Excluded from Git)" },
+        @{ Path = "maestro/references/roles/memory-merger.md"; Text = '`conflict-resolution`' }
     )
     foreach ($contract in $requiredContracts) {
-        if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Quiet)) {
+        if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {
             throw "Missing contract '$($contract.Text)' in $($contract.Path)"
         }
     }
 
     $markdownFiles = Get-ChildItem "maestro" -Recurse -Filter "*.md"
     foreach ($document in $markdownFiles) {
-        $content = Get-Content -Raw $document.FullName
+        $content = Get-Content -Raw -Encoding utf8 $document.FullName
         $fenceCount = [regex]::Matches($content, '(?m)^```').Count
         if (($fenceCount % 2) -ne 0) {
             throw "Unbalanced code fences in $($document.FullName)"

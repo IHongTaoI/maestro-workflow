@@ -71,6 +71,8 @@ The three memory layers are:
 Temporary and Task contents never enter Long-term Memory by direct copy. At a Memory Worker
 boundary, compare durable candidates with current Long-term entries and propose `UPDATE`, `MERGE`,
 `CREATE`, or `SKIP`; apply no proposal until Old Zhou or a strong-model reviewer approves it.
+Multi-branch Git memory merges use 3-way consolidation via `memory-merger`, flagging contradictory
+claims as unresolved conflicts with complete dual-sided provenance.
 
 Do not load all historical References by default. Load current state first and follow a Reference
 only when the current decision needs its detail.

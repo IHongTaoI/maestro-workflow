@@ -86,6 +86,26 @@
     },
     {
       "schema_version": 1,
+      "id": "memory-merger",
+      "name": "Memory Merger",
+      "source": "builtin",
+      "status": "active",
+      "capabilities": ["conflict-resolution", "memory-merge", "provenance-tracking"],
+      "scope": ["selected-project", "team-shared-memory"],
+      "responsibility": "Perform 3-way semantic consolidation of diverged Git memory branches and produce conflict records with provenance.",
+      "inputs": ["BASE, OURS, and THEIRS shared memory entries", "file path", "merge constraints"],
+      "outputs": ["merged memory entries", "resolved items", "unresolved conflicts with provenance", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "write-maestro-state", "write-work-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    },
+    {
+      "schema_version": 1,
       "id": "orchestrator",
       "name": "Orchestrator",
       "source": "builtin",

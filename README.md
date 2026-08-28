@@ -59,7 +59,9 @@ asks for confirmation before turning exploratory discussion into a formal Task.
 
 At durable boundaries, the Memory Worker compares sourced Temporary or Task findings with current
 Long-term entries and proposes reviewed `UPDATE`, `MERGE`, `CREATE`, or `SKIP` actions. It never
-copies execution logs directly into Long-term Memory or approves its own proposal.
+copies execution logs directly into Long-term Memory or approves its own proposal. Across concurrent
+Git branches, `memory-merger` performs 3-way semantic consolidation and preserves full dual-sided
+provenance on unresolved conflicts.
 
 ## Package contents
 
