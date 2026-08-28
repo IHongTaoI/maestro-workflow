@@ -1,0 +1,8 @@
+{
+  "status": "completed",
+  "summary": "Uses an unsafe result path.",
+  "result_path": "../outside.md",
+  "role_state_path": "maestro/references/scenarios/validator-fixtures/files/current-state.md",
+  "needs_user_input": false,
+  "recommended_next": []
+}

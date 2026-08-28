@@ -1,0 +1,9 @@
+{
+  "status": "completed",
+  "summary": "Validated a completed result.",
+  "result_path": "maestro/references/scenarios/validator-fixtures/files/result.md",
+  "role_state_path": "maestro/references/scenarios/validator-fixtures/files/current-state.md",
+  "needs_user_input": false,
+  "questions": [],
+  "recommended_next": []
+}

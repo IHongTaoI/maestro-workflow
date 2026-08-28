@@ -146,3 +146,18 @@ Validate structured input/output against:
 
 - [memory-worker-request.schema.json](schemas/memory-worker-request.schema.json)
 - [memory-worker-response.schema.json](schemas/memory-worker-response.schema.json)
+
+Immediately before persisting either formal artifact, run the corresponding artifact-triggered
+protocol guard:
+
+```bash
+python maestro/scripts/validate.py memory-request <file> --project-root <project-root>
+python maestro/scripts/validate.py memory-response <file> --project-root <project-root>
+```
+
+Persist the canonical artifact only after validation succeeds. On failure, repair and validate once
+more. If the second attempt fails, retain the complete raw result with an `.invalid.json` suffix
+beside the intended artifact, record the diagnostics, and continue through the existing fallback
+rules; do not treat the invalid file as a Memory Worker request or response.
+This validation must not create or transition a Task, Temporary, Workflow, delegation, phase, or
+role invocation. It checks the artifact and its reachable project-relative file references only.
