@@ -1,0 +1,15 @@
+{
+  "status": "completed",
+  "current": {
+    "content": {}
+  },
+  "references": [
+    {
+      "title": "Unreachable evidence",
+      "content": "This reference must fail validation.",
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/missing.md"
+      ]
+    }
+  ]
+}

@@ -38,12 +38,46 @@ try {
         }
     }
 
+    function Invoke-ProtocolValidatorCase {
+        param(
+            [Parameter(Mandatory = $true)][string]$Kind,
+            [Parameter(Mandatory = $true)][string]$Data,
+            [Parameter(Mandatory = $true)][int]$ExpectedExit
+        )
+
+        & python "maestro/scripts/validate.py" $Kind $Data --project-root $projectRoot
+        $actualExit = $LASTEXITCODE
+        if ($actualExit -ne $ExpectedExit) {
+            throw "Protocol validator case failed for $Data`: expected exit $ExpectedExit, got $actualExit"
+        }
+    }
+
     Get-ChildItem "maestro/references/schemas" -Filter "*.json" | ForEach-Object {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
     Get-ChildItem "maestro/references/scenarios/schema-fixtures" -Filter "*.json" | ForEach-Object {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
+
+    $validatorFixtureRoot = "maestro/references/scenarios/validator-fixtures"
+    Invoke-ProtocolValidatorCase "handoff" "$validatorFixtureRoot/handoff-valid.json" 0
+    Invoke-ProtocolValidatorCase "handoff" `
+        "$validatorFixtureRoot/handoff-schema-invalid.json" 1
+    Invoke-ProtocolValidatorCase "handoff" `
+        "$validatorFixtureRoot/handoff-traversal-invalid.json" 1
+    Invoke-ProtocolValidatorCase "handoff" "$validatorFixtureRoot/invalid-json.json" 1
+    Invoke-ProtocolValidatorCase "memory-request" `
+        "$validatorFixtureRoot/memory-request-valid.json" 0
+    Invoke-ProtocolValidatorCase "memory-request" `
+        "$validatorFixtureRoot/memory-request-schema-invalid.json" 1
+    Invoke-ProtocolValidatorCase "memory-request" `
+        "$validatorFixtureRoot/memory-request-missing-reference-invalid.json" 1
+    Invoke-ProtocolValidatorCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-valid.json" 0
+    Invoke-ProtocolValidatorCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-schema-invalid.json" 1
+    Invoke-ProtocolValidatorCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-missing-reference-invalid.json" 1
 
     $handoffSchema = "maestro/references/schemas/handoff.schema.json"
     $fixtureRoot = "maestro/references/scenarios/schema-fixtures"
@@ -306,6 +340,8 @@ try {
         @{ Path = "maestro/references/storage.md"; Text = "copied into the matching Task or Temporary" },
         @{ Path = "maestro/references/handoffs.md"; Text = ".maestro/memory/temporary/active/<temporary-id>/handoffs/" },
         @{ Path = "maestro/references/workers.md"; Text = 'must use `/` separators' }
+        @{ Path = "maestro/references/handoffs.md"; Text = "artifact-triggered protocol guard" }
+        @{ Path = "maestro/references/memory.md"; Text = "must not create or transition" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Quiet)) {

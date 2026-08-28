@@ -1,0 +1,24 @@
+{
+  "status": "completed",
+  "current": {
+    "content": {}
+  },
+  "references": [
+    {
+      "title": "Fixture evidence",
+      "content": "Evidence retained for later use.",
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/source.md"
+      ]
+    }
+  ],
+  "long_term_candidates": [
+    {
+      "title": "Stable fixture fact",
+      "content": "The validator fixture has a reachable source.",
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/source.md"
+      ]
+    }
+  ]
+}

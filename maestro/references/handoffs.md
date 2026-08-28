@@ -93,10 +93,23 @@ when the answer requires supporting detail. `blocked` does not imply user input:
 be waiting on another dependency. When `needs_user_input` is false, omit `questions` or use an empty
 array; do not carry stale questions forward.
 
-Exactly one state path is required: `role_state_path` or `worker_state_path`. Validate
-machine-produced Handoffs against [handoff.schema.json](schemas/handoff.schema.json) before
-persisting them. Task-scoped Handoffs live under `.maestro/tasks/<task-id>/handoffs/`; persisted
-Temporary-scoped Handoffs live under
+Exactly one state path is required: `role_state_path` or `worker_state_path`. The validator is an
+artifact-triggered protocol guard, not a Workflow trigger. Immediately before persisting a
+machine-produced Handoff, run:
+
+```bash
+python maestro/scripts/validate.py handoff <file> --project-root <project-root>
+```
+
+Persist the canonical Handoff only when validation succeeds. After a validation failure, repair the
+artifact once and validate it again. If it still fails, preserve the complete raw result with an
+`.invalid.json` suffix beside the intended artifact and record the validation diagnostics; never
+silently accept it as a Handoff. Validation must not create a Task or Temporary, start a Workflow,
+delegate work, invoke a role, or cause a phase transition.
+
+The CLI enforces [handoff.schema.json](schemas/handoff.schema.json), portable project-relative
+paths, and reachable result and state files. Task-scoped Handoffs live under
+`.maestro/tasks/<task-id>/handoffs/`; persisted Temporary-scoped Handoffs live under
 `.maestro/memory/temporary/active/<temporary-id>/handoffs/`. Session-scoped work does not persist a
 Handoff.
 
