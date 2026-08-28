@@ -256,7 +256,9 @@ The Memory Merger compares `OURS` and `THEIRS` against `BASE` following these de
 
 ### Conflict Provenance Contract
 
-Every unresolved conflict must record complete dual-sided provenance for both `ours` and `theirs`:
+Every unresolved conflict allocates a stable `conflict_id` adhering to the recommended format
+`cnf-<timestamp>-<suffix>` (e.g. `cnf-20260828t120000z-a1b2`) and records complete dual-sided
+provenance for both `ours` and `theirs`:
 
 - `author`: submitting developer or agent;
 - `branch`: source Git branch name;

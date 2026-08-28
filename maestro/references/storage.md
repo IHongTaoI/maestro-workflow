@@ -79,6 +79,24 @@ separates local execution state from team shared memory:
   - `workers/registry.yaml`: reviewed, project-shared reusable Worker specifications.
   - `config.yaml`: shared project configuration.
 
+A target project can enforce this boundary using standard `.gitignore` rules:
+
+```gitignore
+# Exclude local Maestro runtime state
+.maestro/memory/temporary/
+.maestro/memory/pending/
+.maestro/locks/
+.maestro/transactions/
+.maestro/tasks/
+
+# Track team shared memory and configurations
+!.maestro/
+!.maestro/config.yaml
+!.maestro/playbooks/
+!.maestro/workers/registry.yaml
+!.maestro/memory/long-term/
+```
+
 The built-in Worker registry is immutable installed reference data. A project registry is created
 only when reusable project-specific Workers or capability aliases are needed. Selected Worker
 specifications are copied into the matching Task or Temporary and never resolved by reference
