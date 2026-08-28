@@ -301,7 +301,11 @@ try {
         @{ Path = "maestro/references/coordination.md"; Text = "Worker resolution must not promote exploratory work into a Task" },
         @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
         @{ Path = "maestro/references/workers.md"; Text = "must never promote it automatically" },
-        @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" }
+        @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" },
+        @{ Path = "maestro/references/coordination.md"; Text = "matching Task or Temporary" },
+        @{ Path = "maestro/references/storage.md"; Text = "copied into the matching Task or Temporary" },
+        @{ Path = "maestro/references/handoffs.md"; Text = ".maestro/memory/temporary/active/<temporary-id>/handoffs/" },
+        @{ Path = "maestro/references/workers.md"; Text = "must use `/` separators on every host" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Quiet)) {

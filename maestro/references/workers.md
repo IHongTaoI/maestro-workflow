@@ -28,6 +28,10 @@ Before capability routing, record:
 - the autonomous and conditional action ceiling inherited from the Task and current instruction;
 - constraints that materially affect selection.
 
+Context paths are stored as project-relative canonical paths and must use `/` separators on every
+host. Normalize valid host paths before validation; reject absolute paths, traversal, and persisted
+`\` separators.
+
 Capability IDs use lowercase kebab-case, such as `runtime-analysis` or `schema-migration`. A
 capability must not appear in both the required and optional lists. Use an existing canonical ID
 when it has the same meaning. Aliases may be declared explicitly by a

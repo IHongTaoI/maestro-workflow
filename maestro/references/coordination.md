@@ -148,8 +148,8 @@ Give a role or Worker:
 1. A bounded objective and completion condition.
 2. Relevant long-term project memory.
 3. The current Task or selected Temporary context, when persistent work exists.
-4. That role's or Worker's `current-state.md`, if it exists, plus the Worker's immutable Task
-   snapshot.
+4. That role's or Worker's `current-state.md`, if it exists, plus the Worker's immutable snapshot from
+   the matching Task or Temporary.
 5. Relevant source, Evidence, Artifact, or earlier Detailed Result paths.
 6. The result directory and Handoff contract.
 

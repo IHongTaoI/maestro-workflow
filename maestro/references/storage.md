@@ -16,6 +16,7 @@ Create directories lazily as the current work needs them:
       active/<temporary-id>/
         meta.yaml
         current.md
+        handoffs/
         references/
         worker-selections/
         workers/<worker-id>/
@@ -62,7 +63,8 @@ The `playbooks/` directory may be supplied by the project before Maestro is firs
 
 The built-in Worker registry is immutable installed reference data. A project registry is created
 only when reusable project-specific Workers or capability aliases are needed. Selected Worker
-specifications are copied into the Task and never resolved by reference during execution.
+specifications are copied into the matching Task or Temporary and never resolved by reference
+during execution.
 
 A minimal parsed project registry has this shape:
 

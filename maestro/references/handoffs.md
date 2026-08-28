@@ -95,7 +95,10 @@ array; do not carry stale questions forward.
 
 Exactly one state path is required: `role_state_path` or `worker_state_path`. Validate
 machine-produced Handoffs against [handoff.schema.json](schemas/handoff.schema.json) before
-persisting them under the Task's `handoffs/` directory.
+persisting them. Task-scoped Handoffs live under `.maestro/tasks/<task-id>/handoffs/`; persisted
+Temporary-scoped Handoffs live under
+`.maestro/memory/temporary/active/<temporary-id>/handoffs/`. Session-scoped work does not persist a
+Handoff.
 
 Old Zhou should not read every Detailed Result. Read it when a role is blocked, conclusions conflict,
 a decision requires more detail than the structured question provides, the user asks for the
