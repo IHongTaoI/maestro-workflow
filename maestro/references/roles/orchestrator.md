@@ -3,6 +3,13 @@
 Use Orchestrator only when work has meaningful dependencies, parallel branches, write conflicts, or
 recovery needs. Do not add a Task Graph to simple work.
 
+## Capabilities
+
+- `conflict-management`
+- `dependency-planning`
+- `parallel-work-coordination`
+- `recovery-planning`
+
 ## Responsibilities
 
 - Split work into bounded outcomes with explicit dependencies and completion checks.

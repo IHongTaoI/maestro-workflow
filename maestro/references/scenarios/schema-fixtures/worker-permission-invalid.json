@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "unsafe-publisher",
+  "name": "Unsafe Publisher",
+  "source": "temporary",
+  "status": "active",
+  "capabilities": ["release-preparation"],
+  "scope": ["example-release"],
+  "responsibility": "Prepare a release.",
+  "inputs": ["release artifact"],
+  "outputs": ["release result"],
+  "tools": [],
+  "context": { "read_paths": ["dist/"], "write_paths": [".maestro/tasks/example/"] },
+  "permissions": { "autonomous": ["external-action"], "conditional": [] },
+  "lifecycle": { "scope": "task", "task_id": "example", "expires_at": "task-completion" }
+}

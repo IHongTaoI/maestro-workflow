@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "one-off-log-parser",
+  "name": "One-off Log Parser",
+  "source": "temporary",
+  "status": "active",
+  "capabilities": ["log-parsing"],
+  "scope": ["provided-log"],
+  "responsibility": "Parse one provided log.",
+  "inputs": ["provided log text"],
+  "outputs": ["grouped failures"],
+  "tools": [],
+  "context": { "read_paths": ["provided-input"], "write_paths": [] },
+  "permissions": { "autonomous": [], "conditional": [] },
+  "lifecycle": {
+    "scope": "session",
+    "task_id": "unrelated-task",
+    "expires_at": "session-end"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "project-workers",
+  "source": "project",
+  "revision": 3,
+  "updated_at": "2026-08-27T14:25:00Z",
+  "updated_by": "old-zhou/example",
+  "aliases": {
+    "database-migration": "schema-migration"
+  },
+  "workers": [
+    {
+      "schema_version": 1,
+      "id": "database-migration-reviewer",
+      "name": "Database Migration Reviewer",
+      "source": "project",
+      "status": "active",
+      "capabilities": [
+        "backward-compatibility",
+        "data-safety",
+        "rollback-strategy",
+        "schema-migration"
+      ],
+      "scope": ["database-migrations", "read-only-review"],
+      "responsibility": "Review database migration compatibility, rollback, and data-safety risks.",
+      "inputs": ["migration plan", "current schema", "deployment constraints"],
+      "outputs": ["migration risk review", "rollback gaps", "Handoff"],
+      "preferred_model": null,
+      "tools": [],
+      "context": { "read_paths": ["db/"], "write_paths": [".maestro/"] },
+      "permissions": {
+        "autonomous": ["inspect-project", "write-maestro-state", "write-work-artifacts"],
+        "conditional": []
+      },
+      "lifecycle": { "scope": "reusable", "expires_at": "never" }
+    }
+  ]
+}

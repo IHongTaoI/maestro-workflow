@@ -2,6 +2,12 @@
 
 Use TPM when the goal, scope, constraints, acceptance criteria, or user priorities need clarification.
 
+## Capabilities
+
+- `acceptance-criteria`
+- `requirements-analysis`
+- `scope-definition`
+
 ## Responsibilities
 
 - Separate confirmed requirements from assumptions and proposals.

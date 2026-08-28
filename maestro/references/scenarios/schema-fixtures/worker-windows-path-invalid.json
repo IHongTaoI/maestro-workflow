@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "unsafe-context-worker",
+  "name": "Unsafe Context Worker",
+  "source": "temporary",
+  "status": "active",
+  "capabilities": ["runtime-profiling"],
+  "scope": ["read-only-analysis"],
+  "responsibility": "Demonstrate that UNC paths are rejected.",
+  "inputs": ["runtime trace"],
+  "outputs": ["analysis"],
+  "tools": [],
+  "context": {
+    "read_paths": ["\\\\server\\share"],
+    "write_paths": []
+  },
+  "permissions": {
+    "autonomous": ["inspect-project"],
+    "conditional": []
+  },
+  "lifecycle": {
+    "scope": "session",
+    "expires_at": "session-end"
+  }
+}

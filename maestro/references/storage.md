@@ -16,7 +16,14 @@ Create directories lazily as the current work needs them:
       active/<temporary-id>/
         meta.yaml
         current.md
+        handoffs/
         references/
+        worker-selections/
+        workers/<worker-id>/
+          spec.yaml
+          current-state.md
+          references/
+          runs/
       archive/
       trash/
     pending/
@@ -36,15 +43,46 @@ Create directories lazily as the current work needs them:
       evidence/
       artifacts/
       handoffs/
+      worker-selections/
       roles/<role>/
         current-state.md
         references/
         runs/
+      workers/<worker-id>/
+        spec.yaml
+        current-state.md
+        references/
+        runs/
     archive/
+  workers/
+    registry.yaml
   playbooks/
 ```
 
 The `playbooks/` directory may be supplied by the project before Maestro is first used.
+
+The built-in Worker registry is immutable installed reference data. A project registry is created
+only when reusable project-specific Workers or capability aliases are needed. Selected Worker
+specifications are copied into the matching Task or Temporary and never resolved by reference
+during execution.
+
+A minimal parsed project registry has this shape:
+
+```yaml
+schema_version: 1
+id: project-workers
+source: project
+revision: 0
+updated_at: 2026-08-27T14:25:00Z
+updated_by: old-zhou/session-or-run-id
+aliases: {}
+workers: []
+```
+
+Each reusable Worker is a complete specification from [workers.md](workers.md). A reviewed Worker
+promoted from historical Task evidence uses `source: learned`; it remains an ordinary registry
+entry and receives no extra authority. Validate parsed registries against
+[worker-registry.schema.json](schemas/worker-registry.schema.json).
 
 ## Configuration
 
@@ -117,12 +155,19 @@ visibility. Validate parsed Task metadata against [task.schema.json](schemas/tas
 ## Mutable-state write protocol
 
 Mutable state includes Temporary `meta.yaml` and `current.md`, Task `task.yaml`, `context.md`,
-`decisions.md`, and `progress.md`, role `current-state.md`, and Long-term `current.md`. Each listed
+`decisions.md`, and `progress.md`, role or Worker `current-state.md`, project Worker
+`registry.yaml`, and Long-term `current.md`. Each listed
 mutable YAML file carries `revision`, `updated_at`, and `updated_by`. Each listed mutable Markdown
 file carries the same fields in YAML front matter. New state starts at revision `0`; each successful
 replacement increments exactly once. Handoffs, Detailed Results, source
-References, Evidence, decision records, and transaction events are immutable once published; add a
-new linked record instead of replacing them.
+References, Evidence, decision records, Worker selections under a Task or Temporary's
+`worker-selections/`, and transaction events are immutable once published; add a new linked record
+instead of replacing them.
+
+Worker `spec.yaml` files under a Task or Temporary are immutable snapshots. Publish each complete
+validated snapshot atomically before its first run. A project registry update cannot replace a
+snapshot, and resumption must not substitute a current registry entry for a missing snapshot.
+Session-scoped Workers are not project state and leave no snapshot.
 
 Atomic replacement protects readers from partial file contents but does not prevent stale writers.
 For every replacement, use this complete protocol:

@@ -1,6 +1,6 @@
 ---
 name: maestro
-description: Coordinate software work through Old Zhou and specialist roles with dynamic delegation, three-layer project memory, resumable Tasks, lightweight Handoffs, and optional Playbooks. Use when the user invokes Maestro, 老周, a Maestro role such as Architect/Laborer/Coder, or asks for persistent multi-role project coordination.
+description: Coordinate software work through Old Zhou, stable roles, and capability-selected Workers with three-layer project memory, resumable Tasks, lightweight Handoffs, and optional Playbooks. Use when the user invokes Maestro, 老周, a Maestro role such as Architect/Laborer/Coder, or asks for persistent multi-role project coordination.
 ---
 
 # Maestro
@@ -24,6 +24,10 @@ the user to install npm packages, run a separate Runtime, or manually prepare mo
   instead of guessing.
 - A direct role request may invoke that role immediately. It does not require a complete workflow.
 - Choose the next role from current evidence and need. Do not enforce role order.
+- For a capability-specific delegation, describe requirements and resolve a reusable, composed, or
+  bounded Worker under [workers.md](references/workers.md). Match a generated Worker's lifecycle to
+  the existing Task, Temporary, or one-off Session; do not create a Task merely to host a Worker.
+- Do not add a permanent role merely to cover a new task type.
 
 Read [coordination.md](references/coordination.md) when starting, resuming, delegating, or finishing
 substantial work.
@@ -45,6 +49,12 @@ Load only the role reference needed for the current delegation:
 - [Test Runner](references/roles/test-runner.md): execute checks and record evidence.
 - [Delivery](references/roles/delivery.md): final readiness and delivery summary.
 
+Stable roles describe organizational responsibility. Capability-based Workers are bounded execution
+units and may reuse a role, compose several reusable Workers, or exist only for one Task. Before
+delegating a dynamic Worker, read [workers.md](references/workers.md), validate its specification,
+and persist its snapshot in the matching Task or Temporary when required. Session-scoped Workers
+remain ephemeral. Do not create a Task merely to host a Worker.
+
 ## Maintain project memory
 
 Keep all live state inside the target project's `.maestro/` directory. Do not write state into the
@@ -55,7 +65,7 @@ memory.
 The three memory layers are:
 
 - Temporary: pre-Task discussion and cross-Session handoff.
-- Task: formal execution context, evidence, artifacts, and per-role state.
+- Task: formal execution context, evidence, artifacts, and per-role or Worker state.
 - Long-term: stable, sourced project knowledge approved by Old Zhou or a strong-model review.
 
 Do not load all historical References by default. Load current state first and follow a Reference
@@ -63,9 +73,9 @@ only when the current decision needs its detail.
 
 ## Record role completion
 
-Every substantial role run produces a Detailed Result on disk, an updated short Current State, and
-a lightweight Handoff to Old Zhou. Read [handoffs.md](references/handoffs.md) before recording or
-consuming a role result.
+Every substantial role or Worker run produces a Detailed Result on disk, an updated short Current
+State, and a lightweight Handoff to Old Zhou. Read [handoffs.md](references/handoffs.md) before
+recording or consuming a result.
 
 ## Use Playbooks as guidance
 

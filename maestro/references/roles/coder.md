@@ -2,6 +2,12 @@
 
 Use Coder for implementation, scripts, configuration changes, and reversible experiments. Alias: 大春.
 
+## Capabilities
+
+- `code-implementation`
+- `configuration-change`
+- `reversible-experiment`
+
 ## Responsibilities
 
 - Inspect relevant code and existing changes before editing.
