@@ -260,3 +260,52 @@ EXPECT:
 MUST NOT:
 - Copy Temporary contents directly into Long-term Memory.
 ```
+
+## Multi-branch Git merge with duplicate memory experiences
+
+```text
+GIVEN:
+- Branch A and Branch B independently learned the same trace diagnosis experience with slightly different wording.
+- Both branches reference reachable evidence files.
+
+EXPECT:
+- Consolidate the two entries into one unified entry under action_taken: merged.
+- Combine and preserve all reachable source references from both branches.
+
+MUST NOT:
+- Mechanically duplicate both entries in merged Long-term Memory.
+- Discard either branch's reachable evidence references.
+```
+
+## Multi-branch Git merge with contradictory factual claims
+
+```text
+GIVEN:
+- Branch A concludes Module A initialization can be asynchronous.
+- Branch B verified that synchronous initialization is required to avoid login failure.
+
+EXPECT:
+- Flag the contradiction under unresolved_conflicts with status: pending-confirmation.
+- Set requires_human_review: true.
+- Record complete dual-sided provenance including author, branch, commit, task_id, memory_path, and reachable source_refs for both sides.
+
+MUST NOT:
+- Silently pick either branch's claim as current truth.
+- Discard the conflict or omit provenance metadata.
+```
+
+## Multi-branch Git merge with superseded memory tombstone
+
+```text
+GIVEN:
+- Branch A previously verified a bug and marked an old Long-term entry as superseded.
+- Older Branch B branched before that change and still contains the old active entry.
+
+EXPECT:
+- Preserve the superseded tombstone status in the merged result.
+- Prevent the old entry from resurrecting as active.
+
+MUST NOT:
+- Reactivate the superseded entry merely because Branch B contains it.
+- Delete historical supersession decision records.
+```

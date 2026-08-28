@@ -228,3 +228,69 @@ beside the intended artifact, record the diagnostics, and continue through the e
 rules; do not treat the invalid file as a Memory Worker request or response.
 This validation must not create or transition a Task, Temporary, Workflow, delegation, phase, or
 role invocation. It checks the artifact and its reachable project-relative file references only.
+
+## Team Shared Memory & Git Semantic Merge
+
+When multiple developers or agents work across concurrent Git branches, shared team memory
+(`.maestro/memory/long-term/current.md`, playbooks, and reviewed decisions) committed to Git can
+diverge. Standard Git text merges cannot resolve semantic evolution or detect contradictions.
+
+### 3-Way Semantic Merge Protocol
+
+A semantic merge operation requires 3-way input: `BASE` (common ancestor version), `OURS`
+(current branch version), `THEIRS` (incoming branch version), and the project-relative `file_path`.
+
+The Memory Merger compares `OURS` and `THEIRS` against `BASE` following these deterministic rules:
+
+1. **Additive non-conflicting additions**: Retain both entries when both branches introduce novel,
+   independent claims.
+2. **Equivalent or duplicate experience**: Consolidate entries that express the same verified
+   experience into one unified entry, deduplicating wording while preserving all reachable
+   `source_refs` from both sides.
+3. **Contradictory findings**: When branches arrive at mutually exclusive claims (e.g. async vs.
+   sync initialization), the AI must not silently choose a winner. Retain both claims as
+   `unresolved_conflicts` with `status: pending-confirmation` and set `requires_human_review: true`.
+4. **Anti-resurrection of superseded/rejected memory**: If an entry was marked `superseded` or
+   `rejected` in a branch's decision history, merging an older branch that still contains the active
+   entry must not resurrect it as active. The tombstone status takes precedence over the stale entry.
+
+### Conflict Provenance Contract
+
+Every unresolved conflict must record complete dual-sided provenance for both `ours` and `theirs`:
+
+- `author`: submitting developer or agent;
+- `branch`: source Git branch name;
+- `commit`: source commit hash or reference;
+- `task_id`: originating Task or Temporary ID;
+- `memory_path`: canonical memory file path;
+- `claim`: exact statement under dispute;
+- `source_refs`: reachable evidence and trace files;
+- `created_at`: RFC 3339 timestamp.
+
+### Conflict Lifecycle
+
+Track unresolved conflicts through four states:
+
+```text
+conflict detected → pending-confirmation → resolved → active / superseded / rejected
+```
+
+A conflict is persisted under `.maestro/memory/long-term/conflicts/` with `status: pending-confirmation`.
+After human or evidence review, publish an immutable decision that transitions the status to
+`resolved`, integrates the confirmed claim into `current.md`, and marks the superseded claim with
+`superseded_by` references to ensure complete auditability.
+
+### Memory Merger Worker
+
+The built-in `memory-merger` worker handles 3-way memory merge requests without altering Task scope
+or making unilateral architectural decisions. Validate its structured inputs and outputs against:
+
+- [memory-merge-request.schema.json](schemas/memory-merge-request.schema.json)
+- [memory-merge-response.schema.json](schemas/memory-merge-response.schema.json)
+
+Run the artifact-triggered protocol guards:
+
+```bash
+python maestro/scripts/validate.py memory-merge-request <file> --project-root <project-root>
+python maestro/scripts/validate.py memory-merge-response <file> --project-root <project-root>
+```

@@ -34,6 +34,7 @@ Create directories lazily as the current work needs them:
         approved/
         rejected/
       decisions/
+      conflicts/
   tasks/
     <task-id>/
       task.yaml
@@ -60,6 +61,23 @@ Create directories lazily as the current work needs them:
 ```
 
 The `playbooks/` directory may be supplied by the project before Maestro is first used.
+
+## Git tracking boundary
+
+To avoid noisy Git conflicts and keep shared knowledge synchronized across branches, Maestro
+separates local execution state from team shared memory:
+
+- **Local Runtime State (Excluded from Git)**:
+  - `memory/temporary/`: pre-Task exploration, scratchpads, active Worker state.
+  - `memory/pending/`: raw uncompressed or unparsed memory worker inputs.
+  - `locks/` and `transactions/`: concurrency and filesystem lock markers.
+  - `tasks/`: local active task execution state, role current-state, and transient selections.
+
+- **Team Shared Memory (Tracked in Git)**:
+  - `memory/long-term/`: `current.md`, `candidates/`, `decisions/`, and `conflicts/`.
+  - `playbooks/`: team workflows, check sequences, and guidelines.
+  - `workers/registry.yaml`: reviewed, project-shared reusable Worker specifications.
+  - `config.yaml`: shared project configuration.
 
 The built-in Worker registry is immutable installed reference data. A project registry is created
 only when reusable project-specific Workers or capability aliases are needed. Selected Worker
@@ -88,8 +106,9 @@ Long-term `current.md` is the current view of approved entries. Each entry expos
 `entry_id`, `memory_kind`, concise content, and reachable `source_refs`; IDs survive wording updates
 and are retired only through an immutable decision. Persist every validated Memory Worker proposal,
 including `SKIP`, under `memory/long-term/candidates/pending/` until review records it as approved or
-rejected. A `SKIP` decision does not mutate `current.md`, but retaining it prevents the same
-duplicate or low-value claim from being reconsidered without new evidence.
+rejected. Store unresolved merge conflicts under `memory/long-term/conflicts/` with status
+`pending-confirmation`. A `SKIP` decision does not mutate `current.md`, but retaining it prevents
+the same duplicate or low-value claim from being reconsidered without new evidence.
 
 ## Configuration
 

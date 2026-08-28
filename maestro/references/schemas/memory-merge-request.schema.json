@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/memory-merge-request.schema.json",
+  "title": "Maestro Memory Merge Request",
+  "type": "object",
+  "required": ["file_path", "base_entries", "ours_entries", "theirs_entries"],
+  "properties": {
+    "file_path": { "$ref": "#/$defs/path" },
+    "base_entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/longTermEntry" }
+    },
+    "ours_entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/longTermEntry" }
+    },
+    "theirs_entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/longTermEntry" }
+    },
+    "merge_hints": { "type": "object" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*\\\\)(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "longTermEntry": {
+      "type": "object",
+      "required": ["entry_id", "title", "memory_kind", "content", "source_refs"],
+      "properties": {
+        "entry_id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "memory_kind": {
+          "enum": ["fact", "experience", "principle", "decision", "constraint", "other"]
+        },
+        "content": { "type": "string", "minLength": 1 },
+        "source_refs": { "$ref": "#/$defs/sourceRefs" },
+        "status": {
+          "enum": ["active", "superseded", "rejected"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
