@@ -26,3 +26,10 @@ including invalid JSON, missing fields, unsafe traversal, and missing references
 will require the validator immediately before persistence. Repair-once and preservation of invalid
 raw output remain orchestration responsibilities, keeping the CLI a protocol guard rather than a
 runtime.
+
+Because model output is untrusted, parsing rejects Python's non-standard `NaN`, `Infinity`, and
+`-Infinity` constants. Path validation rejects control characters before calling host path APIs and
+converts expected path API failures into normal diagnostics. Structural fixtures run through both
+AJV and the Python CLI with the same expected result so schema changes cannot silently drift away
+from the zero-dependency implementation; path reachability remains an intentional Python-only
+semantic guard.

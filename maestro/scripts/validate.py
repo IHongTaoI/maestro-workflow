@@ -23,6 +23,16 @@ class Diagnostic:
     message: str
 
 
+class NonStandardJsonConstant(ValueError):
+    def __init__(self, constant: str):
+        super().__init__(constant)
+        self.constant = constant
+
+
+def reject_non_standard_json_constant(constant: str) -> None:
+    raise NonStandardJsonConstant(constant)
+
+
 def add_error(errors: list[Diagnostic], path: str, message: str) -> None:
     errors.append(Diagnostic(path, message))
 
@@ -136,6 +146,9 @@ class FileReferenceValidator:
         if value.startswith("/") or WINDOWS_DRIVE_PATTERN.match(value):
             add_error(errors, path, "must be project-relative")
             return
+        if any(ord(character) < 32 for character in value):
+            add_error(errors, path, "must not contain control characters")
+            return
 
         pure_path = PurePosixPath(value)
         if any(part in {"", ".", ".."} for part in value.split("/")):
@@ -147,7 +160,7 @@ class FileReferenceValidator:
 
         try:
             resolved = (self.project_root / Path(*pure_path.parts)).resolve(strict=False)
-        except (OSError, RuntimeError) as error:
+        except (OSError, RuntimeError, ValueError) as error:
             add_error(errors, path, f"cannot resolve file reference: {error}")
             return
         try:
@@ -157,7 +170,7 @@ class FileReferenceValidator:
             return
         try:
             is_file = resolved.is_file()
-        except OSError as error:
+        except (OSError, ValueError) as error:
             add_error(errors, path, f"cannot inspect file reference: {error}")
             return
         if not is_file:
@@ -444,17 +457,26 @@ def main(argv: list[str] | None = None) -> int:
             raise NotADirectoryError(f"project root is not a directory: {project_root}")
         output_file = args.file.resolve(strict=True)
         raw = output_file.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
+    except (OSError, RuntimeError, UnicodeError, ValueError) as error:
         print(f"validator error: {error}", file=sys.stderr)
         return 2
 
     try:
-        value = json.loads(raw)
+        value = json.loads(raw, parse_constant=reject_non_standard_json_constant)
     except json.JSONDecodeError as error:
         errors = [
             Diagnostic(
                 "$",
                 f"invalid JSON at line {error.lineno}, column {error.colno}: {error.msg}",
+            )
+        ]
+        emit_result(args, errors, output_file=output_file)
+        return 1
+    except NonStandardJsonConstant as error:
+        errors = [
+            Diagnostic(
+                "$",
+                f"invalid JSON: non-standard constant '{error.constant}'",
             )
         ]
         emit_result(args, errors, output_file=output_file)

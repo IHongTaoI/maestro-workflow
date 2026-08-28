@@ -52,6 +52,42 @@ try {
         }
     }
 
+    function Invoke-ProtocolDiagnosticCase {
+        param(
+            [Parameter(Mandatory = $true)][string]$Kind,
+            [Parameter(Mandatory = $true)][string]$Data,
+            [Parameter(Mandatory = $true)][string]$ExpectedPath,
+            [Parameter(Mandatory = $true)][string]$ExpectedMessage
+        )
+
+        $rawResult = & python "maestro/scripts/validate.py" $Kind $Data `
+            --project-root $projectRoot --json
+        $actualExit = $LASTEXITCODE
+        if ($actualExit -ne 1) {
+            throw "Protocol diagnostic case failed for $Data`: expected exit 1, got $actualExit"
+        }
+
+        $result = $rawResult | ConvertFrom-Json
+        $matchingErrors = @($result.errors | Where-Object {
+            $_.path -eq $ExpectedPath -and $_.message -like "*$ExpectedMessage*"
+        })
+        if ($result.valid -ne $false -or $matchingErrors.Count -eq 0) {
+            throw "Protocol diagnostic case returned no matching diagnostic for $Data"
+        }
+    }
+
+    function Invoke-ProtocolSchemaParityCase {
+        param(
+            [Parameter(Mandatory = $true)][string]$Schema,
+            [Parameter(Mandatory = $true)][string]$Kind,
+            [Parameter(Mandatory = $true)][string]$Data,
+            [Parameter(Mandatory = $true)][int]$ExpectedExit
+        )
+
+        Invoke-AjvCase $Schema $Data $ExpectedExit
+        Invoke-ProtocolValidatorCase $Kind $Data $ExpectedExit
+    }
+
     Get-ChildItem "maestro/references/schemas" -Filter "*.json" | ForEach-Object {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
@@ -60,26 +96,40 @@ try {
     }
 
     $validatorFixtureRoot = "maestro/references/scenarios/validator-fixtures"
-    Invoke-ProtocolValidatorCase "handoff" "$validatorFixtureRoot/handoff-valid.json" 0
-    Invoke-ProtocolValidatorCase "handoff" `
+    $handoffSchema = "maestro/references/schemas/handoff.schema.json"
+    $memoryRequestSchema = "maestro/references/schemas/memory-worker-request.schema.json"
+    $memoryResponseSchema = "maestro/references/schemas/memory-worker-response.schema.json"
+
+    Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
+        "$validatorFixtureRoot/handoff-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
         "$validatorFixtureRoot/handoff-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-schema-invalid.json" 1
+
     Invoke-ProtocolValidatorCase "handoff" `
         "$validatorFixtureRoot/handoff-traversal-invalid.json" 1
     Invoke-ProtocolValidatorCase "handoff" "$validatorFixtureRoot/invalid-json.json" 1
     Invoke-ProtocolValidatorCase "memory-request" `
-        "$validatorFixtureRoot/memory-request-valid.json" 0
-    Invoke-ProtocolValidatorCase "memory-request" `
-        "$validatorFixtureRoot/memory-request-schema-invalid.json" 1
-    Invoke-ProtocolValidatorCase "memory-request" `
         "$validatorFixtureRoot/memory-request-missing-reference-invalid.json" 1
     Invoke-ProtocolValidatorCase "memory-response" `
-        "$validatorFixtureRoot/memory-response-valid.json" 0
-    Invoke-ProtocolValidatorCase "memory-response" `
-        "$validatorFixtureRoot/memory-response-schema-invalid.json" 1
-    Invoke-ProtocolValidatorCase "memory-response" `
         "$validatorFixtureRoot/memory-response-missing-reference-invalid.json" 1
+    Invoke-ProtocolDiagnosticCase "handoff" `
+        "$validatorFixtureRoot/handoff-control-character-invalid.json" `
+        '$.result_path' "control character"
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-nan-invalid.json" '$' "NaN"
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-infinity-invalid.json" '$' "Infinity"
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-negative-infinity-invalid.json" '$' "-Infinity"
 
-    $handoffSchema = "maestro/references/schemas/handoff.schema.json"
     $fixtureRoot = "maestro/references/scenarios/schema-fixtures"
     Invoke-AjvCase $handoffSchema "$fixtureRoot/handoff-blocked-valid.json" 0
     Invoke-AjvCase $handoffSchema "$fixtureRoot/handoff-completed-valid.json" 0

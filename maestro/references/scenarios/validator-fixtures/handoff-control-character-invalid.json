@@ -1,0 +1,8 @@
+{
+  "status": "completed",
+  "summary": "Contains an unsafe control character in a path.",
+  "result_path": "abc\u0000def",
+  "role_state_path": "maestro/references/scenarios/validator-fixtures/files/current-state.md",
+  "needs_user_input": false,
+  "recommended_next": []
+}

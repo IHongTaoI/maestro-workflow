@@ -68,3 +68,24 @@
 **Step 3:** Run `pwsh -File scripts/verify-contracts.ps1` and expect `All Maestro contract checks passed.`
 
 **Step 4:** Inspect `git diff --check`, `git status --short`, and the final diff.
+
+### Task 5: Harden untrusted-input handling after review
+
+**Files:**
+- Modify: `maestro/scripts/validate.py`
+- Create: `maestro/references/scenarios/validator-fixtures/memory-response-nan-invalid.json`
+- Create: `maestro/references/scenarios/validator-fixtures/memory-response-infinity-invalid.json`
+- Create: `maestro/references/scenarios/validator-fixtures/memory-response-negative-infinity-invalid.json`
+- Create: `maestro/references/scenarios/validator-fixtures/handoff-control-character-invalid.json`
+- Modify: `scripts/verify-contracts.ps1`
+
+**Step 1:** Add failing cases for every non-standard JSON constant and a control character in a
+file reference; require stable machine-readable diagnostics.
+
+**Step 2:** Run the valid and schema-invalid fixtures for each protocol through both AJV and the
+Python CLI with matching expected outcomes.
+
+**Step 3:** Reject non-standard constants during parsing, reject control characters before host
+path APIs, and convert `ValueError` from path operations into validation diagnostics.
+
+**Step 4:** Run targeted cases, the full contract suite, syntax parsing, and `git diff --check`.
