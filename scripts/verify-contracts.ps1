@@ -116,6 +116,8 @@ try {
         "$validatorFixtureRoot/memory-response-action-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-conflict-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-date-time-invalid.json" 1
 
     Invoke-ProtocolValidatorCase "handoff" `
         "$validatorFixtureRoot/handoff-traversal-invalid.json" 1

@@ -95,6 +95,10 @@ Long-term store is represented by an empty array, not by omitting the index. Sta
 candidate name the entries it compared without coupling the protocol to Markdown headings or a
 host API.
 
+This is a compatibility change for Memory Worker request producers. A producer that previously
+sent `"current_memory": {}` must migrate to `"current_memory": {"long_term_entries": []}` when no
+Long-term entries exist; otherwise request validation fails.
+
 Memory Worker output is only a candidate. Before promotion, Old Zhou or a strong-model reviewer must
 verify that it is stable, useful beyond the current Task, and supported by reachable `source_refs`.
 Record approval or rejection under `memory/long-term/decisions/`; retain rejected candidates so the
