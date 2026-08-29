@@ -1,5 +1,6 @@
 {
   "status": "completed",
+  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
   "current": { "content": {} },
   "references": [
     {
@@ -171,6 +172,35 @@
       "status": "candidate"
     },
     {
+      "candidate_id": "playbook-candidate-merge",
+      "title": "Validate and preserve protocol evidence",
+      "trigger": "A formal protocol artifact and its evidence are about to be persisted.",
+      "steps": [
+        "Retain reachable source evidence.",
+        "Run the matching artifact-triggered protocol guard.",
+        "Persist the canonical artifact only after validation succeeds."
+      ],
+      "checks": ["Every referenced source exists under the project root."],
+      "action": "MERGE",
+      "match": {
+        "classification": "overlap",
+        "playbook_ids": ["pb-fixture-sources", "pb-fixture-validation"]
+      },
+      "rationale": "The two current Playbooks form one coherent validated procedure.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-29T00:01:30Z"
+      },
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/source.md"
+      ],
+      "evidence_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/result.md"
+      ],
+      "status": "candidate"
+    },
+    {
       "candidate_id": "playbook-candidate-low-value",
       "title": "Run a one-off fixture command",
       "trigger": "The exact disposable fixture needs local inspection.",
@@ -187,9 +217,7 @@
       "source_refs": [
         "maestro/references/scenarios/validator-fixtures/files/source.md"
       ],
-      "evidence_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/result.md"
-      ],
+      "evidence_refs": [],
       "status": "candidate"
     }
   ]

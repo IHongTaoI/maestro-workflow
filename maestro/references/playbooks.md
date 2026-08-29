@@ -45,6 +45,50 @@ evidence and decision history, and never grants permissions beyond the user's cu
 
 Candidates are not active guidance. Only approved, current Playbooks are eligible for selection.
 
+## Canonical Playbook files
+
+A managed formal Playbook is one Markdown or YAML file under `.maestro/playbooks/`, excluding the
+reserved `candidates/` and `decisions/` directories. YAML exposes the fields below at its top level;
+Markdown exposes the same fields in YAML front matter and may use its body for human explanation:
+
+```yaml
+playbook_id: pb-20260829t000000z-a1b2
+file_path: .maestro/playbooks/performance-diagnosis.md
+title: Evidence-first performance diagnosis
+trigger: A user asks to diagnose a runtime performance regression.
+steps:
+  - Capture runtime evidence before proposing a cause.
+checks:
+  - Evidence is reachable from the source Task.
+status: active
+revision: 0
+updated_at: 2026-08-29T00:00:00Z
+updated_by: old-zhou/session-or-run-id
+source_refs:
+  - .maestro/tasks/archive/task-id/evidence/trace.md
+```
+
+`playbook_id` never changes after creation. `file_path` is the normalized project-relative path to
+the same file. Active Playbooks are normalized into `current_playbooks`; files with
+`status: superseded` remain historical and are excluded. `revision`, `updated_at`, and `updated_by`
+follow the mutable-state protocol in [storage.md](storage.md).
+
+### Legacy migration
+
+Before the first Experience Review, scan project-authored Markdown and YAML directly under the
+Playbook tree while excluding reserved candidate and decision records. If any formal Playbook lacks
+the canonical fields, stop Experience Review instead of silently omitting it or inventing a new ID
+on every run.
+
+Offer a one-time migration for explicit user approval. The reviewed migration maps the existing
+title, trigger, ordered steps, and checks, adds `status: active`, allocates and persists one stable
+`playbook_id`, records the existing path as `file_path`, sets `revision: 0`, and preserves the
+original bytes in an immutable migration/transaction snapshot referenced by `source_refs`. Apply all
+approved file normalizations in one transaction.
+Future reads use the stored ID; they never regenerate it from a heading, content hash, or model
+output. If the user declines migration, the legacy file remains usable when explicitly selected,
+but automated Experience Review remains pending rather than comparing against an incomplete index.
+
 When a user asks to follow a Playbook:
 
 1. Read the named Playbook. If none is named, select one only when its purpose clearly matches.

@@ -69,14 +69,20 @@
       "type": "object",
       "required": [
         "playbook_id",
+        "file_path",
         "title",
         "trigger",
         "steps",
+        "checks",
         "status",
+        "revision",
+        "updated_at",
+        "updated_by",
         "source_refs"
       ],
       "properties": {
         "playbook_id": { "$ref": "#/$defs/stableId" },
+        "file_path": { "type": "string", "minLength": 1 },
         "title": { "type": "string", "minLength": 1 },
         "trigger": { "type": "string", "minLength": 1 },
         "steps": {
@@ -85,7 +91,15 @@
           "minItems": 1,
           "uniqueItems": true
         },
+        "checks": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
         "status": { "const": "active" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "updated_by": { "type": "string", "minLength": 1 },
         "source_refs": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },

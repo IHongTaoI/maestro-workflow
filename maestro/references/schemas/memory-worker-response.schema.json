@@ -3,9 +3,10 @@
   "$id": "https://maestro.local/schemas/memory-worker-response.schema.json",
   "title": "Maestro Memory Worker Response",
   "type": "object",
-  "required": ["status", "current"],
+  "required": ["status", "request_file", "current"],
   "properties": {
     "status": { "const": "completed" },
+    "request_file": { "type": "string", "minLength": 1 },
     "current": {
       "type": "object",
       "required": ["content"],
@@ -38,6 +39,11 @@
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
       "minItems": 1,
+      "uniqueItems": true
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
     "reference": {
@@ -249,7 +255,7 @@
         "rationale": { "type": "string", "minLength": 1 },
         "source": { "$ref": "#/$defs/source" },
         "source_refs": { "$ref": "#/$defs/sourceRefs" },
-        "evidence_refs": { "$ref": "#/$defs/sourceRefs" },
+        "evidence_refs": { "$ref": "#/$defs/evidenceRefs" },
         "status": { "const": "candidate" }
       },
       "additionalProperties": false,
@@ -264,7 +270,8 @@
                   "classification": { "const": "novel" },
                   "playbook_ids": { "type": "array", "maxItems": 0 }
                 }
-              }
+              },
+              "evidence_refs": { "type": "array", "minItems": 1 }
             }
           }
         },
@@ -278,7 +285,8 @@
                   "classification": { "enum": ["overlap", "conflict"] },
                   "playbook_ids": { "type": "array", "minItems": 1, "maxItems": 1 }
                 }
-              }
+              },
+              "evidence_refs": { "type": "array", "minItems": 1 }
             }
           }
         },
@@ -292,7 +300,8 @@
                   "classification": { "enum": ["overlap", "conflict"] },
                   "playbook_ids": { "type": "array", "minItems": 2 }
                 }
-              }
+              },
+              "evidence_refs": { "type": "array", "minItems": 1 }
             }
           }
         },

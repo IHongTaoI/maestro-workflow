@@ -4,14 +4,14 @@
   "current": { "content": {} },
   "playbook_candidates": [
     {
-      "candidate_id": "playbook-invalid-approved",
-      "title": "Automatically approved Playbook",
-      "trigger": "A fixture completes successfully once.",
-      "steps": ["Promote the result without review."],
+      "candidate_id": "playbook-missing-required-evidence",
+      "title": "Create without evidence",
+      "trigger": "A fixture has no execution evidence.",
+      "steps": ["Attempt to create reusable guidance."],
       "checks": [],
       "action": "CREATE",
       "match": { "classification": "novel", "playbook_ids": [] },
-      "rationale": "This fixture proves automatic approval is rejected.",
+      "rationale": "Non-SKIP actions require evidence.",
       "source": {
         "type": "task",
         "id": "task-fixture",
@@ -20,10 +20,8 @@
       "source_refs": [
         "maestro/references/scenarios/validator-fixtures/files/source.md"
       ],
-      "evidence_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/result.md"
-      ],
-      "status": "approved"
+      "evidence_refs": [],
+      "status": "candidate"
     }
   ]
 }

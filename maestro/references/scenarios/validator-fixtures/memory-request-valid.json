@@ -19,15 +19,35 @@
   "current_playbooks": [
     {
       "playbook_id": "pb-fixture-validation",
+      "file_path": "maestro/references/scenarios/validator-fixtures/files/source.md",
       "title": "Validate protocol artifacts",
       "trigger": "A formal Maestro protocol artifact is about to be persisted.",
       "steps": [
         "Run the matching artifact-triggered protocol guard.",
         "Persist the canonical artifact only after validation succeeds."
       ],
+      "checks": ["The protocol guard exits successfully."],
       "status": "active",
+      "revision": 2,
+      "updated_at": "2026-08-29T00:00:00Z",
+      "updated_by": "old-zhou/fixture",
       "source_refs": [
         "maestro/references/scenarios/validator-fixtures/files/source.md"
+      ]
+    },
+    {
+      "playbook_id": "pb-fixture-sources",
+      "file_path": "maestro/references/scenarios/validator-fixtures/files/result.md",
+      "title": "Preserve fixture sources",
+      "trigger": "A fixture result needs an auditable source.",
+      "steps": ["Retain a reachable source reference with the result."],
+      "checks": ["The referenced source exists under the project root."],
+      "status": "active",
+      "revision": 1,
+      "updated_at": "2026-08-29T00:01:00Z",
+      "updated_by": "old-zhou/fixture",
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/result.md"
       ]
     }
   ],

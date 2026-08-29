@@ -456,6 +456,61 @@ def validate_memory_request(
             check_plain_object(value[key], f"$.{key}", errors)
 
 
+def load_linked_memory_request(
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> set[str] | None:
+    reference_path = "$.request_file"
+    previous_error_count = len(errors)
+    file_reference(value, reference_path, errors)
+    if len(errors) != previous_error_count or not isinstance(value, str):
+        return None
+
+    request_path = file_reference.project_root / Path(*PurePosixPath(value).parts)
+    try:
+        request_value = json.loads(
+            request_path.read_text(encoding="utf-8"),
+            parse_constant=reject_non_standard_json_constant,
+        )
+    except json.JSONDecodeError as error:
+        add_error(
+            errors,
+            reference_path,
+            f"linked request is invalid JSON at line {error.lineno}, column {error.colno}",
+        )
+        return None
+    except NonStandardJsonConstant as error:
+        add_error(
+            errors,
+            reference_path,
+            f"linked request contains non-standard constant '{error.constant}'",
+        )
+        return None
+    except (OSError, RuntimeError, UnicodeError, ValueError) as error:
+        add_error(errors, reference_path, f"cannot read linked request: {error}")
+        return None
+
+    linked_errors: list[Diagnostic] = []
+    validate_memory_request(request_value, linked_errors, file_reference)
+    if linked_errors:
+        for linked_error in linked_errors:
+            add_error(
+                errors,
+                reference_path,
+                f"linked request {linked_error.path}: {linked_error.message}",
+            )
+        return None
+
+    assert isinstance(request_value, dict)
+    playbooks = request_value["current_playbooks"]
+    return {
+        playbook["playbook_id"]
+        for playbook in playbooks
+        if isinstance(playbook, dict) and isinstance(playbook.get("playbook_id"), str)
+    }
+
+
 def validate_long_term_entry(
     value: Any,
     path: str,
@@ -506,30 +561,46 @@ def validate_playbook(
         return
     required = {
         "playbook_id",
+        "file_path",
         "title",
         "trigger",
         "steps",
+        "checks",
         "status",
+        "revision",
+        "updated_at",
+        "updated_by",
         "source_refs",
     }
     check_object_shape(value, path, errors, required=required, allowed=required)
     if "playbook_id" in value:
         check_stable_id(value["playbook_id"], f"{path}.playbook_id", errors)
-    for key in ("title", "trigger"):
+    if "file_path" in value:
+        file_reference(value["file_path"], f"{path}.file_path", errors)
+    for key in ("title", "trigger", "updated_by"):
         if key in value:
             check_string(value[key], f"{path}.{key}", errors, min_length=1)
-    if "steps" in value and check_array(
-        value["steps"],
-        f"{path}.steps",
-        errors,
-        lambda item, item_path, item_errors: check_string(
-            item, item_path, item_errors, min_length=1
-        ),
-        min_items=1,
-    ):
-        check_unique_strings(value["steps"], f"{path}.steps", errors)
+    for key, min_items in (("steps", 1), ("checks", 0)):
+        if key in value and check_array(
+            value[key],
+            f"{path}.{key}",
+            errors,
+            lambda item, item_path, item_errors: check_string(
+                item, item_path, item_errors, min_length=1
+            ),
+            min_items=min_items,
+        ):
+            check_unique_strings(value[key], f"{path}.{key}", errors)
     if "status" in value and value["status"] != "active":
         add_error(errors, f"{path}.status", "must equal 'active'")
+    if "revision" in value and (
+        not isinstance(value["revision"], int)
+        or is_boolean(value["revision"])
+        or value["revision"] < 0
+    ):
+        add_error(errors, f"{path}.revision", "must be a non-negative integer")
+    if "updated_at" in value:
+        check_date_time(value["updated_at"], f"{path}.updated_at", errors)
     if "source_refs" in value and check_array(
         value["source_refs"],
         f"{path}.source_refs",
@@ -884,15 +955,28 @@ def validate_playbook_candidate(
         if "created_at" in source:
             check_date_time(source["created_at"], f"{path}.source.created_at", errors)
 
-    for key in ("source_refs", "evidence_refs"):
-        if key in value and check_array(
-            value[key],
-            f"{path}.{key}",
-            errors,
-            file_reference,
-            min_items=1,
-        ):
-            check_unique_strings(value[key], f"{path}.{key}", errors)
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+
+    if "evidence_refs" in value and check_array(
+        value["evidence_refs"],
+        f"{path}.evidence_refs",
+        errors,
+        file_reference,
+    ):
+        check_unique_strings(value["evidence_refs"], f"{path}.evidence_refs", errors)
+        if action_valid and value["action"] != "SKIP" and not value["evidence_refs"]:
+            add_error(
+                errors,
+                f"{path}.evidence_refs",
+                "must contain execution evidence for CREATE, UPDATE, or MERGE",
+            )
 
     if "status" in value and value["status"] != "candidate":
         add_error(errors, f"{path}.status", "must equal 'candidate'")
@@ -904,7 +988,7 @@ def validate_memory_response(
     path = "$"
     if not require_object(value, path, errors):
         return
-    required = {"status", "current"}
+    required = {"status", "request_file", "current"}
     allowed = required | {
         "references",
         "discarded",
@@ -913,6 +997,12 @@ def validate_memory_response(
         "notes",
     }
     check_object_shape(value, path, errors, required=required, allowed=allowed)
+
+    current_playbook_ids = None
+    if "request_file" in value:
+        current_playbook_ids = load_linked_memory_request(
+            value["request_file"], errors, file_reference
+        )
 
     if "status" in value and value["status"] != "completed":
         add_error(errors, "$.status", "must equal 'completed'")
@@ -995,6 +1085,23 @@ def validate_memory_response(
                         "must be unique within the response",
                     )
                 seen_candidate_ids.add(candidate_id)
+            if current_playbook_ids is not None:
+                for index, candidate in enumerate(candidates):
+                    if not is_object(candidate) or not is_object(candidate.get("match")):
+                        continue
+                    playbook_ids = candidate["match"].get("playbook_ids")
+                    if not is_array(playbook_ids):
+                        continue
+                    for playbook_index, playbook_id in enumerate(playbook_ids):
+                        if (
+                            isinstance(playbook_id, str)
+                            and playbook_id not in current_playbook_ids
+                        ):
+                            add_error(
+                                errors,
+                                f"$.playbook_candidates[{index}].match.playbook_ids[{playbook_index}]",
+                                "must reference a Playbook from the linked request",
+                            )
 
 
 def validate_provenance(

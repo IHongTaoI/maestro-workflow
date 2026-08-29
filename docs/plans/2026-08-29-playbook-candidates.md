@@ -78,3 +78,25 @@
 4. Push the branch and create a Draft PR targeting `master`.
 5. State `Implemented by Codex` and `Closes #15` in the PR body.
 6. Verify the PR metadata and initial checks.
+
+### Task 6: Close review contract gaps
+
+**Files:**
+- Modify: `maestro/references/schemas/memory-worker-response.schema.json`
+- Modify: `maestro/scripts/validate.py`
+- Modify: `maestro/references/playbooks.md`
+- Modify: `maestro/references/storage.md`
+- Modify: `maestro/references/memory.md`
+- Modify: `maestro/references/scenarios/validator-fixtures/memory-response-*.json`
+- Modify: `scripts/verify-contracts.ps1`
+
+**Steps:**
+1. Add `request_file` to persisted responses and an unknown-Playbook target failure fixture.
+2. Load and validate the linked request, then require candidate target IDs to exist in its
+   `current_playbooks` snapshot.
+3. Permit `SKIP` to carry an empty `evidence_refs` array while retaining required `source_refs`;
+   keep evidence mandatory for CREATE, UPDATE, and MERGE.
+4. Define canonical Markdown/YAML Playbook metadata, revision rules, UPDATE/MERGE behavior, and an
+   explicit one-time migration for legacy project-authored Playbooks.
+5. Run `npm run verify`, `git diff --check`, and inspect the full review-fix diff.
+6. Do not commit, push, reply, or resolve review state without explicit authorization.

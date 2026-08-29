@@ -130,8 +130,9 @@ rejected. Store unresolved merge conflicts under `memory/long-term/conflicts/` w
 `pending-confirmation`. A `SKIP` decision does not mutate `current.md`, but retaining it prevents
 the same duplicate or low-value claim from being reconsidered without new evidence.
 
-Each current Playbook exposes a stable `playbook_id`, title, trigger, ordered steps, active status,
-and reachable `source_refs` to Experience Review. Persist every validated Playbook Candidate,
+Each current Playbook exposes a stable `playbook_id`, canonical `file_path`, title, trigger, ordered
+steps, checks, active status, revision metadata, and reachable `source_refs` to Experience Review.
+Persist every validated Playbook Candidate,
 including `SKIP`, under `playbooks/candidates/` until an immutable record under
 `playbooks/decisions/` approves or rejects it. Candidate records include reachable `source_refs`
 and `evidence_refs`; they are not active guidance and cannot modify a Playbook before explicit user
@@ -209,7 +210,8 @@ visibility. Validate parsed Task metadata against [task.schema.json](schemas/tas
 
 Mutable state includes Temporary `meta.yaml` and `current.md`, Task `task.yaml`, `context.md`,
 `decisions.md`, and `progress.md`, role or Worker `current-state.md`, project Worker
-`registry.yaml`, and Long-term `current.md`. Each listed
+`registry.yaml`, Long-term `current.md`, and every canonical formal Playbook Markdown or YAML file.
+Each listed
 mutable YAML file carries `revision`, `updated_at`, and `updated_by`. Each listed mutable Markdown
 file carries the same fields in YAML front matter. New state starts at revision `0`; each successful
 replacement increments exactly once. Handoffs, Detailed Results, source
@@ -328,8 +330,14 @@ replacement and marks the other targets superseded in the immutable decision. `C
 new stable entry ID. `SKIP` records only a decision and never creates a current entry.
 
 An approved Playbook `UPDATE`, `MERGE`, or `CREATE` uses the same lock, revision, and transaction
-rules for affected Playbook files. `SKIP` and rejected candidates record decisions only. Repeated
-successful Tasks may append evidence through a reviewed update but cannot approve a candidate.
+rules for affected Playbook files. `CREATE` allocates one stable `playbook_id` and starts at revision
+`0`. `UPDATE` preserves its target ID and path and increments that file's revision exactly once.
+`MERGE` names one approved survivor, preserves its ID, increments its revision, and marks every
+other target file `superseded` with its own incremented revision and the survivor recorded as
+`superseded_by` in the immutable decision. Acquire and recheck all target locks in lexical path
+order and publish the multi-file change through one transaction. `SKIP` and rejected candidates
+record decisions only. Repeated successful Tasks may append evidence through a reviewed update but
+cannot approve a candidate.
 
 Record the transition, timestamp, actor/reviewer, rationale when relevant, and source paths before
 moving the directory or file.

@@ -205,9 +205,10 @@ roles or Workers, make architecture decisions, change Task scope, or approve its
 Playbook candidates. This review does not introduce a new Agent Role or Runtime.
 
 Every request also exposes `current_playbooks`, including an empty array when the project has no
-Playbooks. Each indexed Playbook has a stable `playbook_id`, title, trigger, ordered steps, active
-status, and reachable `source_refs`. This lets the worker compare procedures before proposing new
-guidance. A producer that omits `current_playbooks` must migrate because request validation fails.
+Playbooks. Each indexed Playbook has a stable `playbook_id`, canonical `file_path`, title, trigger,
+ordered steps, checks, active status, revision metadata, and reachable `source_refs`. This lets the
+worker compare procedures before proposing new guidance. A producer that omits
+`current_playbooks` must migrate because request validation fails.
 
 Its consolidation flow is bounded and ordered:
 
@@ -223,6 +224,18 @@ Its consolidation flow is bounded and ordered:
    commands, Task chronology, and unverified suggestions are `SKIP` material.
 6. Return both proposal collections for validation and independent review; do not mutate Long-term
    Memory or Playbooks.
+
+Every Memory Worker response records the project-relative `request_file` for the validated request
+that produced it. The response guard loads and validates that request, then enforces:
+
+```text
+match.playbook_ids ⊆ current_playbooks.playbook_id
+```
+
+An invalid or unreachable linked request, or a target ID absent from its current Playbook snapshot,
+invalidates the response. `CREATE`, `UPDATE`, and `MERGE` require at least one reachable
+`evidence_ref`; `SKIP` may use `evidence_refs: []`, but still requires reachable `source_refs` for
+auditability.
 
 Validate structured input/output against:
 

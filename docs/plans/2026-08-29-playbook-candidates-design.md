@@ -61,6 +61,11 @@ The action rules mirror Memory Evolution:
 Candidates and current Playbook IDs must be unique. All source and evidence references must be
 reachable project-relative files.
 
+Each response links the exact validated request artifact that produced it. The protocol guard uses
+that immutable snapshot to reject any candidate target absent from `current_playbooks`; response
+shape validation alone cannot establish this cross-artifact invariant. Evidence is conditional:
+non-`SKIP` actions require it, while a traceable `SKIP` may have no execution evidence.
+
 ## Authority and lifecycle
 
 The Memory Worker may extract and compare candidates, but cannot approve or write a Playbook.
@@ -76,6 +81,11 @@ the same weak procedure is not proposed repeatedly.
 Formal Playbooks remain optional guidance. They may recommend checks, capabilities, or typical
 sequencing, but cannot grant permissions, bypass explicit authorization, or require a fixed Role
 order.
+
+Managed Markdown and YAML Playbooks carry stable identity and revision metadata in front matter or
+top-level fields. Existing unstructured files require one explicitly approved migration; their IDs
+are persisted once and never regenerated. UPDATE changes one revision, while MERGE transactionally
+updates a chosen survivor and marks the other target files superseded.
 
 ## Verification
 

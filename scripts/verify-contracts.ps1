@@ -110,6 +110,8 @@ try {
         "$validatorFixtureRoot/memory-request-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
         "$validatorFixtureRoot/memory-request-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-playbook-revision-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
@@ -124,6 +126,8 @@ try {
         "$validatorFixtureRoot/memory-response-playbook-action-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-playbook-status-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-playbook-evidence-required-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
         "$validatorFixtureRoot/memory-merge-request-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
@@ -178,6 +182,13 @@ try {
         '$.playbook_candidates[1].candidate_id' "must be unique"
     Invoke-ProtocolValidatorCase "memory-response" `
         "$validatorFixtureRoot/memory-response-playbook-missing-reference-invalid.json" 1
+    Invoke-AjvCase $memoryResponseSchema `
+        "$validatorFixtureRoot/memory-response-playbook-unknown-target-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-playbook-unknown-target-invalid.json" `
+        '$.playbook_candidates[0].match.playbook_ids[0]' "must reference a Playbook from the linked request"
+    Invoke-ProtocolValidatorCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-request-missing-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -455,11 +466,18 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = "does not replace" },
         @{ Path = "maestro/references/memory.md"; Text = "Never copy Temporary" },
         @{ Path = "maestro/references/memory.md"; Text = '`current_playbooks`' },
+        @{ Path = "maestro/references/memory.md"; Text = '`request_file`' },
+        @{ Path = "maestro/references/memory.md"; Text = "match.playbook_ids $([char]0x2286) current_playbooks.playbook_id" },
+        @{ Path = "maestro/references/memory.md"; Text = '`evidence_refs: []`' },
         @{ Path = "maestro/references/playbooks.md"; Text = "UPDATE $([char]0x2192) MERGE $([char]0x2192) CREATE $([char]0x2192) SKIP" },
         @{ Path = "maestro/references/playbooks.md"; Text = "explicit user approval" },
         @{ Path = "maestro/references/playbooks.md"; Text = "Candidates are not active guidance" },
+        @{ Path = "maestro/references/playbooks.md"; Text = "one-time migration" },
+        @{ Path = "maestro/references/playbooks.md"; Text = '`revision: 0`' },
         @{ Path = "maestro/references/storage.md"; Text = 'including `SKIP`' },
         @{ Path = "maestro/references/storage.md"; Text = '`playbooks/candidates/`' },
+        @{ Path = "maestro/references/storage.md"; Text = "canonical formal Playbook Markdown or YAML file" },
+        @{ Path = "maestro/references/storage.md"; Text = '`superseded_by`' },
         @{ Path = "maestro/references/memory.md"; Text = "conflict detected $([char]0x2192) pending-confirmation $([char]0x2192) resolved" },
         @{ Path = "maestro/references/memory.md"; Text = "Anti-resurrection of superseded/rejected memory" },
         @{ Path = "maestro/references/storage.md"; Text = "Team Shared Memory (Tracked in Git)" },

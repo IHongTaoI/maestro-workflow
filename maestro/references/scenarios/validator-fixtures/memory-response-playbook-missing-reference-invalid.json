@@ -1,5 +1,6 @@
 {
   "status": "completed",
+  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
   "current": { "content": {} },
   "playbook_candidates": [
     {

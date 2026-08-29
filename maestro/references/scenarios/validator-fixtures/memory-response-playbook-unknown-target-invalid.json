@@ -4,17 +4,17 @@
   "current": { "content": {} },
   "playbook_candidates": [
     {
-      "candidate_id": "playbook-invalid-update",
-      "title": "Invalid Playbook update",
-      "trigger": "A fixture update is requested.",
+      "candidate_id": "playbook-unknown-target",
+      "title": "Update an unknown Playbook",
+      "trigger": "A fixture targets a missing Playbook.",
       "steps": ["Run the fixture check."],
       "checks": [],
       "action": "UPDATE",
       "match": {
         "classification": "overlap",
-        "playbook_ids": ["pb-fixture-sources", "pb-fixture-validation"]
+        "playbook_ids": ["pb-does-not-exist"]
       },
-      "rationale": "An UPDATE must not target two Playbooks.",
+      "rationale": "Fixture for request/response target validation.",
       "source": {
         "type": "task",
         "id": "task-fixture",
