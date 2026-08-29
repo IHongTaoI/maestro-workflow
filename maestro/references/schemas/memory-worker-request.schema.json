@@ -82,7 +82,11 @@
       ],
       "properties": {
         "playbook_id": { "$ref": "#/$defs/stableId" },
-        "file_path": { "type": "string", "minLength": 1 },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\.maestro/playbooks/(?!(?:candidates|decisions)(?:/|$)).+\\.(?:md|markdown|yaml|yml)$"
+        },
         "title": { "type": "string", "minLength": 1 },
         "trigger": { "type": "string", "minLength": 1 },
         "steps": {

@@ -61,10 +61,12 @@ The action rules mirror Memory Evolution:
 Candidates and current Playbook IDs must be unique. All source and evidence references must be
 reachable project-relative files.
 
-Each response links the exact validated request artifact that produced it. The protocol guard uses
-that immutable snapshot to reject any candidate target absent from `current_playbooks`; response
-shape validation alone cannot establish this cross-artifact invariant. Evidence is conditional:
-non-`SKIP` actions require it, while a traceable `SKIP` may have no execution evidence.
+Each response audits the exact validated request artifact that produced it, but does not select the
+trusted validation context. The caller supplies that immutable request independently; the protocol
+guard confirms the response's audit path names the same file and rejects any candidate target absent
+from its `current_playbooks`. Response shape validation alone cannot establish this cross-artifact
+invariant. Evidence is conditional: non-`SKIP` actions require it, while a traceable `SKIP` may have
+no execution evidence.
 
 ## Authority and lifecycle
 
@@ -86,6 +88,11 @@ Managed Markdown and YAML Playbooks carry stable identity and revision metadata 
 top-level fields. Existing unstructured files require one explicitly approved migration; their IDs
 are persisted once and never regenerated. UPDATE changes one revision, while MERGE transactionally
 updates a chosen survivor and marks the other target files superseded.
+
+The current Playbook index may reference only canonical files under `.maestro/playbooks/`, excluding
+candidate and decision records. Request validation reads each canonical file and confirms its stored
+identity, path, revision, and status match the index so an arbitrary existing project file cannot be
+treated as active guidance.
 
 ## Verification
 

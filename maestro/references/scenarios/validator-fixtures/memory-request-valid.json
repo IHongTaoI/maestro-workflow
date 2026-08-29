@@ -1,7 +1,7 @@
 {
   "operation": "role-compress",
   "source_files": [
-    "maestro/references/scenarios/validator-fixtures/files/source.md"
+    "files/source.md"
   ],
   "current_memory": {
     "long_term_entries": [
@@ -11,7 +11,7 @@
         "memory_kind": "principle",
         "content": "Durable fixture claims require reachable evidence.",
         "source_refs": [
-          "maestro/references/scenarios/validator-fixtures/files/source.md"
+          "files/source.md"
         ]
       }
     ]
@@ -19,7 +19,7 @@
   "current_playbooks": [
     {
       "playbook_id": "pb-fixture-validation",
-      "file_path": "maestro/references/scenarios/validator-fixtures/files/source.md",
+      "file_path": ".maestro/playbooks/fixture-validation.md",
       "title": "Validate protocol artifacts",
       "trigger": "A formal Maestro protocol artifact is about to be persisted.",
       "steps": [
@@ -32,12 +32,12 @@
       "updated_at": "2026-08-29T00:00:00Z",
       "updated_by": "old-zhou/fixture",
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ]
     },
     {
       "playbook_id": "pb-fixture-sources",
-      "file_path": "maestro/references/scenarios/validator-fixtures/files/result.md",
+      "file_path": ".maestro/playbooks/fixture-sources.yaml",
       "title": "Preserve fixture sources",
       "trigger": "A fixture result needs an auditable source.",
       "steps": ["Retain a reachable source reference with the result."],
@@ -47,7 +47,7 @@
       "updated_at": "2026-08-29T00:01:00Z",
       "updated_by": "old-zhou/fixture",
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/result.md"
+        "files/result.md"
       ]
     }
   ],

@@ -1,6 +1,6 @@
 {
   "status": "completed",
-  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
+  "request_file": "memory-request-valid.json",
   "current": { "content": {} },
   "playbook_candidates": [
     {
@@ -18,7 +18,7 @@
         "created_at": "2026-08-29T00:00:00Z"
       },
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ],
       "evidence_refs": [],
       "status": "candidate"

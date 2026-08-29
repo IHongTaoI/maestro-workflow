@@ -1,6 +1,6 @@
 {
   "status": "completed",
-  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
+  "request_file": "memory-request-valid.json",
   "current": { "content": {} },
   "playbook_candidates": [
     {
@@ -13,8 +13,8 @@
       "match": { "classification": "novel", "playbook_ids": [] },
       "rationale": "First fixture candidate.",
       "source": { "type": "task", "id": "task-fixture", "created_at": "2026-08-29T00:00:00Z" },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"],
-      "evidence_refs": ["maestro/references/scenarios/validator-fixtures/files/result.md"],
+      "source_refs": ["files/source.md"],
+      "evidence_refs": ["files/result.md"],
       "status": "candidate"
     },
     {
@@ -27,8 +27,8 @@
       "match": { "classification": "novel", "playbook_ids": [] },
       "rationale": "Second fixture candidate with the same ID.",
       "source": { "type": "task", "id": "task-fixture", "created_at": "2026-08-29T00:01:00Z" },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"],
-      "evidence_refs": ["maestro/references/scenarios/validator-fixtures/files/result.md"],
+      "source_refs": ["files/source.md"],
+      "evidence_refs": ["files/result.md"],
       "status": "candidate"
     }
   ]

@@ -1,6 +1,6 @@
 {
   "status": "completed",
-  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
+  "request_file": "memory-request-valid.json",
   "current": {
     "content": {}
   },
@@ -9,7 +9,7 @@
       "title": "Unreachable evidence",
       "content": "This reference must fail validation.",
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/missing.md"
+        "files/missing.md"
       ]
     }
   ]

@@ -1,7 +1,7 @@
 {
   "operation": "task-complete",
   "source_files": [
-    "maestro/references/scenarios/validator-fixtures/files/source.md"
+    "files/source.md"
   ],
   "current_memory": {
     "long_term_entries": [
@@ -11,7 +11,7 @@
         "memory_kind": "fact",
         "content": "First indexed claim.",
         "source_refs": [
-          "maestro/references/scenarios/validator-fixtures/files/source.md"
+          "files/source.md"
         ]
       },
       {
@@ -20,7 +20,7 @@
         "memory_kind": "experience",
         "content": "Second indexed claim.",
         "source_refs": [
-          "maestro/references/scenarios/validator-fixtures/files/source.md"
+          "files/source.md"
         ]
       }
     ]

@@ -1,13 +1,13 @@
 {
   "operation": "task-complete",
   "source_files": [
-    "maestro/references/scenarios/validator-fixtures/files/source.md"
+    "files/source.md"
   ],
   "current_memory": { "long_term_entries": [] },
   "current_playbooks": [
     {
       "playbook_id": "pb-repeated",
-      "file_path": "maestro/references/scenarios/validator-fixtures/files/source.md",
+      "file_path": ".maestro/playbooks/fixture-validation.md",
       "title": "First playbook",
       "trigger": "The first fixture applies.",
       "steps": ["Run the first fixture check."],
@@ -17,12 +17,12 @@
       "updated_at": "2026-08-29T00:00:00Z",
       "updated_by": "old-zhou/fixture",
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ]
     },
     {
       "playbook_id": "pb-repeated",
-      "file_path": "maestro/references/scenarios/validator-fixtures/files/result.md",
+      "file_path": ".maestro/playbooks/fixture-sources.yaml",
       "title": "Second playbook",
       "trigger": "The second fixture applies.",
       "steps": ["Run the second fixture check."],
@@ -32,7 +32,7 @@
       "updated_at": "2026-08-29T00:01:00Z",
       "updated_by": "old-zhou/fixture",
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ]
     }
   ],

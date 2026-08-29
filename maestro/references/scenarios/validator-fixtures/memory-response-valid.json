@@ -1,12 +1,12 @@
 {
   "status": "completed",
-  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
+  "request_file": "memory-request-valid.json",
   "current": { "content": {} },
   "references": [
     {
       "title": "Fixture evidence",
       "content": "Evidence retained for later use.",
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     }
   ],
   "long_term_candidates": [
@@ -25,7 +25,7 @@
         "workspace_id": "workspace-fixture",
         "created_at": "2026-08-28T00:00:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-update",
@@ -41,7 +41,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:01:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-merge",
@@ -60,7 +60,7 @@
         "id": "temporary-fixture",
         "created_at": "2026-08-28T00:02:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-duplicate",
@@ -76,7 +76,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:03:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-low-value",
@@ -92,7 +92,7 @@
         "id": "temporary-fixture",
         "created_at": "2026-08-28T00:04:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-conflict",
@@ -108,7 +108,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:05:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     }
   ],
   "playbook_candidates": [
@@ -135,10 +135,10 @@
         "created_at": "2026-08-29T00:00:00Z"
       },
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ],
       "evidence_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/result.md"
+        "files/result.md"
       ],
       "status": "candidate"
     },
@@ -164,10 +164,10 @@
         "created_at": "2026-08-29T00:01:00Z"
       },
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ],
       "evidence_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/result.md"
+        "files/result.md"
       ],
       "status": "candidate"
     },
@@ -193,10 +193,10 @@
         "created_at": "2026-08-29T00:01:30Z"
       },
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ],
       "evidence_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/result.md"
+        "files/result.md"
       ],
       "status": "candidate"
     },
@@ -215,7 +215,7 @@
         "created_at": "2026-08-29T00:02:00Z"
       },
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ],
       "evidence_refs": [],
       "status": "candidate"

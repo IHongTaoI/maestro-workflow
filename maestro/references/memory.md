@@ -226,14 +226,17 @@ Its consolidation flow is bounded and ordered:
    Memory or Playbooks.
 
 Every Memory Worker response records the project-relative `request_file` for the validated request
-that produced it. The response guard loads and validates that request, then enforces:
+that produced it. The caller passes that request independently through `--request`; the response
+cannot choose its own validation context. The response guard loads and validates the externally
+supplied request, confirms that `request_file` resolves to the same file for audit, then enforces:
 
 ```text
 match.playbook_ids ⊆ current_playbooks.playbook_id
 ```
 
-An invalid or unreachable linked request, or a target ID absent from its current Playbook snapshot,
-invalidates the response. `CREATE`, `UPDATE`, and `MERGE` require at least one reachable
+An invalid or unreachable externally supplied request, an audit path mismatch, or a target ID
+absent from the supplied request's current Playbook snapshot invalidates the response. `CREATE`,
+`UPDATE`, and `MERGE` require at least one reachable
 `evidence_ref`; `SKIP` may use `evidence_refs: []`, but still requires reachable `source_refs` for
 auditability.
 
@@ -247,7 +250,7 @@ protocol guard:
 
 ```bash
 python maestro/scripts/validate.py memory-request <file> --project-root <project-root>
-python maestro/scripts/validate.py memory-response <file> --project-root <project-root>
+python maestro/scripts/validate.py memory-response <file> --request <request-file> --project-root <project-root>
 ```
 
 Persist the canonical artifact only after validation succeeds. On failure, repair and validate once

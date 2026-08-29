@@ -20,6 +20,12 @@ STABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 RFC3339_DATE_TIME_PATTERN = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
+PLAYBOOK_METADATA_PATTERN = re.compile(
+    r"^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*?)[ \t]*$"
+)
+PLAYBOOK_METADATA_FIELDS = {"playbook_id", "file_path", "revision", "status"}
+PLAYBOOK_EXTENSIONS = {".md", ".markdown", ".yaml", ".yml"}
+PLAYBOOK_RESERVED_DIRECTORIES = {"candidates", "decisions"}
 
 
 @dataclass(frozen=True)
@@ -241,6 +247,99 @@ class FileReferenceValidator:
             add_error(errors, path, "must reference an existing file")
 
 
+def check_canonical_playbook_path(
+    value: Any, path: str, errors: list[Diagnostic]
+) -> PurePosixPath | None:
+    if not check_canonical_path(value, path, errors):
+        return None
+    assert isinstance(value, str)
+    pure_path = PurePosixPath(value)
+    parts = pure_path.parts
+    if len(parts) < 3 or parts[:2] != (".maestro", "playbooks"):
+        add_error(errors, path, "must be under '.maestro/playbooks/'")
+        return None
+    if parts[2] in PLAYBOOK_RESERVED_DIRECTORIES:
+        add_error(
+            errors,
+            path,
+            "must not be under reserved 'candidates/' or 'decisions/' directories",
+        )
+        return None
+    if pure_path.suffix not in PLAYBOOK_EXTENSIONS:
+        add_error(errors, path, "must reference a Markdown or YAML Playbook file")
+        return None
+    return pure_path
+
+
+def parse_playbook_metadata_scalar(value: str) -> str:
+    value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        return decoded if isinstance(decoded, str) else value
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    return value
+
+
+def load_canonical_playbook_metadata(
+    playbook_path: Path, diagnostic_path: str, errors: list[Diagnostic]
+) -> dict[str, Any] | None:
+    try:
+        lines = playbook_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, RuntimeError, UnicodeError, ValueError) as error:
+        add_error(errors, diagnostic_path, f"cannot read canonical Playbook: {error}")
+        return None
+
+    if playbook_path.suffix.lower() in {".md", ".markdown"}:
+        if not lines or lines[0].strip() != "---":
+            add_error(errors, diagnostic_path, "Markdown Playbook must contain YAML front matter")
+            return None
+        closing_index = next(
+            (
+                index
+                for index, line in enumerate(lines[1:], start=1)
+                if line.strip() in {"---", "..."}
+            ),
+            None,
+        )
+        if closing_index is None:
+            add_error(errors, diagnostic_path, "Markdown Playbook front matter is not closed")
+            return None
+        metadata_lines = lines[1:closing_index]
+    else:
+        metadata_lines = lines
+
+    metadata: dict[str, Any] = {}
+    for line in metadata_lines:
+        if not line or line[0].isspace() or line.lstrip().startswith("#"):
+            continue
+        match = PLAYBOOK_METADATA_PATTERN.fullmatch(line)
+        if match is None or match.group(1) not in PLAYBOOK_METADATA_FIELDS:
+            continue
+        key, raw_value = match.groups()
+        if key in metadata:
+            add_error(errors, diagnostic_path, f"canonical Playbook metadata repeats '{key}'")
+            return None
+        scalar = parse_playbook_metadata_scalar(raw_value)
+        if key == "revision" and re.fullmatch(r"-?\d+", scalar):
+            metadata[key] = int(scalar)
+        else:
+            metadata[key] = scalar
+
+    missing = PLAYBOOK_METADATA_FIELDS - metadata.keys()
+    if missing:
+        add_error(
+            errors,
+            diagnostic_path,
+            f"canonical Playbook metadata is missing: {', '.join(sorted(missing))}",
+        )
+        return None
+    return metadata
+
+
 def validate_question(value: Any, path: str, errors: list[Diagnostic]) -> None:
     if not require_object(value, path, errors):
         return
@@ -456,18 +555,12 @@ def validate_memory_request(
             check_plain_object(value[key], f"$.{key}", errors)
 
 
-def load_linked_memory_request(
-    value: Any,
+def load_memory_request(
+    request_path: Path,
     errors: list[Diagnostic],
     file_reference: FileReferenceValidator,
 ) -> set[str] | None:
-    reference_path = "$.request_file"
-    previous_error_count = len(errors)
-    file_reference(value, reference_path, errors)
-    if len(errors) != previous_error_count or not isinstance(value, str):
-        return None
-
-    request_path = file_reference.project_root / Path(*PurePosixPath(value).parts)
+    reference_path = "--request"
     try:
         request_value = json.loads(
             request_path.read_text(encoding="utf-8"),
@@ -477,18 +570,18 @@ def load_linked_memory_request(
         add_error(
             errors,
             reference_path,
-            f"linked request is invalid JSON at line {error.lineno}, column {error.colno}",
+            f"supplied request is invalid JSON at line {error.lineno}, column {error.colno}",
         )
         return None
     except NonStandardJsonConstant as error:
         add_error(
             errors,
             reference_path,
-            f"linked request contains non-standard constant '{error.constant}'",
+            f"supplied request contains non-standard constant '{error.constant}'",
         )
         return None
     except (OSError, RuntimeError, UnicodeError, ValueError) as error:
-        add_error(errors, reference_path, f"cannot read linked request: {error}")
+        add_error(errors, reference_path, f"cannot read supplied request: {error}")
         return None
 
     linked_errors: list[Diagnostic] = []
@@ -498,7 +591,7 @@ def load_linked_memory_request(
             add_error(
                 errors,
                 reference_path,
-                f"linked request {linked_error.path}: {linked_error.message}",
+                f"supplied request {linked_error.path}: {linked_error.message}",
             )
         return None
 
@@ -509,6 +602,32 @@ def load_linked_memory_request(
         for playbook in playbooks
         if isinstance(playbook, dict) and isinstance(playbook.get("playbook_id"), str)
     }
+
+
+def validate_request_audit_reference(
+    value: Any,
+    request_path: Path,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    reference_path = "$.request_file"
+    previous_error_count = len(errors)
+    file_reference(value, reference_path, errors)
+    if len(errors) != previous_error_count or not isinstance(value, str):
+        return
+    try:
+        audited_path = (
+            file_reference.project_root / Path(*PurePosixPath(value).parts)
+        ).resolve(strict=True)
+    except (OSError, RuntimeError, ValueError) as error:
+        add_error(errors, reference_path, f"cannot resolve audit request: {error}")
+        return
+    if audited_path != request_path:
+        add_error(
+            errors,
+            reference_path,
+            "must match the externally supplied --request file",
+        )
 
 
 def validate_long_term_entry(
@@ -576,7 +695,33 @@ def validate_playbook(
     if "playbook_id" in value:
         check_stable_id(value["playbook_id"], f"{path}.playbook_id", errors)
     if "file_path" in value:
+        canonical_path = check_canonical_playbook_path(
+            value["file_path"], f"{path}.file_path", errors
+        )
         file_reference(value["file_path"], f"{path}.file_path", errors)
+        if canonical_path is not None:
+            resolved_path = file_reference.project_root / Path(*canonical_path.parts)
+            try:
+                is_file = resolved_path.is_file()
+            except (OSError, ValueError) as error:
+                add_error(
+                    errors,
+                    f"{path}.file_path",
+                    f"cannot inspect canonical Playbook: {error}",
+                )
+                is_file = False
+            if is_file:
+                metadata = load_canonical_playbook_metadata(
+                    resolved_path, f"{path}.file_path", errors
+                )
+                if metadata is not None:
+                    for key in sorted(PLAYBOOK_METADATA_FIELDS):
+                        if key in value and metadata[key] != value[key]:
+                            add_error(
+                                errors,
+                                f"{path}.{key}",
+                                f"must match canonical Playbook metadata ({metadata[key]!r})",
+                            )
     for key in ("title", "trigger", "updated_by"):
         if key in value:
             check_string(value[key], f"{path}.{key}", errors, min_length=1)
@@ -983,7 +1128,10 @@ def validate_playbook_candidate(
 
 
 def validate_memory_response(
-    value: Any, errors: list[Diagnostic], file_reference: FileReferenceValidator
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+    request_path: Path,
 ) -> None:
     path = "$"
     if not require_object(value, path, errors):
@@ -998,10 +1146,10 @@ def validate_memory_response(
     }
     check_object_shape(value, path, errors, required=required, allowed=allowed)
 
-    current_playbook_ids = None
+    current_playbook_ids = load_memory_request(request_path, errors, file_reference)
     if "request_file" in value:
-        current_playbook_ids = load_linked_memory_request(
-            value["request_file"], errors, file_reference
+        validate_request_audit_reference(
+            value["request_file"], request_path, errors, file_reference
         )
 
     if "status" in value and value["status"] != "completed":
@@ -1099,8 +1247,9 @@ def validate_memory_response(
                         ):
                             add_error(
                                 errors,
-                                f"$.playbook_candidates[{index}].match.playbook_ids[{playbook_index}]",
-                                "must reference a Playbook from the linked request",
+                                f"$.playbook_candidates[{index}].match."
+                                f"playbook_ids[{playbook_index}]",
+                                "must reference a Playbook from the externally supplied request",
                             )
 
 
@@ -1416,8 +1565,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("file", type=Path)
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--request",
+        type=Path,
+        help="trusted Memory Worker request used to validate a memory-response",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.kind == "memory-response" and args.request is None:
+        parser.error("--request is required for memory-response")
+    if args.kind != "memory-response" and args.request is not None:
+        parser.error("--request is only valid for memory-response")
+    return args
 
 
 def emit_result(
@@ -1448,6 +1607,9 @@ def main(argv: list[str] | None = None) -> int:
             raise NotADirectoryError(f"project root is not a directory: {project_root}")
         output_file = args.file.resolve(strict=True)
         raw = output_file.read_text(encoding="utf-8")
+        request_file = args.request.resolve(strict=True) if args.request is not None else None
+        if request_file is not None and not request_file.is_file():
+            raise FileNotFoundError(f"request is not a file: {request_file}")
     except (OSError, RuntimeError, UnicodeError, ValueError) as error:
         print(f"validator error: {error}", file=sys.stderr)
         return 2
@@ -1480,7 +1642,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.kind == "memory-request":
         validate_memory_request(value, errors, file_reference)
     elif args.kind == "memory-response":
-        validate_memory_response(value, errors, file_reference)
+        assert request_file is not None
+        validate_memory_response(value, errors, file_reference, request_file)
     elif args.kind == "memory-merge-request":
         validate_memory_merge_request(value, errors, file_reference)
     else:

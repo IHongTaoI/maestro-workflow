@@ -1,13 +1,13 @@
 {
   "operation": "task-complete",
   "source_files": [
-    "maestro/references/scenarios/validator-fixtures/files/source.md"
+    "files/source.md"
   ],
   "current_memory": { "long_term_entries": [] },
   "current_playbooks": [
     {
       "playbook_id": "pb-invalid-revision",
-      "file_path": "maestro/references/scenarios/validator-fixtures/files/source.md",
+      "file_path": ".maestro/playbooks/fixture-validation.md",
       "title": "Invalid revision Playbook",
       "trigger": "A fixture uses an invalid revision.",
       "steps": ["Run the fixture check."],
@@ -17,7 +17,7 @@
       "updated_at": "2026-08-29T00:00:00Z",
       "updated_by": "old-zhou/fixture",
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ]
     }
   ],

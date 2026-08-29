@@ -73,6 +73,12 @@ the same file. Active Playbooks are normalized into `current_playbooks`; files w
 `status: superseded` remain historical and are excluded. `revision`, `updated_at`, and `updated_by`
 follow the mutable-state protocol in [storage.md](storage.md).
 
+Request validation accepts a `current_playbooks.file_path` only when it names an existing Markdown
+or YAML file under `.maestro/playbooks/`, outside the reserved `candidates/` and `decisions/`
+directories. The guard reads the file and requires its `playbook_id`, `file_path`, `revision`, and
+`status` metadata to match the indexed entry; an arbitrary project file cannot stand in for a
+formal Playbook.
+
 ### Legacy migration
 
 Before the first Experience Review, scan project-authored Markdown and YAML directly under the

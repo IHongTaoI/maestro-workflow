@@ -100,3 +100,31 @@
    explicit one-time migration for legacy project-authored Playbooks.
 5. Run `npm run verify`, `git diff --check`, and inspect the full review-fix diff.
 6. Do not commit, push, reply, or resolve review state without explicit authorization.
+
+### Task 7: Bind response validation to trusted request context
+
+**Files:**
+- Modify: `maestro/scripts/validate.py`
+- Modify: `maestro/references/schemas/memory-worker-request.schema.json`
+- Modify: `maestro/references/memory.md`
+- Modify: `maestro/references/playbooks.md`
+- Modify: `maestro/references/scenarios/validator-fixtures/memory-request-*.json`
+- Modify: `maestro/references/scenarios/validator-fixtures/memory-response-*.json`
+- Create: `maestro/references/scenarios/validator-fixtures/.maestro/playbooks/*`
+- Modify: `scripts/verify-contracts.ps1`
+
+**Steps:**
+1. Add a response fixture whose audit `request_file` names a historical request while the externally
+   supplied request has no matching Playbook; verify the current validator accepts it before the fix.
+2. Require `--request <request.json>` for `memory-response`, load targets only from that externally
+   supplied artifact, and reject a response whose `request_file` resolves to a different file.
+3. Replace generic indexed-Playbook file references with canonical path checks under
+   `.maestro/playbooks/`, excluding `candidates/` and `decisions/`.
+4. Read canonical Markdown front matter or YAML top-level metadata and require `playbook_id`,
+   `file_path`, `revision`, and `status` to match the `current_playbooks` entry.
+5. Move validation fixtures to a self-contained fixture project root, add non-canonical and metadata
+   mismatch failures, and update the PowerShell harness to pass the trusted request explicitly.
+6. Update the contract documentation, run focused failing/passing cases, then run `npm run verify`
+   and `git diff --check`.
+7. Stage only the reviewed paths, commit, push the existing PR branch, and reply to the authorized
+   top-level Review comment without merging, closing Issue #15, or changing Draft state.

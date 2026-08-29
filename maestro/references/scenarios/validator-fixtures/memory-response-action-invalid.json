@@ -1,6 +1,6 @@
 {
   "status": "completed",
-  "request_file": "maestro/references/scenarios/validator-fixtures/memory-request-valid.json",
+  "request_file": "memory-request-valid.json",
   "current": { "content": {} },
   "long_term_candidates": [
     {
@@ -20,7 +20,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:00:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-invalid-merge",
@@ -36,7 +36,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:01:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     }
   ]
 }
