@@ -368,7 +368,13 @@ def validate_memory_request(
     path = "$"
     if not require_object(value, path, errors):
         return
-    required = {"operation", "source_files", "current_memory", "memory_hints"}
+    required = {
+        "operation",
+        "source_files",
+        "current_memory",
+        "current_playbooks",
+        "memory_hints",
+    }
     allowed = required | {"task_context", "source_content"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
 
@@ -421,6 +427,30 @@ def validate_memory_request(
                                 "must be unique within current memory",
                             )
                         seen_entry_ids.add(entry_id)
+    if "current_playbooks" in value:
+        playbooks = value["current_playbooks"]
+        if check_array(
+            playbooks,
+            "$.current_playbooks",
+            errors,
+            lambda item, item_path, item_errors: validate_playbook(
+                item, item_path, item_errors, file_reference
+            ),
+        ):
+            seen_playbook_ids: set[str] = set()
+            for index, playbook in enumerate(playbooks):
+                if not is_object(playbook):
+                    continue
+                playbook_id = playbook.get("playbook_id")
+                if not isinstance(playbook_id, str):
+                    continue
+                if playbook_id in seen_playbook_ids:
+                    add_error(
+                        errors,
+                        f"$.current_playbooks[{index}].playbook_id",
+                        "must be unique within current playbooks",
+                    )
+                seen_playbook_ids.add(playbook_id)
     for key in ("memory_hints", "task_context", "source_content"):
         if key in value:
             check_plain_object(value[key], f"$.{key}", errors)
@@ -456,6 +486,50 @@ def validate_long_term_entry(
             errors,
             {"active", "superseded", "rejected"},
         )
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+
+
+def validate_playbook(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "playbook_id",
+        "title",
+        "trigger",
+        "steps",
+        "status",
+        "source_refs",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    if "playbook_id" in value:
+        check_stable_id(value["playbook_id"], f"{path}.playbook_id", errors)
+    for key in ("title", "trigger"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "steps" in value and check_array(
+        value["steps"],
+        f"{path}.steps",
+        errors,
+        lambda item, item_path, item_errors: check_string(
+            item, item_path, item_errors, min_length=1
+        ),
+        min_items=1,
+    ):
+        check_unique_strings(value["steps"], f"{path}.steps", errors)
+    if "status" in value and value["status"] != "active":
+        add_error(errors, f"{path}.status", "must equal 'active'")
     if "source_refs" in value and check_array(
         value["source_refs"],
         f"{path}.source_refs",
@@ -668,6 +742,162 @@ def validate_long_term_candidate(
         check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
 
 
+def validate_playbook_candidate(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+
+    required = {
+        "candidate_id",
+        "title",
+        "trigger",
+        "steps",
+        "checks",
+        "action",
+        "match",
+        "rationale",
+        "source",
+        "source_refs",
+        "evidence_refs",
+        "status",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+
+    if "candidate_id" in value:
+        check_stable_id(value["candidate_id"], f"{path}.candidate_id", errors)
+    for key in ("title", "trigger", "rationale"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    for key, min_items in (("steps", 1), ("checks", 0)):
+        if key in value and check_array(
+            value[key],
+            f"{path}.{key}",
+            errors,
+            lambda item, item_path, item_errors: check_string(
+                item, item_path, item_errors, min_length=1
+            ),
+            min_items=min_items,
+        ):
+            check_unique_strings(value[key], f"{path}.{key}", errors)
+
+    action_valid = False
+    if "action" in value:
+        action_valid = check_enum(
+            value["action"],
+            f"{path}.action",
+            errors,
+            {"UPDATE", "MERGE", "CREATE", "SKIP"},
+        )
+
+    classification = None
+    playbook_ids = None
+    if "match" in value and require_object(value["match"], f"{path}.match", errors):
+        match = value["match"]
+        check_object_shape(
+            match,
+            f"{path}.match",
+            errors,
+            required={"classification", "playbook_ids"},
+            allowed={"classification", "playbook_ids"},
+        )
+        if "classification" in match and check_enum(
+            match["classification"],
+            f"{path}.match.classification",
+            errors,
+            {"novel", "duplicate", "overlap", "conflict", "low-value"},
+        ):
+            classification = match["classification"]
+        if "playbook_ids" in match and check_array(
+            match["playbook_ids"],
+            f"{path}.match.playbook_ids",
+            errors,
+            lambda item, item_path, item_errors: check_stable_id(
+                item, item_path, item_errors
+            ),
+        ):
+            playbook_ids = match["playbook_ids"]
+            check_unique_strings(playbook_ids, f"{path}.match.playbook_ids", errors)
+
+    if action_valid and classification is not None and playbook_ids is not None:
+        action = value["action"]
+        if action == "CREATE" and (classification != "novel" or playbook_ids):
+            add_error(
+                errors,
+                f"{path}.match",
+                "CREATE requires classification 'novel' and no Playbook IDs",
+            )
+        elif action == "UPDATE" and (
+            classification not in {"overlap", "conflict"}
+            or len(playbook_ids) != 1
+        ):
+            add_error(
+                errors,
+                f"{path}.match",
+                "UPDATE requires overlap or conflict with exactly one Playbook ID",
+            )
+        elif action == "MERGE" and (
+            classification not in {"overlap", "conflict"}
+            or len(playbook_ids) < 2
+        ):
+            add_error(
+                errors,
+                f"{path}.match",
+                "MERGE requires overlap or conflict with at least two Playbook IDs",
+            )
+        elif action == "SKIP":
+            valid_skip = (
+                classification == "duplicate" and len(playbook_ids) >= 1
+            ) or (classification == "low-value" and len(playbook_ids) == 0)
+            if not valid_skip:
+                add_error(
+                    errors,
+                    f"{path}.match",
+                    "SKIP requires a duplicate with targets or low-value with no targets",
+                )
+
+    if "source" in value and require_object(value["source"], f"{path}.source", errors):
+        source = value["source"]
+        check_object_shape(
+            source,
+            f"{path}.source",
+            errors,
+            required={"type", "id", "created_at"},
+            allowed={"type", "id", "workspace_id", "created_at"},
+        )
+        if "type" in source:
+            check_enum(
+                source["type"],
+                f"{path}.source.type",
+                errors,
+                {"temporary", "task"},
+            )
+        if "id" in source:
+            check_stable_id(source["id"], f"{path}.source.id", errors)
+        if "workspace_id" in source:
+            check_stable_id(
+                source["workspace_id"], f"{path}.source.workspace_id", errors
+            )
+        if "created_at" in source:
+            check_date_time(source["created_at"], f"{path}.source.created_at", errors)
+
+    for key in ("source_refs", "evidence_refs"):
+        if key in value and check_array(
+            value[key],
+            f"{path}.{key}",
+            errors,
+            file_reference,
+            min_items=1,
+        ):
+            check_unique_strings(value[key], f"{path}.{key}", errors)
+
+    if "status" in value and value["status"] != "candidate":
+        add_error(errors, f"{path}.status", "must equal 'candidate'")
+
+
 def validate_memory_response(
     value: Any, errors: list[Diagnostic], file_reference: FileReferenceValidator
 ) -> None:
@@ -679,6 +909,7 @@ def validate_memory_response(
         "references",
         "discarded",
         "long_term_candidates",
+        "playbook_candidates",
         "notes",
     }
     check_object_shape(value, path, errors, required=required, allowed=allowed)
@@ -734,6 +965,33 @@ def validate_memory_response(
                     add_error(
                         errors,
                         f"$.long_term_candidates[{index}].candidate_id",
+                        "must be unique within the response",
+                    )
+                seen_candidate_ids.add(candidate_id)
+    if "playbook_candidates" in value:
+        candidates = value["playbook_candidates"]
+        if check_array(
+            candidates,
+            "$.playbook_candidates",
+            errors,
+            lambda item, item_path, item_errors: validate_playbook_candidate(
+                item,
+                item_path,
+                item_errors,
+                file_reference,
+            ),
+        ):
+            seen_candidate_ids: set[str] = set()
+            for index, candidate in enumerate(candidates):
+                if not is_object(candidate):
+                    continue
+                candidate_id = candidate.get("candidate_id")
+                if not isinstance(candidate_id, str):
+                    continue
+                if candidate_id in seen_candidate_ids:
+                    add_error(
+                        errors,
+                        f"$.playbook_candidates[{index}].candidate_id",
                         "must be unique within the response",
                     )
                 seen_candidate_ids.add(candidate_id)

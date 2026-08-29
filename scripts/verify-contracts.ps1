@@ -120,6 +120,10 @@ try {
         "$validatorFixtureRoot/memory-response-conflict-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-date-time-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-playbook-action-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-playbook-status-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
         "$validatorFixtureRoot/memory-merge-request-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
@@ -155,6 +159,11 @@ try {
     Invoke-ProtocolDiagnosticCase "memory-request" `
         "$validatorFixtureRoot/memory-request-duplicate-id-invalid.json" `
         '$.current_memory.long_term_entries[1].entry_id' "must be unique"
+    Invoke-AjvCase $memoryRequestSchema `
+        "$validatorFixtureRoot/memory-request-playbook-duplicate-id-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-request" `
+        "$validatorFixtureRoot/memory-request-playbook-duplicate-id-invalid.json" `
+        '$.current_playbooks[1].playbook_id' "must be unique"
     Invoke-ProtocolValidatorCase "memory-response" `
         "$validatorFixtureRoot/memory-response-missing-reference-invalid.json" 1
     Invoke-AjvCase $memoryResponseSchema `
@@ -162,6 +171,13 @@ try {
     Invoke-ProtocolDiagnosticCase "memory-response" `
         "$validatorFixtureRoot/memory-response-duplicate-id-invalid.json" `
         '$.long_term_candidates[1].candidate_id' "must be unique"
+    Invoke-AjvCase $memoryResponseSchema `
+        "$validatorFixtureRoot/memory-response-playbook-duplicate-id-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-playbook-duplicate-id-invalid.json" `
+        '$.playbook_candidates[1].candidate_id' "must be unique"
+    Invoke-ProtocolValidatorCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-playbook-missing-reference-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -438,7 +454,12 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = "These actions are proposals, not writes" },
         @{ Path = "maestro/references/memory.md"; Text = "does not replace" },
         @{ Path = "maestro/references/memory.md"; Text = "Never copy Temporary" },
+        @{ Path = "maestro/references/memory.md"; Text = '`current_playbooks`' },
+        @{ Path = "maestro/references/playbooks.md"; Text = "UPDATE $([char]0x2192) MERGE $([char]0x2192) CREATE $([char]0x2192) SKIP" },
+        @{ Path = "maestro/references/playbooks.md"; Text = "explicit user approval" },
+        @{ Path = "maestro/references/playbooks.md"; Text = "Candidates are not active guidance" },
         @{ Path = "maestro/references/storage.md"; Text = 'including `SKIP`' },
+        @{ Path = "maestro/references/storage.md"; Text = '`playbooks/candidates/`' },
         @{ Path = "maestro/references/memory.md"; Text = "conflict detected $([char]0x2192) pending-confirmation $([char]0x2192) resolved" },
         @{ Path = "maestro/references/memory.md"; Text = "Anti-resurrection of superseded/rejected memory" },
         @{ Path = "maestro/references/storage.md"; Text = "Team Shared Memory (Tracked in Git)" },
@@ -447,6 +468,7 @@ try {
         @{ Path = "README.md"; Text = "The CLI is only an installer, updater, and diagnostic tool" },
         @{ Path = "README.md"; Text = "It never schedules roles" },
         @{ Path = "maestro/SKILL.md"; Text = "it never performs orchestration" }
+        @{ Path = "maestro/SKILL.md"; Text = "Playbook Candidates are not selectable guidance" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {

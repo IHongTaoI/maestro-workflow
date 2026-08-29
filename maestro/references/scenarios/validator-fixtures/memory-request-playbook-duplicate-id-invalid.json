@@ -1,0 +1,30 @@
+{
+  "operation": "task-complete",
+  "source_files": [
+    "maestro/references/scenarios/validator-fixtures/files/source.md"
+  ],
+  "current_memory": { "long_term_entries": [] },
+  "current_playbooks": [
+    {
+      "playbook_id": "pb-repeated",
+      "title": "First playbook",
+      "trigger": "The first fixture applies.",
+      "steps": ["Run the first fixture check."],
+      "status": "active",
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/source.md"
+      ]
+    },
+    {
+      "playbook_id": "pb-repeated",
+      "title": "Second playbook",
+      "trigger": "The second fixture applies.",
+      "steps": ["Run the second fixture check."],
+      "status": "active",
+      "source_refs": [
+        "maestro/references/scenarios/validator-fixtures/files/source.md"
+      ]
+    }
+  ],
+  "memory_hints": {}
+}

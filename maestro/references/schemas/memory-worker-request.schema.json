@@ -3,7 +3,13 @@
   "$id": "https://maestro.local/schemas/memory-worker-request.schema.json",
   "title": "Maestro Memory Worker Request",
   "type": "object",
-  "required": ["operation", "source_files", "current_memory", "memory_hints"],
+  "required": [
+    "operation",
+    "source_files",
+    "current_memory",
+    "current_playbooks",
+    "memory_hints"
+  ],
   "properties": {
     "operation": {
       "enum": ["role-compress", "session-handoff", "task-bootstrap", "task-complete"]
@@ -24,6 +30,10 @@
         }
       },
       "additionalProperties": true
+    },
+    "current_playbooks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/playbook" }
     },
     "memory_hints": { "type": "object" },
     "task_context": { "type": "object" },
@@ -46,6 +56,36 @@
           "enum": ["fact", "experience", "principle", "decision", "constraint", "other"]
         },
         "content": { "type": "string", "minLength": 1 },
+        "source_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "playbook": {
+      "type": "object",
+      "required": [
+        "playbook_id",
+        "title",
+        "trigger",
+        "steps",
+        "status",
+        "source_refs"
+      ],
+      "properties": {
+        "playbook_id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "trigger": { "type": "string", "minLength": 1 },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "status": { "const": "active" },
         "source_refs": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },

@@ -1,0 +1,20 @@
+{
+  "status": "completed",
+  "current": { "content": {} },
+  "playbook_candidates": [
+    {
+      "candidate_id": "playbook-missing-evidence",
+      "title": "Missing evidence Playbook",
+      "trigger": "A fixture has no reachable evidence.",
+      "steps": ["Use the missing evidence."],
+      "checks": [],
+      "action": "CREATE",
+      "match": { "classification": "novel", "playbook_ids": [] },
+      "rationale": "Fixture for unreachable evidence rejection.",
+      "source": { "type": "task", "id": "task-fixture", "created_at": "2026-08-29T00:00:00Z" },
+      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"],
+      "evidence_refs": ["maestro/references/scenarios/validator-fixtures/files/missing.md"],
+      "status": "candidate"
+    }
+  ]
+}

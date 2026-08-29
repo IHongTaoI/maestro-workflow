@@ -4,5 +4,6 @@
     "maestro/references/scenarios/validator-fixtures/files/missing.md"
   ],
   "current_memory": { "long_term_entries": [] },
+  "current_playbooks": [],
   "memory_hints": {}
 }
