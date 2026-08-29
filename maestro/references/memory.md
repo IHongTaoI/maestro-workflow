@@ -83,6 +83,11 @@ noise. Mutable Task and role Markdown uses the revision front matter and write p
 Long-term Memory contains project knowledge likely to matter across future Tasks: architecture,
 stable module responsibilities, verified facts, API boundaries, conventions, and durable decisions.
 
+Long-term experience is declarative project knowledge: it states what has been verified or learned
+about this project. A reusable procedure with an explicit trigger, ordered steps, and checks belongs
+in a Playbook Candidate instead. Do not duplicate the same procedural guidance as both a Long-term
+entry and a Playbook Candidate.
+
 Long-term Memory is a maintained experience base, not a Task record archive. Never copy Temporary
 or Task contents directly into it. Trace data, routine command output, discarded hypotheses,
 process logs, and one-off implementation detail remain in their source layer unless a reusable,
@@ -195,9 +200,14 @@ transient or invalid-output failure, then fall back to the primary model. If no 
 available, the current agent may perform the same bounded compression. If all attempts fail, write
 the complete request and sources under `memory/pending/` and continue the business task.
 
-The Memory Worker organizes memory. It must not select roles or Workers, make architecture
-decisions, change
-Task scope, or approve its own long-term candidates.
+The Memory Worker organizes memory and performs a bounded Experience Review. It must not select
+roles or Workers, make architecture decisions, change Task scope, or approve its own Long-term or
+Playbook candidates. This review does not introduce a new Agent Role or Runtime.
+
+Every request also exposes `current_playbooks`, including an empty array when the project has no
+Playbooks. Each indexed Playbook has a stable `playbook_id`, title, trigger, ordered steps, active
+status, and reachable `source_refs`. This lets the worker compare procedures before proposing new
+guidance. A producer that omits `current_playbooks` must migrate because request validation fails.
 
 Its consolidation flow is bounded and ordered:
 
@@ -207,7 +217,12 @@ Its consolidation flow is bounded and ordered:
    evidence, and stable ID.
 3. Classify it as novel, duplicate, overlap, conflict, or low-value.
 4. Propose `UPDATE`, `MERGE`, `CREATE`, or `SKIP` using the evolution rules above.
-5. Return the proposals for validation and independent review; do not mutate Long-term Memory.
+5. Separately identify procedures with an explicit trigger, ordered reusable steps, checks, and
+   evidence from real execution. Compare them with `current_playbooks` and emit
+   `playbook_candidates` under the rules in [playbooks.md](playbooks.md). Discussion, routine
+   commands, Task chronology, and unverified suggestions are `SKIP` material.
+6. Return both proposal collections for validation and independent review; do not mutate Long-term
+   Memory or Playbooks.
 
 Validate structured input/output against:
 

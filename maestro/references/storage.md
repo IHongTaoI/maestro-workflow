@@ -58,6 +58,8 @@ Create directories lazily as the current work needs them:
   workers/
     registry.yaml
   playbooks/
+    candidates/
+    decisions/
 ```
 
 The `playbooks/` directory may be supplied by the project before Maestro is first used.
@@ -75,7 +77,7 @@ separates local execution state from team shared memory:
 
 - **Team Shared Memory (Tracked in Git)**:
   - `memory/long-term/`: `current.md`, `candidates/`, `decisions/`, and `conflicts/`.
-  - `playbooks/`: team workflows, check sequences, and guidelines.
+  - `playbooks/`: approved team guidance plus reviewed `candidates/` and `decisions/`.
   - `workers/registry.yaml`: reviewed, project-shared reusable Worker specifications.
   - `config.yaml`: shared project configuration.
 
@@ -127,6 +129,13 @@ including `SKIP`, under `memory/long-term/candidates/pending/` until review reco
 rejected. Store unresolved merge conflicts under `memory/long-term/conflicts/` with status
 `pending-confirmation`. A `SKIP` decision does not mutate `current.md`, but retaining it prevents
 the same duplicate or low-value claim from being reconsidered without new evidence.
+
+Each current Playbook exposes a stable `playbook_id`, title, trigger, ordered steps, active status,
+and reachable `source_refs` to Experience Review. Persist every validated Playbook Candidate,
+including `SKIP`, under `playbooks/candidates/` until an immutable record under
+`playbooks/decisions/` approves or rejects it. Candidate records include reachable `source_refs`
+and `evidence_refs`; they are not active guidance and cannot modify a Playbook before explicit user
+approval.
 
 ## Configuration
 
@@ -310,11 +319,17 @@ Storage transitions do not define business workflow. Allowed lifecycle moves are
 - Temporary `active` → formal Task after explicit confirmation, then Temporary → `archive`.
 - Task active → `archive` after completion.
 - Long-term candidate `pending` → `approved` or `rejected` after review.
+- Playbook Candidate `candidate` → `approved`, `rejected`, or `superseded` after explicit user
+  review.
 
 An approved `UPDATE`, `MERGE`, or `CREATE` changes Long-term `current.md` through the mutable-state
 write protocol. `UPDATE` preserves its target entry ID. `MERGE` preserves one target ID as the
 replacement and marks the other targets superseded in the immutable decision. `CREATE` allocates a
 new stable entry ID. `SKIP` records only a decision and never creates a current entry.
+
+An approved Playbook `UPDATE`, `MERGE`, or `CREATE` uses the same lock, revision, and transaction
+rules for affected Playbook files. `SKIP` and rejected candidates record decisions only. Repeated
+successful Tasks may append evidence through a reviewed update but cannot approve a candidate.
 
 Record the transition, timestamp, actor/reviewer, rationale when relevant, and source paths before
 moving the directory or file.

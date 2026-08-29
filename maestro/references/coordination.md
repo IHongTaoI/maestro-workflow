@@ -184,12 +184,14 @@ Read historical References only when a current-state anchor points to informatio
 
 When a formal Task's agreed outcome and relevant verification are complete:
 
-1. Ask the Memory Worker to compress final Task state, compare durable claims with indexed
-   Long-term entries, and propose `UPDATE`, `MERGE`, `CREATE`, or `SKIP` for each candidate.
+1. Ask the Memory Worker to compress final Task state and perform Experience Review: compare durable
+   claims with indexed Long-term entries and reusable executed procedures with indexed Playbooks,
+   then propose `UPDATE`, `MERGE`, `CREATE`, or `SKIP` for each collection.
 2. Write `completion.md` with outcome, verification, limitations, pending work, and source paths.
 3. Mark the Task completed and move it to `.maestro/tasks/archive/<task-id>/`.
-4. Review every proposed action; promote only stable, sourced knowledge and apply approved changes
-   through the Long-term mutable-state protocol.
+4. Review every proposed action; promote only stable, sourced knowledge. Keep every Playbook
+   Candidate inert unless the user explicitly approves it, then apply approved changes through the
+   relevant mutable-state protocol.
 5. Return a concise delivery summary to the user.
 
 If compression fails, preserve a `memory_pending` record and archive the completed business Task.
