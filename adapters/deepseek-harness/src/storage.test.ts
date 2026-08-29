@@ -35,6 +35,7 @@ function fsError(code: string): Error {
  */
 function makeFs(overrides: Partial<Pick<StateFileSystem, 'resolve'>> = {}) {
   const files = new Map<string, FileEntry>()
+  let failNextReplace = false
   const fs: StateFileSystem = {
     async resolve(path: string): Promise<FsTarget> {
       return target(path)
@@ -63,6 +64,10 @@ function makeFs(overrides: Partial<Pick<StateFileSystem, 'resolve'>> = {}) {
         return { operation: 'create', version: version(1), before: null, after: content } as FsWriteOutcome
       }
       if (expected?.kind === 'replaceIfVersion') {
+        if (failNextReplace) {
+          failNextReplace = false
+          throw fsError('FS_IO_ERROR')
+        }
         if (existing === undefined || existing.version !== Number(expected.version)) {
           throw fsError('FS_STALE_VERSION')
         }
@@ -94,7 +99,14 @@ function makeFs(overrides: Partial<Pick<StateFileSystem, 'resolve'>> = {}) {
     },
     ...overrides,
   }
-  return { fs, files }
+  return {
+    fs,
+    files,
+    /** Arm a one-shot `replaceIfVersion` failure (next guarded write throws). */
+    failNextReplace: () => {
+      failNextReplace = true
+    },
+  }
 }
 
 test('lockPathFor derives a stable lock path under .maestro/locks', () => {
@@ -223,4 +235,37 @@ test('acquireLock: release is idempotent and safe to call twice', async () => {
   const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
   await release()
   await release() // second call must not throw or corrupt state
+})
+
+test('writeGuarded rejects a fabricated snapshot whose target escapes .maestro', async () => {
+  const { fs } = makeFs()
+  const store = new MaestroStateStore(fs)
+  // StateSnapshot is a public interface — a caller can hand us a snapshot
+  // whose target points outside the state root. writeGuarded must still refuse.
+  const fakeSnapshot = {
+    target: target('/outside/evil.md'),
+    version: version(1),
+    content: 'x',
+  }
+  await assert.rejects(() => store.writeGuarded(fakeSnapshot, 'y'), StatePathError)
+})
+
+test('acquireLock: release retries after a transient write failure', async () => {
+  const { fs, failNextReplace } = makeFs()
+  const store = new MaestroStateStore(fs)
+  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
+
+  // First release attempt hits a transient I/O error and must surface it…
+  failNextReplace()
+  await assert.rejects(
+    () => release(),
+    (error: unknown) => (error as { code?: string }).code === 'FS_IO_ERROR',
+  )
+
+  // …but a second attempt (failure cleared) succeeds — the lock is released.
+  await release()
+  const lockKey = store.lockPathFor('memory/long-term/current.md')
+  const snapshot = await store.readSnapshot(lockKey)
+  assert.ok(snapshot)
+  assert.equal(JSON.parse(snapshot.content).state, 'released')
 })

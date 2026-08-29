@@ -169,7 +169,17 @@ export class MaestroStateStore {
    * @param snapshot - the {@link readSnapshot} result the edit was based on.
    * @param content - the complete replacement text.
    */
-  writeGuarded(snapshot: StateSnapshot, content: string): Promise<FsWriteOutcome> {
+  async writeGuarded(snapshot: StateSnapshot, content: string): Promise<FsWriteOutcome> {
+    // Re-verify containment here, not just in readSnapshot(): StateSnapshot is
+    // a public interface, so a caller could hand us a fabricated snapshot whose
+    // target escapes `.maestro/`. The canonical contains() check makes that
+    // impossible regardless of how the snapshot was obtained.
+    const root = await this.root
+    if (!this.fs.contains(root, snapshot.target)) {
+      throw new StatePathError(
+        `@maestro-ai/dsh-adapter: snapshot target escapes the state root (${STATE_ROOT}/).`,
+      )
+    }
     return this.fs.writeText(snapshot.target, content, {
       kind: 'replaceIfVersion',
       version: snapshot.version,
@@ -302,7 +312,6 @@ function makeRelease(
   let done = false
   return async () => {
     if (done) return
-    done = true
     const released: LockLease = {
       ...held,
       state: 'released',
@@ -310,9 +319,17 @@ function makeRelease(
     }
     try {
       await store.release(lockPath, JSON.stringify(released), version)
+      done = true
     } catch (error) {
-      // FS_STALE_VERSION means we no longer own the lock — nothing to release.
-      if (!isFsError(error, 'FS_STALE_VERSION')) throw error
+      if (isFsError(error, 'FS_STALE_VERSION')) {
+        // We no longer own the lock (a reclaimer replaced it) — nothing to
+        // release, so treat the release as complete and don't retry.
+        done = true
+      } else {
+        // Transient failure: leave `done` unset so a later release() call can
+        // retry instead of silently giving up on a still-held lock.
+        throw error
+      }
     }
   }
 }

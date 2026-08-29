@@ -43,7 +43,12 @@ export interface Activation {
   skill: boolean
   /** Deterministic state store was mounted (requires `fs`). */
   storage: boolean
-  /** Session-lifecycle hooks were mounted (requires `agents`). */
+  /**
+   * Whether session-lifecycle hooks were actually registered. This is a
+   * *feature activated* flag, distinct from the {@link Capabilities.agents}
+   * capability: it stays `false` until a real lifecycle handler is wired
+   * (currently a `TODO(next)` in the Core Skill).
+   */
   hooks: boolean
   /** Whether the adapter degraded to the plain-skill fallback. */
   degraded: boolean

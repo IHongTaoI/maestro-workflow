@@ -47,13 +47,18 @@ export function assertSkills(capabilities: Capabilities): void {
  * Resolve the enhancement paths from detected capabilities. The result is
  * pure data; `index.ts` mounts exactly the plugins this decision selects.
  *
+ * `hooks` reflects a feature that is *activated*, not merely a capability that
+ * is *available*: `ctx.agents` exists today but no lifecycle handler is wired
+ * (the Handoff / session-boundary logic still lives in the Core Skill), so
+ * `hooks` stays `false` until a real handler is registered.
+ *
  * @param capabilities - the result of {@link detectCapabilities}.
  * @returns the {@link Activation} plan.
  */
 export function planActivation(capabilities: Capabilities): Activation {
   const skill = capabilities.skills
   const storage = capabilities.fs
-  const hooks = capabilities.agents
+  const hooks = false
   return {
     skill,
     storage,
