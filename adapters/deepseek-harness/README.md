@@ -4,6 +4,13 @@ DeepSeek Harness (dsh) 的 Maestro 适配层。它把可移植的 Maestro Core S
 dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #14][issue-14]「Core 可移植 +
 可选 Harness Plugin / Adapter」方向的第一个宿主实现。
 
+> **当前接线状态（如实）**：本 PR 只完整交付了 **Product A**（把 Core 注册成 dsh skill）。
+> `ctx.fs` 存在时，确定性的 `MaestroStateStore` 与 `MaestroSchemaValidator` 会被构建并注册成
+> Cordis service（`maestro.stateStore` / `maestro.schemaValidator`），但**尚未暴露成
+> model-facing tool**，因此 Core 的实际执行链还不经过它们——锁 / CAS / 校验目前是"机制就绪、
+> 未接入模型"的状态。`ctx.agents` 仅用于能力探测，没有注册任何生命周期 handler（Handoff /
+> session-boundary 决策逻辑还在 Core Skill 里，属 TODO）。详见下文「落地顺序」。
+
 > dsh 目前是 v0.1 开发者预览版，官方 README 明确「THERE WILL BE COMPATIBILITY-BREAKING
 > CHANGES」。本适配层把对 dsh API 的引用收敛到 `src/` 内的 TypeScript 类型导入，Core 永不
 > import 任何 `@deepseek-ai/*` 包。
@@ -65,17 +72,31 @@ export function apply(ctx, config) {
 | `revision`（`storage.md`） | `ctx.fs` 的 `FsVersion`（`stat()` 返回的不透明版本 token） |
 | 原子替换 + 冲突检测 | `ctx.fs.writeText(target, content, { kind: 'replaceIfVersion', version })`；冲突抛 `FS_STALE_VERSION` |
 | 独占锁 create-if-absent | `ctx.fs.writeText(lockTarget, owner, { kind: 'createIfAbsent' })`；已存在抛 `FS_NOT_OBSERVED` |
-| 路径遍历防护 | `ctx.fs.contains(parent, child)`；`lockPathFor` 额外拒绝 `..` 与绝对路径 |
+| 状态路径边界 | 每次解析都走 `ctx.fs.contains(.maestro/, target)` 做权威 containment 校验，`lockPathFor` / 状态路径再拒绝 `..` 与绝对路径 |
 | schema 校验 | 复用 `maestro/references/schemas/*.json`（JSON Schema draft 2020-12），用 `ajv` 校验 |
+
+## 锁协议（`acquireLock`）
+
+dsh `ctx.fs` 目前没有 delete/remove 原语，锁不能像 `storage.md` 那样删目录释放，因此用**文件 +
+租约 + tombstone** 实现，语义对齐 `storage.md`：
+
+- **独占获取**：`createIfAbsent` 写 `{ owner, acquiredAt, expiresAt, state: 'held' }`。
+- **正常释放**：release 把锁写成 `state: 'released'` tombstone（guarded replace，只覆盖自己
+  拿到的那一版）。下一个 writer 看到 `released` 立即回收，**不必等租约过期**。
+- **过期回收**：`storage.md` 明确「clock age alone is insufficient」——已过期但仍 `held` 的锁
+  只有在调用方通过 `canReclaim(lease)` 确认原 owner 确已不活跃后才被回收；**不提供
+  `canReclaim` 时绝不自动强抢**，超时后 surface conflict。回收走 `replaceIfVersion` CAS，
+  并发回收者只有一个能赢。
+- 调用方在授权回收后，仍须按 `storage.md` 在 transaction / Evidence 里记录「原 owner、过期
+  时间、回收者、时间戳」。
 
 ## 与 `storage.md` 的已知偏差
 
 - **锁是文件而非目录**：`storage.md` 规定锁是 `.maestro/locks/<key>.lock/` 目录，但 dsh `ctx.fs`
-  目前没有"创建目录"原语，适配层用同名**文件** + `createIfAbsent` 实现，排他语义等价。
-- **租约式锁**：dsh `ctx.fs` 暂无 delete/remove 原语，锁文件无法在 release 时删除。`acquireLock`
-  因此写入 `owner` + `expiresAt` 租约；已存在的锁只有在租约过期后才可被回收，回收本身走
-  `replaceIfVersion` CAS（并发回收者只有一个能赢）。调用方仍需按 `storage.md` 确认原 owner 已
-  不活跃，并在 transaction / Evidence 里记录回收行为。
+  没有"创建目录"原语，适配层用同名**文件**实现，排他语义等价。
+- **锁靠 tombstone + 租约而非删除释放**：因无 delete 原语，release 是写 `released` tombstone
+  而非删锁；回收过期锁依赖调用方 `canReclaim` 确认 owner 不活跃，符合 `storage.md` 的保守回收
+  要求。
 
 ## 目录结构
 
@@ -85,21 +106,37 @@ adapters/deepseek-harness/
 ├── tsconfig.json
 ├── README.md
 └── src/
-    ├── index.ts      # 唯一插件入口，唯一 import dsh API 处
-    ├── types.ts      # Config 与共享类型
-    ├── detect.ts     # capability detection + fallback 决策
-    ├── skill.ts      # 产物 A：注册 Core 为 dsh skill
-    ├── storage.ts    # 产物 B：ctx.fs 上的锁 / CAS 写协议
-    ├── validate.ts   # 产物 B：schema 校验
-    └── hooks.ts      # 产物 B：agent 事件 → session 生命周期（骨架）
+    ├── index.ts        # 唯一插件入口，唯一 import dsh API 处；注册 Core skill + 提供 storage service
+    ├── types.ts        # Config 与共享类型
+    ├── detect.ts       # capability detection + fallback 决策
+    ├── skill.ts        # 产物 A：注册 Core 为 dsh skill
+    ├── storage.ts      # 产物 B：ctx.fs 上的锁 / CAS 写协议（含 .maestro/ 边界强制）
+    ├── validate.ts     # 产物 B：schema 校验
+    ├── hooks.ts        # 产物 B：turn-stopping 监听原语（正确 await，尚未接线）
+    ├── storage.test.ts # storage / lock 单元测试（fake seam）
+    └── hooks.test.ts   # hooks 监听原语单元测试（fake ctx）
 ```
 
-## 落地顺序（后续）
+## 测试
+
+```sh
+cd adapters/deepseek-harness
+npm install
+npm run typecheck   # tsc --noEmit
+npm test            # tsx --test src/*.test.ts
+```
+
+`storage` 与 `hooks` 模块只有 type-only 的 `@deepseek-ai/*` 导入，测试用一个内存 fake seam /
+fake ctx 即可覆盖锁 / CAS / 边界 / await 语义，无需真实 dsh runtime。
+
+## 落地顺序
 
 1. ~~产物 A：skill 注册~~（本 PR）
 2. ~~detect 骨架 + fallback~~（本 PR）
-3. storage 的锁 / CAS 写（本 PR 提供基础实现）
-4. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
-5. session hooks 的完整生命周期联动——后续
+3. ~~storage 的锁 / CAS 写 + `.maestro/` 边界强制~~（本 PR，含单测）
+4. ~~hooks 的 turn-stopping 监听原语（正确 await）~~（本 PR，含单测，但未接线）
+5. 把 store / validator 暴露成 model-facing tool，让 Core 的 storage 协议真正跑在 CAS 实现上——后续
+6. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
+7. session hooks 的完整生命周期联动（Handoff / Memory 保存）——后续
 
 [issue-14]: https://github.com/IHongTaoI/maestro-workflow/issues/14

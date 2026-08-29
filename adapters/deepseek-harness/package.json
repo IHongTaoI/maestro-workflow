@@ -10,7 +10,8 @@
     "src/"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts"
   },
   "keywords": [
     "maestro",
@@ -38,6 +39,7 @@
     "@deepseek-ai/dsh-agent": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-fs": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-skill": "^0.1.1-rc.2",
+    "tsx": "^4.23.12",
     "typescript": "^5.5.4"
   },
   "license": "MIT"

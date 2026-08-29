@@ -25,3 +25,12 @@ jobs:
         run: ./scripts/verify-contracts.ps1
       - name: Verify npm package contents
         run: npm pack --dry-run
+      - name: Install dsh-adapter dependencies
+        run: npm install
+        working-directory: adapters/deepseek-harness
+      - name: Typecheck dsh-adapter
+        run: npm run typecheck
+        working-directory: adapters/deepseek-harness
+      - name: Test dsh-adapter
+        run: npm test
+        working-directory: adapters/deepseek-harness

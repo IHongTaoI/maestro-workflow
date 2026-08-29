@@ -36,6 +36,12 @@ export interface LifecycleHandlers {
  * Register lifecycle listeners on the context. Cordis removes listeners when
  * the context is disposed, so no manual disposer is returned.
  *
+ * `agent/turn-stopping` is a `@mode serial` event: the dispatcher awaits each
+ * listener in order before the turn boundary commits. The listener therefore
+ * **returns** the handler promise (wrapped so errors are logged, not thrown)
+ * instead of fire-and-forgetting it — otherwise a turn could close while a
+ * Handoff / memory save is still in flight.
+ *
  * @param ctx - the Cordis context.
  * @param handlers - the callbacks to wire up.
  */
@@ -45,7 +51,7 @@ export function registerLifecycleHooks(ctx: Context, handlers: LifecycleHandlers
   ctx.on(
     'agent/turn-stopping',
     function (payload) {
-      void Promise.resolve(onTurnStopping(payload)).catch((error: unknown) => {
+      return Promise.resolve(onTurnStopping(payload)).catch((error: unknown) => {
         ctx.logger.warn(`maestro-adapter: onTurnStopping listener failed: ${String(error)}`)
       })
     },
