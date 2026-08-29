@@ -1,0 +1,35 @@
+{
+  "status": "completed",
+  "request_file": "memory-request-valid.json",
+  "current": { "content": {} },
+  "playbook_candidates": [
+    {
+      "candidate_id": "playbook-repeated",
+      "title": "First Playbook candidate",
+      "trigger": "The first fixture applies.",
+      "steps": ["Run the first fixture check."],
+      "checks": [],
+      "action": "CREATE",
+      "match": { "classification": "novel", "playbook_ids": [] },
+      "rationale": "First fixture candidate.",
+      "source": { "type": "task", "id": "task-fixture", "created_at": "2026-08-29T00:00:00Z" },
+      "source_refs": ["files/source.md"],
+      "evidence_refs": ["files/result.md"],
+      "status": "candidate"
+    },
+    {
+      "candidate_id": "playbook-repeated",
+      "title": "Second Playbook candidate",
+      "trigger": "The second fixture applies.",
+      "steps": ["Run the second fixture check."],
+      "checks": [],
+      "action": "CREATE",
+      "match": { "classification": "novel", "playbook_ids": [] },
+      "rationale": "Second fixture candidate with the same ID.",
+      "source": { "type": "task", "id": "task-fixture", "created_at": "2026-08-29T00:01:00Z" },
+      "source_refs": ["files/source.md"],
+      "evidence_refs": ["files/result.md"],
+      "status": "candidate"
+    }
+  ]
+}

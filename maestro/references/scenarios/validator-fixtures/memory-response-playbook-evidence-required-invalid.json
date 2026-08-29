@@ -1,0 +1,27 @@
+{
+  "status": "completed",
+  "request_file": "memory-request-valid.json",
+  "current": { "content": {} },
+  "playbook_candidates": [
+    {
+      "candidate_id": "playbook-missing-required-evidence",
+      "title": "Create without evidence",
+      "trigger": "A fixture has no execution evidence.",
+      "steps": ["Attempt to create reusable guidance."],
+      "checks": [],
+      "action": "CREATE",
+      "match": { "classification": "novel", "playbook_ids": [] },
+      "rationale": "Non-SKIP actions require evidence.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-29T00:00:00Z"
+      },
+      "source_refs": [
+        "files/source.md"
+      ],
+      "evidence_refs": [],
+      "status": "candidate"
+    }
+  ]
+}

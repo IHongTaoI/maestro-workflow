@@ -1,8 +1,9 @@
 {
   "operation": ["role-compress"],
   "source_files": [
-    "maestro/references/scenarios/validator-fixtures/files/source.md"
+    "files/source.md"
   ],
   "current_memory": [],
+  "current_playbooks": [],
   "memory_hints": {}
 }

@@ -72,6 +72,9 @@ The three memory layers are:
 Temporary and Task contents never enter Long-term Memory by direct copy. At a Memory Worker
 boundary, compare durable candidates with current Long-term entries and propose `UPDATE`, `MERGE`,
 `CREATE`, or `SKIP`; apply no proposal until Old Zhou or a strong-model reviewer approves it.
+At the same bounded Experience Review, compare evidence-backed reusable procedures with current
+Playbooks and emit review-only Playbook Candidates. A candidate cannot become active guidance until
+the user explicitly approves its `UPDATE`, `MERGE`, or `CREATE` action.
 Multi-branch Git memory merges use 3-way consolidation via `memory-merger`, flagging contradictory
 claims as unresolved conflicts with complete dual-sided provenance.
 
@@ -90,6 +93,7 @@ When the user names a Playbook or asks to follow a project workflow, read
 [playbooks.md](references/playbooks.md) and the relevant file under `.maestro/playbooks/`.
 Playbooks recommend roles and checks; they never create mandatory Runtime stages or override the
 user's current direction.
+Playbook Candidates are not selectable guidance and never grant authority.
 
 ## Session and safety boundaries
 

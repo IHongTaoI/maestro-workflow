@@ -1,5 +1,6 @@
 {
   "status": "completed",
+  "request_file": "memory-request-valid.json",
   "current": { "content": {} },
   "long_term_candidates": [
     {
@@ -17,7 +18,7 @@
         "created_at": "not-a-date"
       },
       "source_refs": [
-        "maestro/references/scenarios/validator-fixtures/files/source.md"
+        "files/source.md"
       ]
     }
   ]

@@ -1,0 +1,7 @@
+{
+  "operation": "role-compress",
+  "source_files": ["files/source.md"],
+  "current_memory": {"long_term_entries": []},
+  "current_playbooks": [],
+  "memory_hints": {}
+}

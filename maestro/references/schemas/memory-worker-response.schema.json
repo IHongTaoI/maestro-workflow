@@ -3,9 +3,10 @@
   "$id": "https://maestro.local/schemas/memory-worker-response.schema.json",
   "title": "Maestro Memory Worker Response",
   "type": "object",
-  "required": ["status", "current"],
+  "required": ["status", "request_file", "current"],
   "properties": {
     "status": { "const": "completed" },
+    "request_file": { "type": "string", "minLength": 1 },
     "current": {
       "type": "object",
       "required": ["content"],
@@ -21,6 +22,10 @@
       "type": "array",
       "items": { "$ref": "#/$defs/longTermCandidate" }
     },
+    "playbook_candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/playbookCandidate" }
+    },
     "notes": {}
   },
   "additionalProperties": false,
@@ -34,6 +39,11 @@
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
       "minItems": 1,
+      "uniqueItems": true
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
     "reference": {
@@ -65,6 +75,21 @@
           "enum": ["novel", "duplicate", "overlap", "conflict", "low-value"]
         },
         "entry_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "playbookMatch": {
+      "type": "object",
+      "required": ["classification", "playbook_ids"],
+      "properties": {
+        "classification": {
+          "enum": ["novel", "duplicate", "overlap", "conflict", "low-value"]
+        },
+        "playbook_ids": {
           "type": "array",
           "items": { "$ref": "#/$defs/stableId" },
           "uniqueItems": true
@@ -190,6 +215,120 @@
           },
           "else": {
             "properties": { "conflict_status": { "const": "none" } }
+          }
+        }
+      ]
+    },
+    "playbookCandidate": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "title",
+        "trigger",
+        "steps",
+        "checks",
+        "action",
+        "match",
+        "rationale",
+        "source",
+        "source_refs",
+        "evidence_refs",
+        "status"
+      ],
+      "properties": {
+        "candidate_id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "trigger": { "type": "string", "minLength": 1 },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "checks": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "action": { "enum": ["UPDATE", "MERGE", "CREATE", "SKIP"] },
+        "match": { "$ref": "#/$defs/playbookMatch" },
+        "rationale": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/source" },
+        "source_refs": { "$ref": "#/$defs/sourceRefs" },
+        "evidence_refs": { "$ref": "#/$defs/evidenceRefs" },
+        "status": { "const": "candidate" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "action": { "const": "CREATE" } }, "required": ["action"] },
+          "then": {
+            "properties": {
+              "match": {
+                "type": "object",
+                "properties": {
+                  "classification": { "const": "novel" },
+                  "playbook_ids": { "type": "array", "maxItems": 0 }
+                }
+              },
+              "evidence_refs": { "type": "array", "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "UPDATE" } }, "required": ["action"] },
+          "then": {
+            "properties": {
+              "match": {
+                "type": "object",
+                "properties": {
+                  "classification": { "enum": ["overlap", "conflict"] },
+                  "playbook_ids": { "type": "array", "minItems": 1, "maxItems": 1 }
+                }
+              },
+              "evidence_refs": { "type": "array", "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "MERGE" } }, "required": ["action"] },
+          "then": {
+            "properties": {
+              "match": {
+                "type": "object",
+                "properties": {
+                  "classification": { "enum": ["overlap", "conflict"] },
+                  "playbook_ids": { "type": "array", "minItems": 2 }
+                }
+              },
+              "evidence_refs": { "type": "array", "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "SKIP" } }, "required": ["action"] },
+          "then": {
+            "properties": {
+              "match": {
+                "type": "object",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "classification": { "const": "duplicate" },
+                      "playbook_ids": { "type": "array", "minItems": 1 }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "classification": { "const": "low-value" },
+                      "playbook_ids": { "type": "array", "maxItems": 0 }
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       ]

@@ -1,11 +1,12 @@
 {
   "status": "completed",
+  "request_file": "memory-request-valid.json",
   "current": { "content": {} },
   "references": [
     {
       "title": "Fixture evidence",
       "content": "Evidence retained for later use.",
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     }
   ],
   "long_term_candidates": [
@@ -24,7 +25,7 @@
         "workspace_id": "workspace-fixture",
         "created_at": "2026-08-28T00:00:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-update",
@@ -40,7 +41,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:01:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-merge",
@@ -59,7 +60,7 @@
         "id": "temporary-fixture",
         "created_at": "2026-08-28T00:02:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-duplicate",
@@ -75,7 +76,7 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:03:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-low-value",
@@ -91,7 +92,7 @@
         "id": "temporary-fixture",
         "created_at": "2026-08-28T00:04:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
     },
     {
       "candidate_id": "candidate-conflict",
@@ -107,7 +108,117 @@
         "id": "task-fixture",
         "created_at": "2026-08-28T00:05:00Z"
       },
-      "source_refs": ["maestro/references/scenarios/validator-fixtures/files/source.md"]
+      "source_refs": ["files/source.md"]
+    }
+  ],
+  "playbook_candidates": [
+    {
+      "candidate_id": "playbook-candidate-create",
+      "title": "Evidence-first performance diagnosis",
+      "trigger": "A user asks to diagnose a runtime performance regression.",
+      "steps": [
+        "Capture runtime evidence before proposing a cause.",
+        "Run a reversible experiment against the strongest hypothesis.",
+        "Recommend a permanent change only after the experiment confirms the cause."
+      ],
+      "checks": [
+        "The evidence is reachable from the source Task.",
+        "The experiment does not require a permanent change."
+      ],
+      "action": "CREATE",
+      "match": { "classification": "novel", "playbook_ids": [] },
+      "rationale": "The executed method is reusable and no current Playbook covers it.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "workspace_id": "workspace-fixture",
+        "created_at": "2026-08-29T00:00:00Z"
+      },
+      "source_refs": [
+        "files/source.md"
+      ],
+      "evidence_refs": [
+        "files/result.md"
+      ],
+      "status": "candidate"
+    },
+    {
+      "candidate_id": "playbook-candidate-update",
+      "title": "Validate protocol artifacts",
+      "trigger": "A formal Maestro protocol artifact is about to be persisted.",
+      "steps": [
+        "Run the matching artifact-triggered protocol guard.",
+        "Repair an invalid artifact once and validate it again.",
+        "Persist the canonical artifact only after validation succeeds."
+      ],
+      "checks": ["A second invalid result is retained with an invalid suffix."],
+      "action": "UPDATE",
+      "match": {
+        "classification": "overlap",
+        "playbook_ids": ["pb-fixture-validation"]
+      },
+      "rationale": "Executed evidence adds a repair step to one current Playbook.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-29T00:01:00Z"
+      },
+      "source_refs": [
+        "files/source.md"
+      ],
+      "evidence_refs": [
+        "files/result.md"
+      ],
+      "status": "candidate"
+    },
+    {
+      "candidate_id": "playbook-candidate-merge",
+      "title": "Validate and preserve protocol evidence",
+      "trigger": "A formal protocol artifact and its evidence are about to be persisted.",
+      "steps": [
+        "Retain reachable source evidence.",
+        "Run the matching artifact-triggered protocol guard.",
+        "Persist the canonical artifact only after validation succeeds."
+      ],
+      "checks": ["Every referenced source exists under the project root."],
+      "action": "MERGE",
+      "match": {
+        "classification": "overlap",
+        "playbook_ids": ["pb-fixture-sources", "pb-fixture-validation"]
+      },
+      "rationale": "The two current Playbooks form one coherent validated procedure.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-29T00:01:30Z"
+      },
+      "source_refs": [
+        "files/source.md"
+      ],
+      "evidence_refs": [
+        "files/result.md"
+      ],
+      "status": "candidate"
+    },
+    {
+      "candidate_id": "playbook-candidate-low-value",
+      "title": "Run a one-off fixture command",
+      "trigger": "The exact disposable fixture needs local inspection.",
+      "steps": ["Run the one-off command used by this Task."],
+      "checks": [],
+      "action": "SKIP",
+      "match": { "classification": "low-value", "playbook_ids": [] },
+      "rationale": "The command and path are Task-specific and have no reusable workflow value.",
+      "source": {
+        "type": "temporary",
+        "id": "temporary-fixture",
+        "created_at": "2026-08-29T00:02:00Z"
+      },
+      "source_refs": [
+        "files/source.md"
+      ],
+      "evidence_refs": [],
+      "status": "candidate"
     }
   ]
 }

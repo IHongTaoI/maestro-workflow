@@ -1,0 +1,32 @@
+{
+  "status": "completed",
+  "request_file": "memory-request-valid.json",
+  "current": { "content": {} },
+  "playbook_candidates": [
+    {
+      "candidate_id": "playbook-invalid-update",
+      "title": "Invalid Playbook update",
+      "trigger": "A fixture update is requested.",
+      "steps": ["Run the fixture check."],
+      "checks": [],
+      "action": "UPDATE",
+      "match": {
+        "classification": "overlap",
+        "playbook_ids": ["pb-fixture-sources", "pb-fixture-validation"]
+      },
+      "rationale": "An UPDATE must not target two Playbooks.",
+      "source": {
+        "type": "task",
+        "id": "task-fixture",
+        "created_at": "2026-08-29T00:00:00Z"
+      },
+      "source_refs": [
+        "files/source.md"
+      ],
+      "evidence_refs": [
+        "files/result.md"
+      ],
+      "status": "candidate"
+    }
+  ]
+}
