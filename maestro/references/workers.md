@@ -104,6 +104,9 @@ instruction references, not inline prompts. Resolve built-in references through
 [the built-in instruction registry](instructions/builtin-registry.json). A project may extend the
 registry under `.maestro/instructions/registry.yaml`; apply the same reviewed mutable-state protocol
 as the project Worker registry, and never let a project entry override a built-in reference.
+Built-in entries use `source_scope: core` and paths relative to the installed Maestro Skill root;
+project entries use `source_scope: project` and project-relative paths. Reject duplicate refs inside
+either registry and any intersection between the project and built-in ref sets.
 
 Resolve every required reference before execution. An unknown reference, unreadable source, or
 host that cannot inject a required instruction makes the delegation `unsupported`; stop without
@@ -117,6 +120,8 @@ byte, its raw file bytes, and one trailing NUL byte in sequence. The framed dige
 runs auditable, avoids ambiguous multi-file concatenation, and prevents a resumed Task from silently
 receiving different instructions. New delegations resolve the current reviewed registry;
 resumptions reuse the persisted packet and immutable Worker snapshot.
+Before execution or resumption, recompute every resolved digest from the trusted Core or project
+root and reject a mismatch. A syntactically valid 64-character digest is not sufficient evidence.
 
 ## Materialize a Delegation Packet
 
@@ -135,6 +140,13 @@ be a subset of the snapshot's optional refs. Every required ref must have exactl
 record before a `supported` or `degraded` run starts. The packet may narrow tools, context, and
 permissions but cannot expand the Worker snapshot. Reject duplicate resolved refs or a ref present
 in both required and optional sets.
+
+Validate those relationships against the immutable Worker snapshot supplied independently by Old
+Zhou or the Host Adapter; never load the validation baseline from an untrusted path chosen only by
+the packet. Cross-check the Worker ID, required and optional refs, tools, autonomous and conditional
+permissions, every injected `context_ref` against `context.read_paths`, and the Detailed Result and
+Handoff paths against `context.write_paths`. A packet that is internally consistent but exceeds any
+snapshot boundary is invalid.
 
 Persist Task and Temporary packets as
 `workers/<worker-id>/runs/<run-id>/delegation.json` before starting the host subagent. A

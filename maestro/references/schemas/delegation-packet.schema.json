@@ -42,9 +42,10 @@
           "uniqueItems": true,
           "items": {
             "type": "object",
-            "required": ["ref", "source_paths", "sha256"],
+            "required": ["ref", "source_scope", "source_paths", "sha256"],
             "properties": {
               "ref": { "$ref": "#/$defs/instruction_ref" },
+              "source_scope": { "enum": ["core", "project"] },
               "source_paths": {
                 "type": "array",
                 "minItems": 1,

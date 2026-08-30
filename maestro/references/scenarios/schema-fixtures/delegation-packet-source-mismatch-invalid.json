@@ -1,12 +1,19 @@
 {
   "schema_version": 1,
   "worker_id": "bounded-investigator",
+  "worker_snapshot_path": ".maestro/tasks/example/workers/bounded-investigator/spec.yaml",
   "objective": "Investigate startup behavior.",
   "completion_condition": "Return evidence-backed findings and a standard Handoff.",
   "instructions": {
     "required_refs": ["contract:handoff", "policy:safety-boundary"],
     "optional_refs": [],
     "resolved": [
+      {
+        "ref": "contract:handoff",
+        "source_scope": "project",
+        "source_paths": ["README.md"],
+        "sha256": "9904ac153290c76be35036507bcec6d7b8e3de4352b64d511a64af61d75dd8a1"
+      },
       {
         "ref": "policy:safety-boundary",
         "source_scope": "core",
@@ -16,13 +23,9 @@
     ]
   },
   "context_refs": [{ "kind": "current-task", "path": ".maestro/tasks/example/context.md" }],
-  "tools": [],
+  "tools": ["shell"],
   "permissions": { "autonomous": ["inspect-project"], "conditional": [] },
-  "host_adapter": {
-    "id": "limited-host",
-    "status": "unsupported",
-    "unsupported_requirements": ["instruction:contract:handoff"]
-  },
-  "result_path": ".maestro/tasks/example/workers/bounded-investigator/runs/run-2/result.md",
-  "handoff_path": ".maestro/tasks/example/handoffs/bounded-investigator-run-2.json"
+  "host_adapter": { "id": "incorrect-host", "status": "supported", "unsupported_requirements": [] },
+  "result_path": ".maestro/tasks/example/workers/bounded-investigator/runs/run-9/result.md",
+  "handoff_path": ".maestro/tasks/example/handoffs/bounded-investigator-run-9.json"
 }

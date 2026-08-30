@@ -28,10 +28,11 @@ try {
         param(
             [Parameter(Mandatory = $true)][string]$Kind,
             [Parameter(Mandatory = $true)][string]$Data,
-            [Parameter(Mandatory = $true)][int]$ExpectedExit
+            [Parameter(Mandatory = $true)][int]$ExpectedExit,
+            [string[]]$ExtraArguments = @()
         )
 
-        & node "scripts/validate-worker-semantics.mjs" $Kind $Data
+        & node "scripts/validate-worker-semantics.mjs" $Kind $Data @ExtraArguments
         $actualExit = $LASTEXITCODE
         if ($actualExit -ne $ExpectedExit) {
             throw "Worker semantic case failed for $Data`: expected exit $ExpectedExit, got $actualExit"
@@ -303,18 +304,79 @@ try {
         "$fixtureRoot/worker-instruction-overlap-invalid.json" 1
     Invoke-AjvCase $instructionRegistrySchema `
         "maestro/references/instructions/builtin-registry.json" 0
+    Invoke-WorkerSemanticCase "instruction-registry" `
+        "maestro/references/instructions/builtin-registry.json" 0
+    Invoke-AjvCase $instructionRegistrySchema `
+        "$fixtureRoot/instruction-registry-project-valid.json" 0
+    Invoke-WorkerSemanticCase "instruction-registry" `
+        "$fixtureRoot/instruction-registry-project-valid.json" 0 `
+        @("--builtin", "maestro/references/instructions/builtin-registry.json")
+    Invoke-AjvCase $instructionRegistrySchema `
+        "$fixtureRoot/instruction-registry-duplicate-invalid.json" 0
+    Invoke-WorkerSemanticCase "instruction-registry" `
+        "$fixtureRoot/instruction-registry-duplicate-invalid.json" 1
+    Invoke-AjvCase $instructionRegistrySchema `
+        "$fixtureRoot/instruction-registry-override-invalid.json" 0
+    Invoke-WorkerSemanticCase "instruction-registry" `
+        "$fixtureRoot/instruction-registry-override-invalid.json" 1 `
+        @("--builtin", "maestro/references/instructions/builtin-registry.json")
+    Invoke-AjvCase $workerSchema `
+        "$fixtureRoot/worker-delegation-snapshot-valid.json" 0
+    $delegationArguments = @(
+        "--worker", "$fixtureRoot/worker-delegation-snapshot-valid.json",
+        "--builtin", "maestro/references/instructions/builtin-registry.json",
+        "--core-root", "maestro",
+        "--project-root", "."
+    )
     Invoke-AjvCase $delegationPacketSchema `
         "$fixtureRoot/delegation-packet-supported-valid.json" 0
     Invoke-WorkerSemanticCase "delegation" `
-        "$fixtureRoot/delegation-packet-supported-valid.json" 0
+        "$fixtureRoot/delegation-packet-supported-valid.json" 0 $delegationArguments
     Invoke-AjvCase $delegationPacketSchema `
         "$fixtureRoot/delegation-packet-unsupported-valid.json" 0
     Invoke-WorkerSemanticCase "delegation" `
-        "$fixtureRoot/delegation-packet-unsupported-valid.json" 0
+        "$fixtureRoot/delegation-packet-unsupported-valid.json" 0 $delegationArguments
     Invoke-AjvCase $delegationPacketSchema `
         "$fixtureRoot/delegation-packet-missing-required-invalid.json" 0
     Invoke-WorkerSemanticCase "delegation" `
-        "$fixtureRoot/delegation-packet-missing-required-invalid.json" 1
+        "$fixtureRoot/delegation-packet-missing-required-invalid.json" 1 $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-required-refs-mismatch-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-required-refs-mismatch-invalid.json" 1 `
+        $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-optional-refs-expansion-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-optional-refs-expansion-invalid.json" 1 `
+        $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-tool-expansion-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-tool-expansion-invalid.json" 1 $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-permission-expansion-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-permission-expansion-invalid.json" 1 `
+        $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-context-expansion-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-context-expansion-invalid.json" 1 $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-write-expansion-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-write-expansion-invalid.json" 1 `
+        $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-digest-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-digest-invalid.json" 1 $delegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-source-mismatch-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-source-mismatch-invalid.json" 1 `
+        $delegationArguments
     Invoke-AjvCase $registrySchema "maestro/references/workers/builtin-registry.json" 0 `
         @($workerSchema)
     Invoke-WorkerSemanticCase "registry" "maestro/references/workers/builtin-registry.json" 0

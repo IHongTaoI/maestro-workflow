@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "worker_id": "laborer",
+  "worker_id": "bounded-investigator",
   "objective": "Investigate startup behavior.",
   "completion_condition": "Return evidence-backed findings and a standard Handoff.",
   "instructions": {
@@ -9,12 +9,13 @@
     "resolved": [
       {
         "ref": "policy:safety-boundary",
-        "source_paths": ["references/workers.md"],
-        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        "source_scope": "core",
+        "source_paths": ["references/workers.md", "references/coordination.md"],
+        "sha256": "f7334798ac5c68952fbcff5606464ce51f4ae625d60e129c7414ed7194b98c9e"
       }
     ]
   },
-  "context_refs": [],
+  "context_refs": [{ "kind": "current-task", "path": ".maestro/tasks/example/context.md" }],
   "tools": [],
   "permissions": { "autonomous": ["inspect-project"], "conditional": [] },
   "host_adapter": {
@@ -22,6 +23,6 @@
     "status": "supported",
     "unsupported_requirements": []
   },
-  "result_path": ".maestro/tasks/example/workers/laborer/runs/run-3/result.md",
-  "handoff_path": ".maestro/tasks/example/handoffs/laborer-run-3.json"
+  "result_path": ".maestro/tasks/example/workers/bounded-investigator/runs/run-3/result.md",
+  "handoff_path": ".maestro/tasks/example/handoffs/bounded-investigator-run-3.json"
 }
