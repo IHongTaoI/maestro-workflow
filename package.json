@@ -15,7 +15,8 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:contracts": "pwsh -File scripts/verify-contracts.ps1",
-    "verify": "npm test && npm run test:contracts && npm pack --dry-run"
+    "test:evals": "node maestro/evals/run.mjs --observations maestro/evals/fixtures/observations.json",
+    "verify": "npm test && npm run test:contracts && npm run test:evals && npm pack --dry-run"
   },
   "engines": {
     "node": ">=20.19.0"

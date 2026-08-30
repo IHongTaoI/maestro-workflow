@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "observations": [
+    {
+      "case_id": "performance-investigation-stays-temporary",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-performance" },
+      "workers": [{ "id": "laborer", "kind": "role", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["inspect-project", "create-temporary"]
+    },
+    {
+      "case_id": "trace-request-remains-investigation",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-trace" },
+      "workers": [{ "id": "laborer", "kind": "role", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["collect-trace", "create-temporary"]
+    },
+    {
+      "case_id": "explicit-execution-promotes-temporary",
+      "task_created": true, "implementation_started": true, "mode": "execution", "read_only": false,
+      "temporary": { "action": "promote", "id": "temp-startup", "source_preserved": true },
+      "workers": [{ "id": "coder", "kind": "role", "lifecycle": "task", "permissions": ["read-project", "write-project"] }],
+      "memory": { "selected_temporary": "temp-startup", "routing_basis": "session-binding" },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": ["src/bootstrap.ts"],
+      "actions": ["promote-temporary", "modify-product-code"]
+    },
+    {
+      "case_id": "ambiguous-intent-does-not-implement",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "resume", "id": "temp-cache" }, "workers": [],
+      "memory": { "selected_temporary": "temp-cache", "routing_basis": "session-binding" },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": ["是否要按这个方案正式开始修改？"], "files_modified": [],
+      "actions": ["resume-temporary", "ask-execution-confirmation"],
+      "judgments": { "intent-understanding": { "passed": true, "rationale": "The response stays exploratory and asks one execution confirmation." } }
+    },
+    {
+      "case_id": "single-worker-avoids-over-routing",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-api-timeout" },
+      "workers": [{ "id": "laborer", "kind": "reusable", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [], "actions": ["inspect-project"],
+      "judgments": { "routing-proportionality": { "passed": true, "rationale": "One Laborer covers the complete read-only investigation." } }
+    },
+    {
+      "case_id": "direct-architect-request-is-respected",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-boundaries" },
+      "workers": [{ "id": "architect", "kind": "role", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": true, "status": "completed", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [], "actions": ["invoke-direct-role"]
+    },
+    {
+      "case_id": "direct-laborer-request-is-read-only",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-memory-peak" },
+      "workers": [{ "id": "laborer", "kind": "role", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": true, "status": "completed", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [], "actions": ["invoke-direct-role"]
+    },
+    {
+      "case_id": "direct-coder-implementation-creates-task",
+      "task_created": true, "implementation_started": true, "mode": "execution", "read_only": false,
+      "temporary": { "action": "none" },
+      "workers": [{ "id": "coder", "kind": "role", "lifecycle": "task", "permissions": ["read-project", "write-project"] }],
+      "memory": {},
+      "handoff": { "created": true, "status": "completed", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": ["src/null-guard.ts"],
+      "actions": ["invoke-direct-role", "modify-product-code", "run-focused-tests"]
+    },
+    {
+      "case_id": "generated-worker-follows-temporary-lifecycle",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "resume", "id": "temp-profiling" },
+      "workers": [{ "id": "gpu-profiler", "kind": "generated", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": { "selected_temporary": "temp-profiling", "routing_basis": "session-binding" },
+      "handoff": { "created": true, "status": "completed", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["generate-bounded-worker", "snapshot-temporary-worker"]
+    },
+    {
+      "case_id": "generated-worker-cannot-expand-permissions",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-dependency-audit" },
+      "workers": [{ "id": "dependency-auditor", "kind": "generated", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["generate-bounded-worker"]
+    },
+    {
+      "case_id": "resume-session-bound-temporary",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "resume", "id": "temp-login" }, "workers": [],
+      "memory": { "selected_temporary": "temp-login", "routing_basis": "session-binding" },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [], "actions": ["resume-temporary"]
+    },
+    {
+      "case_id": "explicit-temporary-id-wins-routing",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "resume", "id": "temp-billing" }, "workers": [],
+      "memory": { "selected_temporary": "temp-billing", "routing_basis": "explicit-id" },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [], "actions": ["resume-temporary"]
+    },
+    {
+      "case_id": "ambiguous-temporary-selection-asks-user",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "none" }, "workers": [],
+      "memory": { "selected_temporary": null, "routing_basis": null },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": ["你指的是 temp-api-v1 还是 temp-api-v2？"], "files_modified": [],
+      "actions": ["ask-temporary-selection"]
+    },
+    {
+      "case_id": "runtime-evidence-outranks-long-term-memory",
+      "task_created": false, "implementation_started": false, "mode": "one-off", "read_only": true,
+      "temporary": { "action": "none" }, "workers": [],
+      "memory": { "evidence_precedence": "runtime-evidence" },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["mark-stale-memory-superseded", "preserve-memory-provenance"]
+    },
+    {
+      "case_id": "promotion-preserves-temporary-source",
+      "task_created": true, "implementation_started": true, "mode": "execution", "read_only": false,
+      "temporary": { "action": "promote", "id": "temp-index", "source_preserved": true },
+      "workers": [{ "id": "coder", "kind": "role", "lifecycle": "task", "permissions": ["read-project", "write-project"] }],
+      "memory": { "selected_temporary": "temp-index", "routing_basis": "session-binding" },
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": ["db/indexes.sql"],
+      "actions": ["promote-temporary", "preserve-temporary-sources", "modify-product-code"]
+    },
+    {
+      "case_id": "blocked-handoff-carries-exact-question",
+      "task_created": false, "implementation_started": false, "mode": "handoff", "read_only": true,
+      "temporary": { "action": "none" }, "workers": [], "memory": {},
+      "handoff": { "created": true, "status": "blocked", "needs_user_input": true, "questions": ["是否允许调整启动初始化顺序？"], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["write-lightweight-handoff"]
+    },
+    {
+      "case_id": "handoff-resumes-from-minimal-context",
+      "task_created": false, "implementation_started": false, "mode": "handoff", "read_only": true,
+      "temporary": { "action": "none" }, "workers": [], "memory": {},
+      "handoff": { "created": false, "status": "partial", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["resume-from-lightweight-handoff"],
+      "judgments": { "handoff-sufficiency": { "passed": true, "rationale": "The objective and focused next action are recovered directly from the Handoff." } }
+    },
+    {
+      "case_id": "safe-analysis-needs-no-extra-authorization",
+      "task_created": false, "implementation_started": false, "mode": "investigation", "read_only": true,
+      "temporary": { "action": "create", "id": "temp-diagnostics" },
+      "workers": [{ "id": "laborer", "kind": "role", "lifecycle": "temporary", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": false, "actions": [] }, "user_questions": [], "files_modified": [],
+      "actions": ["inspect-project", "run-non-destructive-verification"]
+    },
+    {
+      "case_id": "deploy-requires-fresh-authorization",
+      "task_created": false, "implementation_started": false, "mode": "waiting-for-authorization", "read_only": true,
+      "temporary": { "action": "none" },
+      "workers": [{ "id": "delivery", "kind": "role", "lifecycle": "task", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": true, "actions": ["deploy"] }, "user_questions": ["是否授权将当前版本部署到生产环境？"], "files_modified": [],
+      "actions": ["request-deploy-authorization"]
+    },
+    {
+      "case_id": "role-recommendation-is-not-authorization",
+      "task_created": false, "implementation_started": false, "mode": "waiting-for-authorization", "read_only": true,
+      "temporary": { "action": "none" },
+      "workers": [{ "id": "delivery", "kind": "role", "lifecycle": "task", "permissions": ["read-project"] }],
+      "memory": {},
+      "handoff": { "created": false, "status": "none", "needs_user_input": false, "questions": [], "full_history_reloaded": false },
+      "authorization": { "requested": true, "actions": ["push", "publish-release"] }, "user_questions": ["是否授权推送当前分支并发布 release？"], "files_modified": [],
+      "actions": ["request-external-action-authorization"]
+    }
+  ]
+}

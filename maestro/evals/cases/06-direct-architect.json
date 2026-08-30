@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "direct-architect-request-is-respected",
+  "name": "Direct Architect invocation is respected",
+  "category": "routing",
+  "regression": { "real_case": false, "source": "Issue #6 direct role invocation coverage" },
+  "setup": {},
+  "turns": [{ "user_prompt": "老陈帮我评审一下模块边界，先不要实现" }],
+  "expect": [
+    { "path": "/workers/0/id", "operator": "equals", "value": "architect" },
+    { "path": "/workers", "operator": "length_equals", "value": 1 },
+    { "path": "/implementation_started", "operator": "equals", "value": false }
+  ],
+  "must_not": [
+    { "path": "/actions", "operator": "contains", "value": "replace-direct-role-with-worker-resolution" }
+  ]
+}

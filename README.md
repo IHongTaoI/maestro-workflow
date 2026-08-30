@@ -110,6 +110,27 @@ copies execution logs directly into Long-term Memory or approves its own proposa
 Git branches, `memory-merger` performs 3-way semantic consolidation and preserves full dual-sided
 provenance on unresolved conflicts.
 
+## Behavior evals
+
+Maestro includes 20 structured Agent behavior cases covering work-shape decisions, role and Worker
+routing, Temporary/Task/Long-term Memory, Session Handoffs, and authorization boundaries. Run the
+deterministic fixture replay with:
+
+```text
+npm run test:evals
+```
+
+The replay checks the eval schema, observation contract, assertion engine, and expected baseline.
+To evaluate a live model after changing `SKILL.md` or its references, provide a host adapter to the
+same runner. The adapter receives the current Skill contents for every run:
+
+```text
+node maestro/evals/run.mjs --adapter ./path/to/host-adapter.mjs
+```
+
+See [`maestro/evals/README.md`](maestro/evals/README.md) for the case format, normalized observation
+contract, optional LLM judge interface, and CI/live-run distinction.
+
 ## npm package contents
 
 ```text
@@ -121,6 +142,9 @@ cli/
   install.js
 maestro/
   SKILL.md
+  evals/
+    cases/
+    fixtures/
   references/
     coordination.md
     storage.md

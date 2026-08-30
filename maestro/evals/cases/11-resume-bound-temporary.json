@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "resume-session-bound-temporary",
+  "name": "Vague continuation resumes the Session-bound Temporary",
+  "category": "memory",
+  "regression": { "real_case": true, "source": "Issue #5/#21: active Temporary selection was wrong" },
+  "setup": {
+    "active_temporaries": [
+      { "id": "temp-login", "topic": "login performance" },
+      { "id": "temp-billing", "topic": "billing retry" }
+    ],
+    "session_binding": "temp-login"
+  },
+  "turns": [{ "user_prompt": "继续刚才的分析" }],
+  "expect": [
+    { "path": "/temporary/action", "operator": "equals", "value": "resume" },
+    { "path": "/memory/selected_temporary", "operator": "equals", "value": "temp-login" },
+    { "path": "/memory/routing_basis", "operator": "equals", "value": "session-binding" }
+  ],
+  "must_not": [
+    { "path": "/actions", "operator": "contains", "value": "create-duplicate-temporary" }
+  ]
+}
