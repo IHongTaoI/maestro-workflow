@@ -15,7 +15,9 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:contracts": "pwsh -File scripts/verify-contracts.ps1",
-    "verify": "npm test && npm run test:contracts && npm pack --dry-run"
+    "test:evals:fixtures": "node maestro/evals/run.mjs --observations maestro/evals/fixtures/observations.json",
+    "test:evals:live:codex": "node maestro/evals/run.mjs --adapter maestro/evals/adapters/codex-cli.mjs --judge-adapter maestro/evals/adapters/codex-cli.mjs",
+    "verify": "npm test && npm run test:contracts && npm run test:evals:fixtures && npm pack --dry-run"
   },
   "engines": {
     "node": ">=20.19.0"

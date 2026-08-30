@@ -7,12 +7,15 @@ try {
     function Invoke-AjvCase {
         param(
             [Parameter(Mandatory = $true)][string]$Schema,
-            [Parameter(Mandatory = $true)][string]$Data,
+            [Parameter(Mandatory = $true)][string[]]$Data,
             [Parameter(Mandatory = $true)][int]$ExpectedExit,
             [string[]]$References = @()
         )
 
-        $ajvArguments = @("validate", "--spec=draft2020", "-c", "ajv-formats", "-s", $Schema, "-d", $Data)
+        $ajvArguments = @("validate", "--spec=draft2020", "-c", "ajv-formats", "-s", $Schema)
+        foreach ($dataPath in $Data) {
+            $ajvArguments += @("-d", $dataPath)
+        }
         foreach ($reference in $References) {
             $ajvArguments += @("-r", $reference)
         }
@@ -20,7 +23,7 @@ try {
         & npx --yes --package ajv-cli@5 --package ajv-formats@2 ajv @ajvArguments
         $actualExit = $LASTEXITCODE
         if ($actualExit -ne $ExpectedExit) {
-            throw "Ajv case failed for $Data`: expected exit $ExpectedExit, got $actualExit"
+            throw "Ajv case failed for $($Data -join ', ')`: expected exit $ExpectedExit, got $actualExit"
         }
     }
 
@@ -133,6 +136,21 @@ try {
     Get-ChildItem "maestro/references/scenarios/schema-fixtures" -Filter "*.json" | ForEach-Object {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
+
+    $evalCaseSchema = "maestro/evals/case.schema.json"
+    $evalObservationSchema = "maestro/evals/observation.schema.json"
+    $evalObservationSetSchema = "maestro/evals/observation-set.schema.json"
+    Get-ChildItem "maestro/evals" -Filter "*.schema.json" | ForEach-Object {
+        Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
+    }
+    $evalCaseFiles = @(Get-ChildItem "maestro/evals/cases" -Filter "*.json")
+    $evalCaseFiles | ForEach-Object {
+        Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
+    }
+    Invoke-AjvCase -Schema $evalCaseSchema -Data @($evalCaseFiles.FullName) -ExpectedExit 0
+    Invoke-AjvCase -Schema $evalObservationSetSchema `
+        -Data "maestro/evals/fixtures/observations.json" -ExpectedExit 0 `
+        -References @($evalObservationSchema)
 
     $validatorFixtureRoot = "maestro/references/scenarios/validator-fixtures"
     $handoffSchema = "maestro/references/schemas/handoff.schema.json"
@@ -645,6 +663,8 @@ try {
         @{ Path = "maestro/references/workers.md"; Text = "delegation-packet.schema.json" },
         @{ Path = "maestro/references/coordination.md"; Text = "Do not assume a role or Worker inherits" },
         @{ Path = "maestro/references/coordination.md"; Text = "Worker resolution must not promote exploratory work into a Task" },
+        @{ Path = "maestro/references/coordination.md"; Text = "Do not start a duplicate run" },
+        @{ Path = "maestro/SKILL.md"; Text = "wait through the host's native mechanism" },
         @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
         @{ Path = "maestro/references/workers.md"; Text = "must never promote it automatically" },
         @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" },
@@ -682,6 +702,8 @@ try {
         @{ Path = "README.md"; Text = "It never schedules roles" },
         @{ Path = "maestro/SKILL.md"; Text = "it never performs orchestration" }
         @{ Path = "maestro/SKILL.md"; Text = "Playbook Candidates are not selectable guidance" }
+        @{ Path = "maestro/evals/README.md"; Text = "It is not evidence that a live model" }
+        @{ Path = "maestro/evals/README.md"; Text = "request.skill.files" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {

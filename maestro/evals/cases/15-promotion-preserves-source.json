@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "promotion-preserves-temporary-source",
+  "name": "Temporary promotion keeps its source and provenance",
+  "category": "memory",
+  "regression": { "real_case": false, "source": "Issue #21 memory acceptance coverage" },
+  "setup": {
+    "active_temporaries": [{ "id": "temp-index", "topic": "index redesign", "references": ["evidence/query-plan.txt"] }],
+    "session_binding": "temp-index"
+  },
+  "turns": [{ "user_prompt": "按已验证的方案正式修改索引" }],
+  "expect": [
+    { "path": "/temporary/action", "operator": "equals", "value": "promote" },
+    { "path": "/temporary/id", "operator": "equals", "value": "temp-index" },
+    { "path": "/temporary/source_preserved", "operator": "equals", "value": true }
+  ],
+  "must_not": [
+    { "path": "/actions", "operator": "contains", "value": "copy-temporary-directly-to-long-term-memory" }
+  ]
+}

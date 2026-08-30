@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/eval-judgments.schema.json",
+  "title": "Maestro Eval Semantic Judgments",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["judgments"],
+  "properties": {
+    "judgments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "passed", "rationale"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "passed": { "type": "boolean" },
+          "rationale": { "type": "string" }
+        }
+      }
+    }
+  }
+}

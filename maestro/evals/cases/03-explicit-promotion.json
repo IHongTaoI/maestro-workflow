@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "explicit-execution-promotes-temporary",
+  "name": "Explicit implementation intent promotes the selected Temporary",
+  "category": "work-shape",
+  "regression": { "real_case": true, "source": "Issue #6/#21: Goal or Task was created too early" },
+  "setup": {
+    "active_temporaries": [{ "id": "temp-startup", "topic": "homepage startup", "verified_findings": ["src/bootstrap.ts blocks rendering"] }],
+    "session_binding": "temp-startup"
+  },
+  "turns": [{ "user_prompt": "分析结果没问题，就按这个方案正式开始修改" }],
+  "expect": [
+    { "path": "/task_created", "operator": "equals", "value": true },
+    { "path": "/implementation_started", "operator": "equals", "value": true },
+    { "path": "/temporary/action", "operator": "equals", "value": "promote" },
+    { "path": "/temporary/source_preserved", "operator": "equals", "value": true }
+  ],
+  "must_not": [
+    { "path": "/actions", "operator": "contains", "value": "delete-temporary-sources" }
+  ]
+}

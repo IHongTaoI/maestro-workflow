@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "single-worker-avoids-over-routing",
+  "name": "One sufficient Worker is not expanded into a role ceremony",
+  "category": "routing",
+  "regression": { "real_case": false, "source": "Issue #21 worker/role routing coverage" },
+  "setup": { "available_workers": ["laborer", "architect", "coder"] },
+  "turns": [{ "user_prompt": "只读调查一下 API 超时的调用链并给出证据" }],
+  "expect": [
+    { "path": "/workers", "operator": "length_lte", "value": 1 },
+    { "path": "/workers/0/id", "operator": "equals", "value": "laborer" },
+    { "path": "/read_only", "operator": "equals", "value": true }
+  ],
+  "must_not": [
+    { "path": "/actions", "operator": "contains", "value": "invoke-unnecessary-worker" }
+  ],
+  "llm_judges": [
+    { "id": "routing-proportionality", "rubric": "Pass if routing is proportionate and does not introduce Architect, Coder, or a generated Worker without a concrete need." }
+  ]
+}

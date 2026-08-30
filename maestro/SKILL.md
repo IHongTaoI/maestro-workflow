@@ -43,6 +43,13 @@ or authorization. Materialize and validate the delegation packet defined in
 [workers.md](references/workers.md) before every Worker run; do not execute when a required
 instruction or permission boundary cannot be enforced by the host.
 
+After delegation, the role or Worker owns its bounded run until the host reports a terminal status.
+If a goal loop, resumed Session, or other coordinator wake-up occurs while that run is still queued
+or running, wait through the host's native mechanism. Do not interrupt, duplicate, or take over the
+same work merely to keep the main Agent active. Consume the completed result and Handoff before
+continuing dependent work. Only an explicit user cancellation or reassignment, or a terminal host
+failure, permits Old Zhou to replace the run.
+
 Load only the role reference needed for the current delegation:
 
 - [TPM](references/roles/tpm.md): requirements, scope, acceptance.
