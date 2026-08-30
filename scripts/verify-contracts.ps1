@@ -336,6 +336,24 @@ try {
         "$fixtureRoot/delegation-packet-unsupported-valid.json" 0
     Invoke-WorkerSemanticCase "delegation" `
         "$fixtureRoot/delegation-packet-unsupported-valid.json" 0 $delegationArguments
+    Invoke-AjvCase $workerSchema `
+        "$fixtureRoot/worker-delegation-unknown-required-snapshot-valid.json" 0
+    $unknownInstructionDelegationArguments = @(
+        "--worker", "$fixtureRoot/worker-delegation-unknown-required-snapshot-valid.json",
+        "--builtin", "maestro/references/instructions/builtin-registry.json",
+        "--core-root", "maestro",
+        "--project-root", "."
+    )
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-unknown-required-unsupported-valid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-unknown-required-unsupported-valid.json" 0 `
+        $unknownInstructionDelegationArguments
+    Invoke-AjvCase $delegationPacketSchema `
+        "$fixtureRoot/delegation-packet-unknown-required-unreported-invalid.json" 0
+    Invoke-WorkerSemanticCase "delegation" `
+        "$fixtureRoot/delegation-packet-unknown-required-unreported-invalid.json" 1 `
+        $unknownInstructionDelegationArguments
     Invoke-AjvCase $delegationPacketSchema `
         "$fixtureRoot/delegation-packet-missing-required-invalid.json" 0
     Invoke-WorkerSemanticCase "delegation" `

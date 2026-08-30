@@ -241,8 +241,14 @@ if (kind === "requirements") {
 
   const required = new Set(data.instructions?.required_refs ?? []);
   const optional = new Set(data.instructions?.optional_refs ?? []);
+  const adapterStatus = data.host_adapter?.status;
+  const unsupportedRequirements = new Set(data.host_adapter?.unsupported_requirements ?? []);
   for (const instructionRef of [...required, ...optional]) {
-    if (!knownInstructions.has(instructionRef)) {
+    if (knownInstructions.has(instructionRef)) continue;
+    const reportsUnknownInstruction = unsupportedRequirements.has(`instruction:${instructionRef}`);
+    const safelyStopsForUnknownRequired =
+      required.has(instructionRef) && adapterStatus === "unsupported" && reportsUnknownInstruction;
+    if (!safelyStopsForUnknownRequired) {
       errors.push(`packet declares unknown instruction ref: ${instructionRef}`);
     }
   }
@@ -261,7 +267,11 @@ if (kind === "requirements") {
       errors.push(`resolved instruction ref was not declared by the packet: ${instruction.ref}`);
     }
     const registered = knownInstructions.get(instruction.ref);
-    if (registered !== undefined) {
+    if (registered === undefined) {
+      errors.push(
+        `resolved instruction ref is absent from the trusted registries: ${instruction.ref}`,
+      );
+    } else {
       if (
         instruction.source_scope !== registered.source_scope ||
         !arraysEqual(instruction.source_paths, registered.source_paths)
@@ -282,8 +292,9 @@ if (kind === "requirements") {
     errors.push(`required instruction refs were not resolved: ${missingRequired.join(", ")}`);
   }
   if (data.host_adapter?.status === "unsupported") {
-    const unsupported = new Set(data.host_adapter.unsupported_requirements ?? []);
-    const unreported = missingRequired.filter((ref) => !unsupported.has(`instruction:${ref}`));
+    const unreported = missingRequired.filter(
+      (ref) => !unsupportedRequirements.has(`instruction:${ref}`),
+    );
     if (unreported.length > 0) {
       errors.push(`missing required instruction refs were not reported: ${unreported.join(", ")}`);
     }
