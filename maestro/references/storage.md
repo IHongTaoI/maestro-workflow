@@ -23,7 +23,8 @@ Create directories lazily as the current work needs them:
           spec.yaml
           current-state.md
           references/
-          runs/
+          runs/<run-id>/
+            delegation.json
       archive/
       trash/
     pending/
@@ -53,9 +54,12 @@ Create directories lazily as the current work needs them:
         spec.yaml
         current-state.md
         references/
-        runs/
+        runs/<run-id>/
+          delegation.json
     archive/
   workers/
+    registry.yaml
+  instructions/
     registry.yaml
   playbooks/
     candidates/
@@ -79,6 +83,7 @@ separates local execution state from team shared memory:
   - `memory/long-term/`: `current.md`, `candidates/`, `decisions/`, and `conflicts/`.
   - `playbooks/`: approved team guidance plus reviewed `candidates/` and `decisions/`.
   - `workers/registry.yaml`: reviewed, project-shared reusable Worker specifications.
+  - `instructions/registry.yaml`: reviewed project instruction references; built-in refs cannot be overridden.
   - `config.yaml`: shared project configuration.
 
 A target project can enforce this boundary using standard `.gitignore` rules:
@@ -96,6 +101,7 @@ A target project can enforce this boundary using standard `.gitignore` rules:
 !.maestro/config.yaml
 !.maestro/playbooks/
 !.maestro/workers/registry.yaml
+!.maestro/instructions/registry.yaml
 !.maestro/memory/long-term/
 ```
 
@@ -103,6 +109,12 @@ The built-in Worker registry is immutable installed reference data. A project re
 only when reusable project-specific Workers or capability aliases are needed. Selected Worker
 specifications are copied into the matching Task or Temporary and never resolved by reference
 during execution.
+
+The built-in instruction registry is also immutable installed reference data. A reviewed project
+instruction registry may extend it but cannot replace built-in references. Persist each Task- or
+Temporary-scoped run's validated `delegation.json` before execution; it records the exact injected
+instruction digests, context references, tools, effective permissions, and Host Adapter support
+status. Session-scoped packets remain ephemeral.
 
 A minimal parsed project registry has this shape:
 

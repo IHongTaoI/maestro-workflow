@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "maestro-instructions",
+  "source": "builtin",
+  "instructions": [
+    { "ref": "contract:handoff", "source_scope": "core", "source_paths": ["references/handoffs.md"] },
+    { "ref": "policy:safety-boundary", "source_scope": "core", "source_paths": ["references/workers.md", "references/coordination.md"] },
+    { "ref": "role:architect", "source_scope": "core", "source_paths": ["references/roles/architect.md"] },
+    { "ref": "role:coder", "source_scope": "core", "source_paths": ["references/roles/coder.md"] },
+    { "ref": "role:delivery", "source_scope": "core", "source_paths": ["references/roles/delivery.md"] },
+    { "ref": "role:laborer", "source_scope": "core", "source_paths": ["references/roles/laborer.md"] },
+    { "ref": "role:memory-merger", "source_scope": "core", "source_paths": ["references/roles/memory-merger.md"] },
+    { "ref": "role:orchestrator", "source_scope": "core", "source_paths": ["references/roles/orchestrator.md"] },
+    { "ref": "role:test-designer", "source_scope": "core", "source_paths": ["references/roles/test-designer.md"] },
+    { "ref": "role:test-runner", "source_scope": "core", "source_paths": ["references/roles/test-runner.md"] },
+    { "ref": "role:tpm", "source_scope": "core", "source_paths": ["references/roles/tpm.md"] }
+  ]
+}

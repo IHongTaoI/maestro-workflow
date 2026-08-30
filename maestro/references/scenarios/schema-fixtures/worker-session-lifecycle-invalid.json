@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "one-off-log-parser",
   "name": "One-off Log Parser",
   "source": "temporary",
@@ -9,6 +9,7 @@
   "responsibility": "Parse one provided log.",
   "inputs": ["provided log text"],
   "outputs": ["grouped failures"],
+  "instructions": { "required": ["contract:handoff", "policy:safety-boundary"], "optional": [] },
   "tools": [],
   "context": { "read_paths": ["provided-input"], "write_paths": [] },
   "permissions": { "autonomous": [], "conditional": [] },

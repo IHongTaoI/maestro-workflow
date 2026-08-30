@@ -8,7 +8,7 @@
   "aliases": {},
   "workers": [
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "migration-reviewer",
       "name": "Migration Reviewer A",
       "source": "project",
@@ -18,13 +18,14 @@
       "responsibility": "Review migration plans.",
       "inputs": ["migration plan"],
       "outputs": ["risk review"],
+      "instructions": { "required": ["role:architect", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["db/"], "write_paths": [".maestro/"] },
       "permissions": { "autonomous": ["inspect-project"], "conditional": [] },
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "migration-reviewer",
       "name": "Migration Reviewer B",
       "source": "project",
@@ -34,6 +35,7 @@
       "responsibility": "Review migration risks.",
       "inputs": ["migration plan"],
       "outputs": ["risk review"],
+      "instructions": { "required": ["role:architect", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["db/"], "write_paths": [".maestro/"] },
       "permissions": { "autonomous": ["inspect-project"], "conditional": [] },

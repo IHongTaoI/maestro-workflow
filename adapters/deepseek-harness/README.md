@@ -11,6 +11,11 @@ dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #
 > 未接入模型"的状态。`ctx.agents` 仅用于能力探测，没有注册任何生命周期 handler（Handoff /
 > session-boundary 决策逻辑还在 Core Skill 里，属 TODO）。详见下文「落地顺序」。
 
+> **Worker Delegation Contract**：当前 Adapter 尚未实现 Worker Delegation Packet 到 dsh
+> subagent prompt / tool isolation 的映射，因此不能对独立 Worker 执行宣称 `supported`。在该映射
+> 完成前，Core 可以在当前 Agent 中直接执行同一份契约，但必须如实描述为本地 fallback；若要求
+> 独立 Worker 隔离，则应报告 `unsupported`，不能假设子 Agent 自动继承父 Skill 或权限。
+
 > dsh 目前是 v0.1 开发者预览版，官方 README 明确「THERE WILL BE COMPATIBILITY-BREAKING
 > CHANGES」。本适配层把对 dsh API 的引用收敛到 `src/` 内的 TypeScript 类型导入，Core 永不
 > import 任何 `@deepseek-ai/*` 包。
@@ -74,6 +79,7 @@ export function apply(ctx, config) {
 | 独占锁 create-if-absent | `ctx.fs.writeText(lockTarget, owner, { kind: 'createIfAbsent' })`；已存在抛 `FS_NOT_OBSERVED` |
 | 状态路径边界 | 每次解析都走 `ctx.fs.contains(.maestro/, target)` 做权威 containment 校验，`lockPathFor` / 状态路径再拒绝 `..` 与绝对路径 |
 | schema 校验 | 复用 `maestro/references/schemas/*.json`（JSON Schema draft 2020-12），用 `ajv` 校验 |
+| Worker 指令与上下文注入 | 尚未接线；独立 Worker 必须报告 `unsupported`，不能静默继承父上下文 |
 
 ## 锁协议（`acquireLock`）
 
@@ -138,5 +144,7 @@ fake ctx 即可覆盖锁 / CAS / 边界 / await 语义，无需真实 dsh runtim
 5. 把 store / validator 暴露成 model-facing tool，让 Core 的 storage 协议真正跑在 CAS 实现上——后续
 6. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
 7. session hooks 的完整生命周期联动（Handoff / Memory 保存）——后续
+8. 将 Worker Delegation Packet 映射到 dsh subagent 指令、上下文、工具与权限隔离，并返回真实
+   `supported` / `degraded` / `unsupported` 状态——后续
 
 [issue-14]: https://github.com/IHongTaoI/maestro-workflow/issues/14

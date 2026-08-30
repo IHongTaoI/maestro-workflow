@@ -143,7 +143,8 @@ grant permission for it.
 
 ## Delegation packet
 
-Give a role or Worker:
+Do not assume a role or Worker inherits the parent Agent's instructions, Skill, Session history,
+tools, or permissions. Give it:
 
 1. A bounded objective and completion condition.
 2. Relevant long-term project memory.
@@ -154,6 +155,13 @@ Give a role or Worker:
 6. The result directory and Handoff contract.
 
 Do not pass the complete conversation or every historical Reference.
+
+For a capability Worker, materialize these inputs as the validated Delegation Packet defined in
+[workers.md](workers.md). Its `context_refs` identify injected content; the Worker's `context`
+continues to define filesystem access boundaries. Keep these concepts separate. Resolve required
+instructions and the effective permission intersection before invoking the host. An unsupported
+required instruction or unenforceable permission boundary stops delegation rather than triggering
+a silent best-effort run.
 
 ## Resumption
 

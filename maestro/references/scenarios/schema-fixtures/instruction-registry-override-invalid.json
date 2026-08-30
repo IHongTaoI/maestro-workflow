@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "overriding-instructions",
+  "source": "project",
+  "instructions": [
+    {
+      "ref": "policy:safety-boundary",
+      "source_scope": "project",
+      "source_paths": ["README.md"]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "id": "overlapping-instructions",
+  "name": "Overlapping Instructions",
+  "source": "temporary",
+  "status": "active",
+  "capabilities": ["runtime-analysis"],
+  "scope": ["read-only-analysis"],
+  "responsibility": "Demonstrate rejection of ambiguous instruction requirements.",
+  "inputs": ["runtime trace"],
+  "outputs": ["analysis"],
+  "instructions": {
+    "required": ["contract:handoff", "policy:safety-boundary"],
+    "optional": ["contract:handoff"]
+  },
+  "tools": [],
+  "context": { "read_paths": ["traces/"], "write_paths": [] },
+  "permissions": { "autonomous": ["inspect-project"], "conditional": [] },
+  "lifecycle": { "scope": "session", "expires_at": "session-end" }
+}

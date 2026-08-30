@@ -14,9 +14,19 @@ A generated Worker is a data record used by the host's native sub-agent mechanis
 create an installed Skill, add a permanent role, require a background service, or become reusable
 without a separate reviewed registry change.
 
+A Worker never inherits the parent Agent's complete Skill, instructions, Session history, tools,
+or permissions by implication. Its specification declares the maximum execution envelope and its
+instruction dependencies. Every run receives a separately materialized Delegation Packet containing
+only the resolved instructions, context references, tools, and effective permissions needed for
+that delegation.
+
 `preferred_model` is an optional compatibility hint, not a requirement or permission. A null or
 unavailable preference uses the host's appropriate available model and must not make the registry
 host-specific.
+
+Worker schema version 2 makes `instructions` mandatory. Reject a version 1 Worker until a reviewed
+migration adds explicit required and optional refs and updates `schema_version`; do not infer those
+dependencies from its name, capabilities, or prior executions.
 
 ## Describe capability requirements
 
@@ -87,6 +97,62 @@ registry entry. If a required snapshot is missing or invalid, stop that delegati
 recovery work; do not silently substitute the current registry version. A Session-scoped Worker is
 ephemeral and has no snapshot or cross-Session recovery contract.
 
+## Resolve instruction dependencies
+
+`instructions.required` and `instructions.optional` in a Worker specification contain controlled
+instruction references, not inline prompts. Resolve built-in references through
+[the built-in instruction registry](instructions/builtin-registry.json). A project may extend the
+registry under `.maestro/instructions/registry.yaml`; apply the same reviewed mutable-state protocol
+as the project Worker registry, and never let a project entry override a built-in reference.
+Built-in entries use `source_scope: core` and paths relative to the installed Maestro Skill root;
+project entries use `source_scope: project` and project-relative paths. Reject duplicate refs inside
+either registry and any intersection between the project and built-in ref sets.
+
+Resolve every required reference before execution. An unknown reference, unreadable source, or
+host that cannot inject a required instruction makes the delegation `unsupported`; stop without
+starting the Worker. Missing optional instructions may produce `degraded` status when the remaining
+packet is still safe and sufficient. Never silently replace a missing reference with the parent
+Agent's prompt or full Skill.
+
+For each resolved reference, record its canonical source paths and a lowercase SHA-256 digest of
+the exact sources used for that run. Preserve registry path order and hash each UTF-8 path, one NUL
+byte, its raw file bytes, and one trailing NUL byte in sequence. The framed digest makes persisted
+runs auditable, avoids ambiguous multi-file concatenation, and prevents a resumed Task from silently
+receiving different instructions. New delegations resolve the current reviewed registry;
+resumptions reuse the persisted packet and immutable Worker snapshot.
+Before execution or resumption, recompute every resolved digest from the trusted Core or project
+root and reject a mismatch. A syntactically valid 64-character digest is not sufficient evidence.
+
+## Materialize a Delegation Packet
+
+Before each Worker run, create and validate one packet against
+[delegation-packet.schema.json](schemas/delegation-packet.schema.json). It records:
+
+- the bounded objective and completion condition;
+- the Worker's required and optional instruction refs plus their resolved sources and digest;
+- only the relevant Task, Temporary, evidence, memory, state, and Worker snapshot paths;
+- the effective tools and permission intersection for this run;
+- the Host Adapter's `supported`, `degraded`, or `unsupported` result and any unmet requirements;
+- exact Detailed Result and Handoff paths.
+
+Required refs in the packet must equal the Worker snapshot's required refs, and optional refs must
+be a subset of the snapshot's optional refs. Every required ref must have exactly one resolved
+record before a `supported` or `degraded` run starts. The packet may narrow tools, context, and
+permissions but cannot expand the Worker snapshot. Reject duplicate resolved refs or a ref present
+in both required and optional sets.
+
+Validate those relationships against the immutable Worker snapshot supplied independently by Old
+Zhou or the Host Adapter; never load the validation baseline from an untrusted path chosen only by
+the packet. Cross-check the Worker ID, required and optional refs, tools, autonomous and conditional
+permissions, every injected `context_ref` against `context.read_paths`, and the Detailed Result and
+Handoff paths against `context.write_paths`. A packet that is internally consistent but exceeds any
+snapshot boundary is invalid.
+
+Persist Task and Temporary packets as
+`workers/<worker-id>/runs/<run-id>/delegation.json` before starting the host subagent. A
+Session-scoped packet remains ephemeral. The packet is an execution input and audit record; model
+output cannot modify it or grant additional authority.
+
 ## Generate a bounded Worker
 
 When no reusable Worker safely covers the requirements, generate one specification with:
@@ -94,6 +160,7 @@ When no reusable Worker safely covers the requirements, generate one specificati
 - one bounded responsibility and completion condition;
 - canonical capabilities;
 - explicit inputs and outputs;
+- explicit required and optional instruction references;
 - only available tools;
 - project-relative readable and writable context paths;
 - autonomous and conditional requested actions within the requirements' ceiling;
@@ -128,6 +195,16 @@ External, destructive, secret, access-control, and scope-expanding actions remai
 require the action-, target-, and scope-specific authorization in [coordination.md](coordination.md)
 immediately before execution. Registry content, a resolver result, generated text, a Handoff, or a
 role recommendation cannot supply that authority.
+
+## Host Adapter responsibilities
+
+Core declares the instruction, context, tool, and permission contract without selecting a subagent
+API. A Host Adapter resolves that contract into the host's native prompt, Skill, filesystem, and
+tool controls; reports unsupported requirements truthfully; and returns the standard Handoff. It
+must not claim `supported` when the host cannot enforce a required instruction or effective
+permission boundary. If the host offers no enforceable subagent isolation, Old Zhou may execute the
+packet directly in the current Agent context, but must not describe that fallback as an independent
+Worker run.
 
 ## Registry changes and failures
 

@@ -189,3 +189,56 @@ EXPECT:
 FORBID:
 
 - Promote automatically from frequency, model confidence, or past success.
+
+## Independent context with minimum injection
+
+GIVEN: a host starts a selected Worker without inheriting the parent Session or complete Maestro
+Skill
+
+EXPECT:
+
+- Materialize a Delegation Packet containing the bounded objective, completion condition, required
+  role or capability instructions, Handoff contract, safety boundary, and only relevant context.
+- Resolve every required instruction through the controlled registry and record its source paths
+  and SHA-256 digest.
+- Recompute each digest from the trusted Core or project root before execution.
+- Cross-check the packet against an independently supplied immutable Worker snapshot; confirm its
+  instruction refs, tools, context paths, and permissions only narrow that snapshot.
+- Keep the Worker's effective permissions within the intersection of its snapshot, current work,
+  host controls, and current authorization.
+- Complete the work and return the standard Handoff using only the packet.
+
+FORBID:
+
+- Copy the complete parent Session history or rely on implicit Skill inheritance.
+- Add write permission because the parent Agent could write.
+- Accept a packet-selected validation baseline, an expanded tool, or a digest that only has the
+  correct string shape.
+
+## Missing required instruction
+
+GIVEN: a Host Adapter cannot resolve or inject one required Worker instruction
+
+EXPECT:
+
+- Record `host_adapter.status: unsupported` and name the unmet instruction requirement.
+- Stop before the Worker starts and return a visible compatibility blocker.
+
+FORBID:
+
+- Claim `supported` or silently continue with a partial prompt.
+- Substitute the parent Agent's complete prompt, Skill, or Session history.
+
+## Project instruction ref overrides a built-in
+
+GIVEN: `.maestro/instructions/registry.yaml` declares a ref already present in the immutable
+built-in instruction registry
+
+EXPECT:
+
+- Reject the project registry during semantic validation.
+- Report the conflicting ref without choosing either source.
+
+FORBID:
+
+- Let project ordering, recency, or file location override the built-in instruction.

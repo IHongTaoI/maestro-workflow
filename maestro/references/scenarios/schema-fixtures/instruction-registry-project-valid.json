@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "project-instructions",
+  "source": "project",
+  "instructions": [
+    {
+      "ref": "project:review-guidance",
+      "source_scope": "project",
+      "source_paths": ["README.md"]
+    }
+  ]
+}
