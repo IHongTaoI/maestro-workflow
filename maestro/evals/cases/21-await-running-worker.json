@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "main-agent-awaits-running-worker",
+  "name": "Main Agent waits for an already running Worker",
+  "category": "routing",
+  "regression": { "real_case": true, "source": "Issue #21: main Agent took over before a delegated subagent completed" },
+  "setup": {
+    "task": { "id": "task-startup-trace", "status": "active", "objective": "identify the startup bottleneck" },
+    "execution_state": {
+      "main_agent": "resumed-by-goal-loop",
+      "worker_runs": [{ "id": "laborer-trace", "status": "running", "result_available": false }]
+    }
+  },
+  "turns": [{ "user_prompt": "继续完成这个调查目标" }],
+  "expect": [
+    { "path": "/execution/main_agent", "operator": "equals", "value": "waiting" },
+    { "path": "/execution/worker_runs/0/status", "operator": "equals", "value": "running" },
+    { "path": "/execution/worker_runs/0/awaited", "operator": "equals", "value": true },
+    { "path": "/execution/worker_runs/0/result_consumed", "operator": "equals", "value": false }
+  ],
+  "must_not": [
+    { "path": "/actions", "operator": "contains", "value": "take-over-running-worker" },
+    { "path": "/actions", "operator": "contains", "value": "interrupt-running-worker" },
+    { "path": "/execution/worker_runs/0/status", "operator": "equals", "value": "interrupted" }
+  ]
+}

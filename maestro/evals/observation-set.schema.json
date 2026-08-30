@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/eval-observation-set.schema.json",
+  "title": "Maestro Eval Observation Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observations"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "observations": {
+      "type": "array",
+      "items": { "$ref": "https://maestro.local/schemas/eval-observation.schema.json" }
+    }
+  }
+}

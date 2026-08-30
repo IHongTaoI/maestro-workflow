@@ -24,17 +24,44 @@ operator vocabulary.
 Replay the checked-in observations to validate the fixture set and assertion runner:
 
 ```text
-npm run test:evals
+npm run test:evals:fixtures
 ```
 
 The replay data is a deterministic runner regression baseline. It is not evidence that a live model
-still follows the Skill. For a real behavior run, supply an execution adapter:
+still follows the Skill.
+
+## Codex live eval
+
+The included reference adapter installs the current Skill bundle into an isolated temporary
+workspace, invokes `codex exec` with a read-only sandbox and ephemeral Session, and constrains its
+final response with a structured-output-compatible projection of `observation.schema.json`. The
+runner then validates that response against the complete, unmodified schema, including constraints
+such as `uniqueItems` that Codex structured output does not accept. The case prompt excludes
+`expect`, `must_not`, and judge rubrics, so the Agent cannot copy the desired result from the
+fixture. Codex CLI must already be installed and authenticated; live runs consume model usage.
+
+```text
+npm run test:evals:live:codex
+```
+
+Run one case while iterating on instructions:
+
+```text
+npm run test:evals:live:codex -- --case performance-investigation-stays-temporary
+```
+
+Set `MAESTRO_CODEX_COMMAND` when the executable is not named `codex`, and
+`MAESTRO_CODEX_TIMEOUT_MS` to change the five-minute per-call timeout.
+
+## Adapter contract
+
+Custom hosts can use the same runner:
 
 ```text
 node maestro/evals/run.mjs --adapter ./path/to/host-adapter.mjs
 ```
 
-The module exports `async function runCase(request)`. `request.case` is the case definition and
+An adapter exports `async function runCase(request)`. `request.case` is the case definition and
 `request.skill.files` contains the current `SKILL.md` and references, so rerunning after an
 instruction edit tests the edited Core. Return one observation matching `observation.schema.json`.
 Adapters own host/model invocation and trace normalization; they must not change the eval cases.
@@ -50,6 +77,6 @@ node maestro/evals/run.mjs \
 ```
 
 Keeping adapters outside the Core preserves host independence and avoids turning the eval harness
-into a Maestro workflow Runtime. CI validates all case/observation schemas and replays the fixed
-baseline; live model runs can be scheduled by a host integration without making ordinary pull
-requests depend on credentials, cost, or sampling variance.
+into a Maestro workflow Runtime. CI labels and runs only the fixed fixture replay; the explicit live
+command validates current Skill behavior without making ordinary pull requests depend on
+credentials, cost, or sampling variance.

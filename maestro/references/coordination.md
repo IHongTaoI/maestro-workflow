@@ -119,6 +119,20 @@ delegation, and result integration. Resolver output must not force a role sequen
 direct role request. Snapshot every persisted Worker before execution so Task or Temporary
 resumption is independent of later registry changes. Do not persist a Session-scoped Worker.
 
+## Await delegated execution
+
+A delegated role or Worker run remains the owner of its bounded objective while the host reports it
+as queued or running. Record the run ID and status in the active Session, Temporary, or Task context
+needed for recovery. A main-loop iteration, goal continuation, Session resume, or unrelated Worker
+completion is not evidence that the run stopped.
+
+Use the host's native wait or status mechanism until the run completes, blocks, fails, or the user
+explicitly cancels or reassigns it. Do not start a duplicate run, interrupt the existing run, or
+perform its objective in Old Zhou merely because the coordinator is active again. Once terminal,
+consume the result and Handoff before scheduling dependent work. If status cannot be recovered,
+inspect the authoritative host handle once and report the uncertainty instead of assuming failure
+or silently taking over.
+
 ## Authorization boundaries
 
 Authorization follows the action, target, and scope rather than the role performing it:

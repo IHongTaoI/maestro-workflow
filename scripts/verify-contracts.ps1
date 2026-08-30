@@ -139,12 +139,18 @@ try {
 
     $evalCaseSchema = "maestro/evals/case.schema.json"
     $evalObservationSchema = "maestro/evals/observation.schema.json"
+    $evalObservationSetSchema = "maestro/evals/observation-set.schema.json"
+    Get-ChildItem "maestro/evals" -Filter "*.schema.json" | ForEach-Object {
+        Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
+    }
     $evalCaseFiles = @(Get-ChildItem "maestro/evals/cases" -Filter "*.json")
     $evalCaseFiles | ForEach-Object {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
     Invoke-AjvCase -Schema $evalCaseSchema -Data @($evalCaseFiles.FullName) -ExpectedExit 0
-    Invoke-AjvCase $evalObservationSchema "maestro/evals/fixtures/observations.json" 0
+    Invoke-AjvCase -Schema $evalObservationSetSchema `
+        -Data "maestro/evals/fixtures/observations.json" -ExpectedExit 0 `
+        -References @($evalObservationSchema)
 
     $validatorFixtureRoot = "maestro/references/scenarios/validator-fixtures"
     $handoffSchema = "maestro/references/schemas/handoff.schema.json"
@@ -657,6 +663,8 @@ try {
         @{ Path = "maestro/references/workers.md"; Text = "delegation-packet.schema.json" },
         @{ Path = "maestro/references/coordination.md"; Text = "Do not assume a role or Worker inherits" },
         @{ Path = "maestro/references/coordination.md"; Text = "Worker resolution must not promote exploratory work into a Task" },
+        @{ Path = "maestro/references/coordination.md"; Text = "Do not start a duplicate run" },
+        @{ Path = "maestro/SKILL.md"; Text = "wait through the host's native mechanism" },
         @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
         @{ Path = "maestro/references/workers.md"; Text = "must never promote it automatically" },
         @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" },

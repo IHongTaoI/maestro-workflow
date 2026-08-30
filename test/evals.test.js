@@ -5,11 +5,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import test from 'node:test';
+import {
+  createCodexAdapter,
+  buildCasePrompt,
+  createCodexOutputSchema,
+} from '../maestro/evals/adapters/codex-cli.mjs';
+import { validateJsonSchema } from '../maestro/evals/schema-validator.mjs';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(import.meta.dirname, '..');
 const runnerPath = path.join(repositoryRoot, 'maestro', 'evals', 'run.mjs');
 const observationsPath = path.join(repositoryRoot, 'maestro', 'evals', 'fixtures', 'observations.json');
+const observationSchemaPath = path.join(repositoryRoot, 'maestro', 'evals', 'observation.schema.json');
 
 function runEvals(args) {
   return execFileAsync(process.execPath, [runnerPath, ...args], {
@@ -32,8 +39,8 @@ test('replays all checked-in Agent behavior cases', async () => {
   const report = JSON.parse(result.stdout);
 
   assert.equal(report.mode, 'observation-replay');
-  assert.equal(report.total, 20);
-  assert.equal(report.passed, 20);
+  assert.equal(report.total, 21);
+  assert.equal(report.passed, 21);
   assert.equal(report.failed, 0);
 });
 
@@ -82,7 +89,39 @@ test('rejects a malformed normalized observation', async (t) => {
   ]));
 
   assert.equal(failure.code, 1);
-  assert.match(failure.stdout, /observation.task_created must be a boolean/);
+  assert.match(failure.stdout, /observation schema: \/task_created: is required/);
+});
+
+test('observation validation reuses the full JSON Schema', async () => {
+  const schema = JSON.parse(await readFile(observationSchemaPath, 'utf8'));
+  const observations = JSON.parse(await readFile(observationsPath, 'utf8'));
+  const base = observations.observations[0];
+  const invalidMode = structuredClone(base);
+  invalidMode.mode = 'planning';
+  const invalidWorker = structuredClone(base);
+  invalidWorker.workers[0].kind = 'invented';
+  const duplicatePermission = structuredClone(base);
+  duplicatePermission.workers[0].permissions.push('read-project');
+  const additionalProperty = structuredClone(base);
+  additionalProperty.workers[0].authority = 'unbounded';
+
+  assert.deepEqual(validateJsonSchema(schema, base), []);
+  assert.match(validateJsonSchema(schema, invalidMode).join('\n'), /\/mode: must be one of/);
+  assert.match(validateJsonSchema(schema, invalidWorker).join('\n'), /\/workers\/0\/kind: must be one of/);
+  assert.match(validateJsonSchema(schema, duplicatePermission).join('\n'), /\/workers\/0\/permissions\/1: must be unique/);
+  assert.match(validateJsonSchema(schema, additionalProperty).join('\n'), /\/workers\/0\/authority: additional property is not allowed/);
+});
+
+test('Codex schema projection removes only unsupported structured-output constraints', async () => {
+  const schema = JSON.parse(await readFile(observationSchemaPath, 'utf8'));
+  const projected = createCodexOutputSchema(schema);
+  const permissions = projected.properties.workers.items.properties.permissions;
+
+  assert.equal(permissions.uniqueItems, undefined);
+  assert.equal(projected.properties.case_id.minLength, undefined);
+  assert.equal(projected.properties.mode.enum.includes('one-off'), true);
+  assert.equal(projected.properties.workers.items.additionalProperties, false);
+  assert.equal(schema.properties.workers.items.properties.permissions.uniqueItems, true);
 });
 
 test('live adapter receives the current Skill bundle', async (t) => {
@@ -111,4 +150,54 @@ test('live adapter receives the current Skill bundle', async (t) => {
 
   assert.equal(report.mode, 'live-adapter');
   assert.equal(report.passed, 1);
+});
+
+test('Codex reference adapter materializes the current Skill and hides expectations', async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-codex-adapter-test-'));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const observations = JSON.parse(await readFile(observationsPath, 'utf8'));
+  const observation = observations.observations.find(
+    (candidate) => candidate.case_id === 'performance-investigation-stays-temporary',
+  );
+  const caseDefinition = JSON.parse(await readFile(
+    path.join(repositoryRoot, 'maestro', 'evals', 'cases', '01-performance-investigation.json'),
+    'utf8',
+  ));
+  const fakeCliPath = path.join(temporaryRoot, 'fake-codex.mjs');
+  await writeFile(fakeCliPath, `
+    import fs from 'node:fs';
+    import path from 'node:path';
+    let prompt = '';
+    process.stdin.setEncoding('utf8');
+    for await (const chunk of process.stdin) prompt += chunk;
+    if (!fs.existsSync(path.join(process.cwd(), '.agents', 'skills', 'maestro', 'SKILL.md'))) {
+      process.stderr.write('Skill was not materialized');
+      process.exit(1);
+    }
+    if (prompt.includes('"expect"') || prompt.includes('"must_not"')) {
+      process.stderr.write('Expected answers leaked into prompt');
+      process.exit(1);
+    }
+    const schemaIndex = process.argv.indexOf('--output-schema');
+    const outputSchema = JSON.parse(fs.readFileSync(process.argv[schemaIndex + 1], 'utf8'));
+    if (JSON.stringify(outputSchema).includes('"uniqueItems"')) {
+      process.stderr.write('Unsupported JSON Schema keyword reached Codex');
+      process.exit(1);
+    }
+    const outputIndex = process.argv.indexOf('--output-last-message');
+    fs.writeFileSync(process.argv[outputIndex + 1], ${JSON.stringify(JSON.stringify(observation))});
+  `);
+  const adapter = createCodexAdapter({
+    command: process.execPath,
+    commandArgs: [fakeCliPath],
+    timeoutMs: 10_000,
+  });
+
+  const result = await adapter.runCase({
+    case: caseDefinition,
+    skill: { files: { 'SKILL.md': '# Maestro', 'references/coordination.md': '# Coordination' } },
+  });
+
+  assert.equal(result.case_id, caseDefinition.id);
+  assert.doesNotMatch(buildCasePrompt(caseDefinition), /"expect"|"must_not"/);
 });

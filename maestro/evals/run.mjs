@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { validateJsonSchema } from './schema-validator.mjs';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '..', '..');
 const defaultCasesPath = path.join(repositoryRoot, 'maestro', 'evals', 'cases');
@@ -13,6 +14,9 @@ const defaultObservationsPath = path.join(
   'evals',
   'fixtures',
   'observations.json',
+);
+const observationSchema = JSON.parse(
+  await readFile(path.join(import.meta.dirname, 'observation.schema.json'), 'utf8'),
 );
 
 function usage() {
@@ -206,34 +210,9 @@ function formatAssertion(assertion) {
   return `${assertion.path} ${assertion.operator} ${JSON.stringify(assertion.value)}`;
 }
 
-function validateObservationShape(observation) {
-  if (observation === null || typeof observation !== 'object' || Array.isArray(observation)) {
-    return ['observation must be an object'];
-  }
-  const failures = [];
-  const booleanFields = ['task_created', 'implementation_started', 'read_only'];
-  const arrayFields = ['workers', 'user_questions', 'files_modified', 'actions'];
-  const objectFields = ['temporary', 'memory', 'handoff', 'authorization'];
-  if (typeof observation.case_id !== 'string' || observation.case_id.length === 0) {
-    failures.push('observation.case_id must be a non-empty string');
-  }
-  if (typeof observation.mode !== 'string') failures.push('observation.mode must be a string');
-  for (const field of booleanFields) {
-    if (typeof observation[field] !== 'boolean') failures.push(`observation.${field} must be a boolean`);
-  }
-  for (const field of arrayFields) {
-    if (!Array.isArray(observation[field])) failures.push(`observation.${field} must be an array`);
-  }
-  for (const field of objectFields) {
-    if (observation[field] === null || typeof observation[field] !== 'object' || Array.isArray(observation[field])) {
-      failures.push(`observation.${field} must be an object`);
-    }
-  }
-  return failures;
-}
-
 function evaluateCase(caseDefinition, observation) {
-  const failures = validateObservationShape(observation);
+  const failures = validateJsonSchema(observationSchema, observation)
+    .map((error) => `observation schema: ${error}`);
   if (failures.length > 0) return failures;
   if (observation.case_id !== caseDefinition.id) {
     failures.push(`observation case_id is '${observation.case_id}', expected '${caseDefinition.id}'`);
@@ -249,9 +228,14 @@ function evaluateCase(caseDefinition, observation) {
     }
   }
   for (const judge of caseDefinition.llm_judges ?? []) {
-    const judgment = observation.judgments?.[judge.id];
-    if (!judgment) failures.push(`missing LLM judgment '${judge.id}'`);
-    else if (judgment.passed !== true) failures.push(`LLM judgment failed: ${judge.id}`);
+    const judgments = observation.judgments.filter((candidate) => candidate.id === judge.id);
+    if (judgments.length === 0) failures.push(`missing LLM judgment '${judge.id}'`);
+    else if (judgments.length > 1) failures.push(`duplicate LLM judgment '${judge.id}'`);
+    else if (judgments[0].passed !== true) failures.push(`LLM judgment failed: ${judge.id}`);
+  }
+  const expectedJudgeIds = new Set((caseDefinition.llm_judges ?? []).map((judge) => judge.id));
+  for (const judgment of observation.judgments) {
+    if (!expectedJudgeIds.has(judgment.id)) failures.push(`unexpected LLM judgment '${judgment.id}'`);
   }
   return failures;
 }
@@ -300,12 +284,12 @@ async function run(options) {
     }
 
     if (judgeCase && (caseDefinition.llm_judges?.length ?? 0) > 0) {
-      observation.judgments = await judgeCase({
+      observation = { ...observation, judgments: await judgeCase({
         case: caseDefinition,
         observation,
         repositoryRoot,
         skill,
-      });
+      }) };
     }
     const failures = evaluateCase(caseDefinition, observation);
     results.push({

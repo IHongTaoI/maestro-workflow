@@ -112,20 +112,20 @@ provenance on unresolved conflicts.
 
 ## Behavior evals
 
-Maestro includes 20 structured Agent behavior cases covering work-shape decisions, role and Worker
-routing, Temporary/Task/Long-term Memory, Session Handoffs, and authorization boundaries. Run the
-deterministic fixture replay with:
+Maestro includes 21 structured Agent behavior cases covering work-shape decisions, role and Worker
+routing, delegated-run waiting, Temporary/Task/Long-term Memory, Session Handoffs, and authorization
+boundaries. Run the deterministic runner/fixture self-test with:
 
 ```text
-npm run test:evals
+npm run test:evals:fixtures
 ```
 
-The replay checks the eval schema, observation contract, assertion engine, and expected baseline.
-To evaluate a live model after changing `SKILL.md` or its references, provide a host adapter to the
-same runner. The adapter receives the current Skill contents for every run:
+The replay checks the eval schema, observation contract, assertion engine, and expected baseline;
+it is not a live Agent regression result. To run the current Skill through the included Codex CLI
+reference adapter after changing `SKILL.md` or its references, use:
 
 ```text
-node maestro/evals/run.mjs --adapter ./path/to/host-adapter.mjs
+npm run test:evals:live:codex
 ```
 
 See [`maestro/evals/README.md`](maestro/evals/README.md) for the case format, normalized observation
