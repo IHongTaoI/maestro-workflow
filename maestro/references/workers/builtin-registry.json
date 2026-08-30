@@ -5,7 +5,7 @@
   "aliases": {},
   "workers": [
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "architect",
       "name": "Architect",
       "source": "builtin",
@@ -16,6 +16,7 @@
       "inputs": ["confirmed current-state evidence", "constraints", "bounded design objective"],
       "outputs": ["reviewable design or architecture decision", "risk analysis", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:architect", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -25,7 +26,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "coder",
       "name": "Coder",
       "source": "builtin",
@@ -36,6 +37,7 @@
       "inputs": ["authorized implementation objective", "relevant project context", "acceptance checks"],
       "outputs": ["reviewable project changes", "verification evidence", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:coder", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".", ".maestro/"] },
       "permissions": {
@@ -45,7 +47,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "delivery",
       "name": "Delivery",
       "source": "builtin",
@@ -56,6 +58,7 @@
       "inputs": ["requested outcome", "verification evidence", "delivery constraints"],
       "outputs": ["readiness verdict", "delivery summary", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:delivery", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -65,7 +68,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "laborer",
       "name": "Laborer",
       "source": "builtin",
@@ -76,6 +79,7 @@
       "inputs": ["investigation question", "relevant project paths", "available evidence"],
       "outputs": ["verified findings", "evidence paths", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:laborer", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -85,7 +89,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "memory-merger",
       "name": "Memory Merger",
       "source": "builtin",
@@ -96,6 +100,7 @@
       "inputs": ["BASE, OURS, and THEIRS shared memory entries", "file path", "merge constraints"],
       "outputs": ["merged memory entries", "resolved items", "unresolved conflicts with provenance", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:memory-merger", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -105,7 +110,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "orchestrator",
       "name": "Orchestrator",
       "source": "builtin",
@@ -116,6 +121,7 @@
       "inputs": ["clear task objective", "dependencies", "write sets and constraints"],
       "outputs": ["smallest useful execution map", "ownership decisions", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:orchestrator", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -125,7 +131,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "test-designer",
       "name": "Test Designer",
       "source": "builtin",
@@ -136,6 +142,7 @@
       "inputs": ["requirements", "risk analysis", "available test surfaces"],
       "outputs": ["verification plan", "risk coverage", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:test-designer", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -145,7 +152,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "test-runner",
       "name": "Test Runner",
       "source": "builtin",
@@ -156,6 +163,7 @@
       "inputs": ["verification plan", "intended artifact", "test environment"],
       "outputs": ["check results", "reproduction evidence", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:test-runner", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {
@@ -165,7 +173,7 @@
       "lifecycle": { "scope": "reusable", "expires_at": "never" }
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "tpm",
       "name": "TPM",
       "source": "builtin",
@@ -176,6 +184,7 @@
       "inputs": ["user goal", "known constraints", "open product choices"],
       "outputs": ["scoped brief", "observable acceptance criteria", "Handoff"],
       "preferred_model": null,
+      "instructions": { "required": ["role:tpm", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": {

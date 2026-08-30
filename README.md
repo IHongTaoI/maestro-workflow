@@ -94,6 +94,11 @@ safe reusable match exists. Generated Workers follow the existing Task, Temporar
 Session lifecycle, cannot grant themselves permissions, and never become permanent roles
 automatically.
 
+Workers do not rely on implicit inheritance from the parent Agent. Each Worker declares required
+and optional instruction references, and each run materializes a minimal Delegation Packet with
+resolved instruction digests, context references, effective tools and permissions, and the host's
+support status. A missing required instruction or unenforceable boundary stops the delegation.
+
 Maestro creates project-owned state under `.maestro/` only when the request needs persistence. It
 asks for confirmation before turning exploratory discussion into a formal Task.
 

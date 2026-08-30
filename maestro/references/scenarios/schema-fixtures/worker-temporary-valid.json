@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "frontend-performance",
   "name": "Frontend Performance Worker",
   "source": "temporary",
@@ -10,6 +10,7 @@
   "inputs": ["homepage trace", "bundle statistics", "current source"],
   "outputs": ["profile evidence", "ranked bottlenecks", "Handoff"],
   "preferred_model": null,
+  "instructions": { "required": ["contract:handoff", "policy:safety-boundary"], "optional": [] },
   "tools": ["browser-trace", "bundle-inspector"],
   "context": {
     "read_paths": ["src/", "dist/stats.json"],

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "unsafe-context-worker",
   "name": "Unsafe Context Worker",
   "source": "temporary",
@@ -9,6 +9,7 @@
   "responsibility": "Demonstrate that UNC paths are rejected.",
   "inputs": ["runtime trace"],
   "outputs": ["analysis"],
+  "instructions": { "required": ["contract:handoff", "policy:safety-boundary"], "optional": [] },
   "tools": [],
   "context": {
     "read_paths": ["\\\\server\\share"],

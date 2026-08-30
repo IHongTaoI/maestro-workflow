@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "worker_id": "laborer",
+  "worker_snapshot_path": ".maestro/tasks/example/workers/laborer/spec.yaml",
+  "objective": "Determine why startup initialization is slow without modifying product code.",
+  "completion_condition": "Return evidence-backed findings and a standard Handoff.",
+  "instructions": {
+    "required_refs": ["role:laborer", "contract:handoff", "policy:safety-boundary"],
+    "optional_refs": [],
+    "resolved": [
+      {
+        "ref": "role:laborer",
+        "source_paths": ["references/roles/laborer.md"],
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "ref": "contract:handoff",
+        "source_paths": ["references/handoffs.md"],
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "ref": "policy:safety-boundary",
+        "source_paths": ["references/workers.md", "references/coordination.md"],
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  "context_refs": [
+    { "kind": "current-task", "path": ".maestro/tasks/example/context.md" },
+    { "kind": "relevant-evidence", "path": ".maestro/tasks/example/evidence/startup-trace.json" }
+  ],
+  "tools": ["shell"],
+  "permissions": {
+    "autonomous": ["inspect-project", "run-nondestructive-checks", "write-work-artifacts"],
+    "conditional": []
+  },
+  "host_adapter": {
+    "id": "example-host",
+    "status": "supported",
+    "unsupported_requirements": []
+  },
+  "result_path": ".maestro/tasks/example/workers/laborer/runs/run-1/result.md",
+  "handoff_path": ".maestro/tasks/example/handoffs/laborer-run-1.json"
+}

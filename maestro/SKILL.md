@@ -38,6 +38,10 @@ substantial work.
 Delegate through the host's sub-agent mechanism when available. Give each role a bounded objective,
 the minimum relevant context, exact source/result paths, constraints, and the expected Handoff.
 When sub-agents are unavailable, perform the role yourself while following the same role contract.
+Do not assume a delegated agent inherits this Skill, the parent Session, role instructions, tools,
+or authorization. Materialize and validate the delegation packet defined in
+[workers.md](references/workers.md) before every Worker run; do not execute when a required
+instruction or permission boundary cannot be enforced by the host.
 
 Load only the role reference needed for the current delegation:
 

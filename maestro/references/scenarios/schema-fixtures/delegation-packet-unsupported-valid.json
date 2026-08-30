@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "worker_id": "laborer",
+  "objective": "Investigate startup behavior.",
+  "completion_condition": "Return evidence-backed findings and a standard Handoff.",
+  "instructions": {
+    "required_refs": ["contract:handoff", "policy:safety-boundary"],
+    "optional_refs": [],
+    "resolved": [
+      {
+        "ref": "policy:safety-boundary",
+        "source_paths": ["references/workers.md", "references/coordination.md"],
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  "context_refs": [],
+  "tools": [],
+  "permissions": { "autonomous": ["inspect-project"], "conditional": [] },
+  "host_adapter": {
+    "id": "limited-host",
+    "status": "unsupported",
+    "unsupported_requirements": ["instruction:contract:handoff"]
+  },
+  "result_path": ".maestro/tasks/example/workers/laborer/runs/run-2/result.md",
+  "handoff_path": ".maestro/tasks/example/handoffs/laborer-run-2.json"
+}
