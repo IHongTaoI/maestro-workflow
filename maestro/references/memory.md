@@ -100,6 +100,30 @@ Long-term store is represented by an empty array, not by omitting the index. Sta
 candidate name the entries it compared without coupling the protocol to Markdown headings or a
 host API.
 
+Persist each entry in `long-term/current.md` as one machine-readable fenced JSON block. The
+surrounding Markdown remains available for a short human introduction, but current claims must not
+exist only as unstructured prose:
+
+````markdown
+```maestro-memory-entry
+{
+  "entry_id": "lt-home-startup-trace",
+  "title": "Collect startup evidence before optimization",
+  "memory_kind": "experience",
+  "content": "Capture a trace before changing homepage initialization.",
+  "source_refs": [".maestro/tasks/archive/task-startup/evidence/trace.md"],
+  "tags": ["performance", "trace"],
+  "aliases": ["首屏性能"],
+  "status": "active"
+}
+```
+````
+
+`tags`, `aliases`, and `status` are optional; status defaults to `active`. The catalog builder
+rejects duplicate IDs, invalid blocks, and unstructured current claims rather than silently
+creating an incomplete index. Existing projects must migrate current Long-term entries to these
+blocks before enabling Memory Awareness.
+
 This is a compatibility change for Memory Worker request producers. A producer that previously
 sent `"current_memory": {}` must migrate to `"current_memory": {"long_term_entries": []}` when no
 Long-term entries exist; otherwise request validation fails.
@@ -185,6 +209,53 @@ novel merely to pass validation.
 Load `current.md` or `current-state.md` by default. References are historical anchors and are loaded
 only when required for a current decision, conflict, explanation, or user request. Never inject the
 entire Reference tree automatically.
+
+## Memory Awareness and progressive retrieval
+
+`manifest.md` and `index.json` under `.maestro/memory/` are local, derived catalog files. Formal
+Temporary, Task, and Long-term files remain authoritative. The catalog can be deleted and rebuilt;
+it must never be edited to change a Memory claim.
+
+At the start of a substantial Session, check the catalog and rebuild it when missing or stale:
+
+```bash
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> check
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> build
+```
+
+Read only `manifest.md` for the initial overview. When the user request may benefit from prior
+context, query the index with the current request plus the active Skill, role, or Worker context and
+the bound Temporary or Task when known:
+
+```bash
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> search \
+  "<current request>" --context "<skill or worker context>" --binding <memory-id>
+```
+
+The retriever returns at most five active candidates and a `relevance_reason`. It may return no
+candidates. Do not force an unrelated Memory into context and do not open every returned source.
+After judging a candidate relevant, load only that record through its stable ID:
+
+```bash
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> show <memory-id>
+```
+
+`show` extracts one Long-term JSON block or the bounded current sections for a Temporary, Task,
+role, or Worker. This is the supported way to avoid injecting all of `long-term/current.md` merely
+to use one entry.
+
+The deterministic catalog covers:
+
+- every structured Long-term entry, including inactive status for audit but excluding inactive
+  entries from normal retrieval;
+- active Temporary routing context from `meta.yaml` and the short current sections;
+- active Task objectives and each role or Worker `current-state.md`.
+
+It does not index historical Reference trees. `search` refreshes a missing or stale catalog by
+default; `--no-refresh` turns staleness into a visible error. Rebuild after an approved Long-term
+write, Temporary lifecycle change, Task lifecycle change, or current-state update. A failed rebuild
+must not block the business task: report the diagnostic and fall back to the existing bounded,
+source-first reads.
 
 ## Memory Worker
 

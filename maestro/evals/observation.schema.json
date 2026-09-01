@@ -70,7 +70,22 @@
       "properties": {
         "selected_temporary": { "type": ["string", "null"] },
         "routing_basis": { "type": ["string", "null"] },
-        "evidence_precedence": { "type": ["string", "null"] }
+        "evidence_precedence": { "type": ["string", "null"] },
+        "manifest_loaded": { "type": "boolean" },
+        "retrieved_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "detail_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "retrieval_reasons": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "handoff": {

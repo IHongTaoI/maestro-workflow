@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-01T06:30:00Z",
+  "source_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {
+      "memory_id": "lt-fixture-index",
+      "layer": "long-term",
+      "record_type": "long-term-entry",
+      "title": "Memory catalog fixture",
+      "summary": "The catalog loads summaries before details.",
+      "path": "files/source.md",
+      "locator": "lt-fixture-index",
+      "status": "active",
+      "memory_kind": "principle",
+      "tags": ["memory", "retrieval"],
+      "aliases": [],
+      "search_hints": [],
+      "updated_at": "2026-09-01T06:29:00Z"
+    }
+  ]
+}

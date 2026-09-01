@@ -110,9 +110,15 @@ copies execution logs directly into Long-term Memory or approves its own proposa
 Git branches, `memory-merger` performs 3-way semantic consolidation and preserves full dual-sided
 provenance on unresolved conflicts.
 
+Memory Awareness adds a small generated Manifest and machine-readable Index across active
+Temporary, Task, and Long-term Memory. The Agent loads the Manifest first, retrieves at most five
+relevant candidates, and extracts one selected record by stable ID instead of injecting the whole
+Long-term file. `maestro/scripts/memory_catalog.py` builds, checks, searches, and selectively reads
+this local derived catalog; it does not replace formal Memory or add a background Runtime.
+
 ## Behavior evals
 
-Maestro includes 21 structured Agent behavior cases covering work-shape decisions, role and Worker
+Maestro includes 23 structured Agent behavior cases covering work-shape decisions, role and Worker
 routing, delegated-run waiting, Temporary/Task/Long-term Memory, Session Handoffs, and authorization
 boundaries. Run the deterministic runner/fixture self-test with:
 
@@ -142,6 +148,9 @@ cli/
   install.js
 maestro/
   SKILL.md
+  scripts/
+    memory_catalog.py
+    validate.py
   evals/
     cases/
     fixtures/
