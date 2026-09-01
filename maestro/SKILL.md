@@ -80,6 +80,18 @@ The three memory layers are:
 - Task: formal execution context, evidence, artifacts, and per-role or Worker state.
 - Long-term: stable, sourced project knowledge approved by Old Zhou or a strong-model review.
 
+At the start of a substantial Session, use the deterministic catalog protocol in
+[memory.md](references/memory.md): check or rebuild `.maestro/memory/manifest.md` and `index.json`,
+then read only the small Manifest for awareness. Do not load all formal Memory or References during
+initialization. If the user asks what Memory exists, present the Manifest as a map and open details
+only when requested.
+
+Before work that may benefit from prior context, query the Memory Index with the current request,
+active Skill or Worker context, and any bound Temporary or Task. Review at most five candidates,
+keep the `relevance_reason`, and use `memory_catalog.py show <memory-id>` only for candidates that
+are actually relevant. An empty result is valid. Never load unrelated Memory merely because an
+index entry exists, and never treat the derived Manifest or Index as authority.
+
 Temporary and Task contents never enter Long-term Memory by direct copy. At a Memory Worker
 boundary, compare durable candidates with current Long-term entries and propose `UPDATE`, `MERGE`,
 `CREATE`, or `SKIP`; apply no proposal until Old Zhou or a strong-model reviewer approves it.

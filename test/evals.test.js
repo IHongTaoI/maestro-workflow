@@ -39,8 +39,8 @@ test('replays all checked-in Agent behavior cases', async () => {
   const report = JSON.parse(result.stdout);
 
   assert.equal(report.mode, 'observation-replay');
-  assert.equal(report.total, 21);
-  assert.equal(report.passed, 21);
+  assert.equal(report.total, 23);
+  assert.equal(report.passed, 23);
   assert.equal(report.failed, 0);
 });
 

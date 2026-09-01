@@ -51,7 +51,7 @@ try {
         )
 
         $caseProjectRoot = $projectRoot
-        if ($Kind -in @("memory-request", "memory-response")) {
+        if ($Kind -in @("memory-index", "memory-request", "memory-response")) {
             $caseProjectRoot = $validatorFixtureRoot
         }
         $validatorArguments = @(
@@ -85,7 +85,7 @@ try {
         )
 
         $caseProjectRoot = $projectRoot
-        if ($Kind -in @("memory-request", "memory-response")) {
+        if ($Kind -in @("memory-index", "memory-request", "memory-response")) {
             $caseProjectRoot = $validatorFixtureRoot
         }
         $validatorArguments = @(
@@ -154,6 +154,7 @@ try {
 
     $validatorFixtureRoot = "maestro/references/scenarios/validator-fixtures"
     $handoffSchema = "maestro/references/schemas/handoff.schema.json"
+    $memoryIndexSchema = "maestro/references/schemas/memory-index.schema.json"
     $memoryRequestSchema = "maestro/references/schemas/memory-worker-request.schema.json"
     $memoryResponseSchema = "maestro/references/schemas/memory-worker-response.schema.json"
     $memoryMergeRequestSchema = "maestro/references/schemas/memory-merge-request.schema.json"
@@ -170,6 +171,15 @@ try {
         "$validatorFixtureRoot/handoff-valid.json" 0
     Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
         "$validatorFixtureRoot/handoff-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
+        "$validatorFixtureRoot/memory-index-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
+        "$validatorFixtureRoot/memory-index-schema-invalid.json" 1
+    Invoke-AjvCase $memoryIndexSchema `
+        "$validatorFixtureRoot/memory-index-duplicate-id-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-index" `
+        "$validatorFixtureRoot/memory-index-duplicate-id-invalid.json" `
+        '$.entries[1].memory_id' "must be unique"
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
         "$validatorFixtureRoot/memory-request-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maestro.local/schemas/memory-index.schema.json",
+  "title": "Maestro Memory Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "source_digest", "entries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "source_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "memory_id",
+        "layer",
+        "record_type",
+        "title",
+        "summary",
+        "path",
+        "locator",
+        "status",
+        "memory_kind",
+        "tags",
+        "aliases",
+        "search_hints",
+        "updated_at"
+      ],
+      "properties": {
+        "memory_id": { "$ref": "#/$defs/stableId" },
+        "layer": { "enum": ["temporary", "task", "long-term"] },
+        "record_type": {
+          "enum": ["long-term-entry", "temporary", "task", "role-state", "worker-state"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        },
+        "locator": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["active", "disputed", "superseded", "rejected", "archived"] },
+        "memory_kind": {
+          "type": ["string", "null"],
+          "enum": ["fact", "experience", "principle", "decision", "constraint", "other", null]
+        },
+        "tags": { "$ref": "#/$defs/uniqueStrings" },
+        "aliases": { "$ref": "#/$defs/uniqueStrings" },
+        "search_hints": { "$ref": "#/$defs/uniqueStrings" },
+        "updated_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "layer": { "const": "long-term" } },
+            "required": ["layer"]
+          },
+          "then": {
+            "properties": {
+              "record_type": { "const": "long-term-entry" },
+              "memory_kind": {
+                "enum": ["fact", "experience", "principle", "decision", "constraint", "other"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "layer": { "const": "temporary" } },
+            "required": ["layer"]
+          },
+          "then": {
+            "properties": {
+              "record_type": { "const": "temporary" },
+              "memory_kind": { "const": null }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "layer": { "const": "task" } },
+            "required": ["layer"]
+          },
+          "then": {
+            "properties": {
+              "record_type": { "enum": ["task", "role-state", "worker-state"] },
+              "memory_kind": { "const": null }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

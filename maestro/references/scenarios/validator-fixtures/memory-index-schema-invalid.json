@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "generated_at": "not-a-date",
+  "source_digest": "not-a-digest",
+  "entries": [
+    {
+      "memory_id": "lt-fixture-index",
+      "layer": "long-term",
+      "record_type": "long-term-entry",
+      "title": "Memory catalog fixture",
+      "summary": "Invalid Long-term metadata.",
+      "path": "files/source.md",
+      "locator": "lt-fixture-index",
+      "status": "active",
+      "memory_kind": null,
+      "tags": [],
+      "aliases": [],
+      "search_hints": [],
+      "updated_at": null
+    }
+  ]
+}

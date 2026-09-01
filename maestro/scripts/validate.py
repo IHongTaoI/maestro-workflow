@@ -26,6 +26,17 @@ PLAYBOOK_METADATA_PATTERN = re.compile(
 PLAYBOOK_METADATA_FIELDS = {"playbook_id", "file_path", "revision", "status"}
 PLAYBOOK_EXTENSIONS = {".md", ".markdown", ".yaml", ".yml"}
 PLAYBOOK_RESERVED_DIRECTORIES = {"candidates", "decisions"}
+MEMORY_LAYERS = {"temporary", "task", "long-term"}
+MEMORY_RECORD_TYPES = {
+    "long-term-entry",
+    "temporary",
+    "task",
+    "role-state",
+    "worker-state",
+}
+MEMORY_STATUSES = {"active", "disputed", "superseded", "rejected", "archived"}
+MEMORY_KINDS = {"fact", "experience", "principle", "decision", "constraint", "other"}
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -668,6 +679,126 @@ def validate_long_term_entry(
         min_items=1,
     ):
         check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+
+
+def validate_memory_index_entry(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "memory_id",
+        "layer",
+        "record_type",
+        "title",
+        "summary",
+        "path",
+        "locator",
+        "status",
+        "memory_kind",
+        "tags",
+        "aliases",
+        "search_hints",
+        "updated_at",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    if "memory_id" in value:
+        check_stable_id(value["memory_id"], f"{path}.memory_id", errors)
+    if "layer" in value:
+        check_enum(value["layer"], f"{path}.layer", errors, MEMORY_LAYERS)
+    if "record_type" in value:
+        check_enum(
+            value["record_type"],
+            f"{path}.record_type",
+            errors,
+            MEMORY_RECORD_TYPES,
+        )
+    for key in ("title", "summary", "locator"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "path" in value:
+        file_reference(value["path"], f"{path}.path", errors)
+    if "status" in value:
+        check_enum(value["status"], f"{path}.status", errors, MEMORY_STATUSES)
+    if "memory_kind" in value and value["memory_kind"] is not None:
+        check_enum(value["memory_kind"], f"{path}.memory_kind", errors, MEMORY_KINDS)
+    for key in ("tags", "aliases", "search_hints"):
+        if key in value and check_array(
+            value[key],
+            f"{path}.{key}",
+            errors,
+            make_string_validator(min_length=1),
+        ):
+            check_unique_strings(value[key], f"{path}.{key}", errors)
+    if "updated_at" in value and value["updated_at"] is not None:
+        check_date_time(value["updated_at"], f"{path}.updated_at", errors)
+
+    layer = value.get("layer")
+    record_type = value.get("record_type")
+    memory_kind = value.get("memory_kind")
+    if layer == "long-term":
+        if record_type != "long-term-entry":
+            add_error(
+                errors,
+                f"{path}.record_type",
+                "must be 'long-term-entry' for Long-term Memory",
+            )
+        if memory_kind is None:
+            add_error(errors, f"{path}.memory_kind", "is required for a Long-term entry")
+    elif layer == "temporary":
+        if record_type != "temporary":
+            add_error(errors, f"{path}.record_type", "must be 'temporary' for Temporary Memory")
+        if memory_kind is not None:
+            add_error(errors, f"{path}.memory_kind", "must be null outside the Long-term layer")
+    elif layer == "task":
+        if record_type not in {"task", "role-state", "worker-state"}:
+            add_error(errors, f"{path}.record_type", "must be a Task current-state record type")
+        if memory_kind is not None:
+            add_error(errors, f"{path}.memory_kind", "must be null outside the Long-term layer")
+
+
+def validate_memory_index(
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, "$", errors):
+        return
+    required = {"schema_version", "generated_at", "source_digest", "entries"}
+    check_object_shape(value, "$", errors, required=required, allowed=required)
+    if value.get("schema_version") != 1:
+        add_error(errors, "$.schema_version", "must equal 1")
+    if "generated_at" in value:
+        check_date_time(value["generated_at"], "$.generated_at", errors)
+    if "source_digest" in value:
+        if check_string(value["source_digest"], "$.source_digest", errors, min_length=1):
+            if not SHA256_PATTERN.fullmatch(value["source_digest"]):
+                add_error(errors, "$.source_digest", "must be a lowercase SHA-256 digest")
+    if "entries" in value and check_array(
+        value["entries"],
+        "$.entries",
+        errors,
+        lambda item, item_path, item_errors: validate_memory_index_entry(
+            item, item_path, item_errors, file_reference
+        ),
+    ):
+        seen_ids: set[str] = set()
+        for index, entry in enumerate(value["entries"]):
+            if not is_object(entry):
+                continue
+            memory_id = entry.get("memory_id")
+            if not isinstance(memory_id, str):
+                continue
+            if memory_id in seen_ids:
+                add_error(
+                    errors,
+                    f"$.entries[{index}].memory_id",
+                    "must be unique within the Memory Index",
+                )
+            seen_ids.add(memory_id)
 
 
 def validate_playbook(
@@ -1557,6 +1688,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "kind",
         choices=(
             "handoff",
+            "memory-index",
             "memory-request",
             "memory-response",
             "memory-merge-request",
@@ -1639,6 +1771,8 @@ def main(argv: list[str] | None = None) -> int:
     errors: list[Diagnostic] = []
     if args.kind == "handoff":
         validate_handoff(value, errors, file_reference)
+    elif args.kind == "memory-index":
+        validate_memory_index(value, errors, file_reference)
     elif args.kind == "memory-request":
         validate_memory_request(value, errors, file_reference)
     elif args.kind == "memory-response":

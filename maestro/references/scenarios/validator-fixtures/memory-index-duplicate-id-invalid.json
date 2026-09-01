@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-01T06:30:00Z",
+  "source_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {
+      "memory_id": "lt-repeated-index",
+      "layer": "long-term",
+      "record_type": "long-term-entry",
+      "title": "First entry",
+      "summary": "First entry summary.",
+      "path": "files/source.md",
+      "locator": "lt-repeated-index",
+      "status": "active",
+      "memory_kind": "fact",
+      "tags": [],
+      "aliases": [],
+      "search_hints": [],
+      "updated_at": null
+    },
+    {
+      "memory_id": "lt-repeated-index",
+      "layer": "long-term",
+      "record_type": "long-term-entry",
+      "title": "Second entry",
+      "summary": "Second entry summary.",
+      "path": "files/source.md",
+      "locator": "lt-repeated-index",
+      "status": "active",
+      "memory_kind": "experience",
+      "tags": [],
+      "aliases": [],
+      "search_hints": [],
+      "updated_at": null
+    }
+  ]
+}

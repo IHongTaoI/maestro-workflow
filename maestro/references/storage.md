@@ -12,6 +12,8 @@ Create directories lazily as the current work needs them:
   locks/
   transactions/
   memory/
+    manifest.md
+    index.json
     temporary/
       active/<temporary-id>/
         meta.yaml
@@ -74,6 +76,8 @@ To avoid noisy Git conflicts and keep shared knowledge synchronized across branc
 separates local execution state from team shared memory:
 
 - **Local Runtime State (Excluded from Git)**:
+  - `memory/manifest.md` and `memory/index.json`: derived awareness catalog rebuilt from formal
+    Memory sources.
   - `memory/temporary/`: pre-Task exploration, scratchpads, active Worker state.
   - `memory/pending/`: raw uncompressed or unparsed memory worker inputs.
   - `locks/` and `transactions/`: concurrency and filesystem lock markers.
@@ -90,6 +94,8 @@ A target project can enforce this boundary using standard `.gitignore` rules:
 
 ```gitignore
 # Exclude local Maestro runtime state
+.maestro/memory/manifest.md
+.maestro/memory/index.json
 .maestro/memory/temporary/
 .maestro/memory/pending/
 .maestro/locks/
@@ -141,6 +147,14 @@ including `SKIP`, under `memory/long-term/candidates/pending/` until review reco
 rejected. Store unresolved merge conflicts under `memory/long-term/conflicts/` with status
 `pending-confirmation`. A `SKIP` decision does not mutate `current.md`, but retaining it prevents
 the same duplicate or low-value claim from being reconsidered without new evidence.
+
+Long-term entries use the fenced `maestro-memory-entry` JSON representation defined in
+[memory.md](memory.md). This gives the deterministic catalog builder an addressable record boundary
+while keeping `current.md` as the authoritative, reviewable source. The generated
+`memory/manifest.md` and `memory/index.json` are local cache files, are not shared through Git, and
+do not participate in the mutable-state revision protocol. Publish the formal Memory change first,
+then rebuild the catalog atomically. A catalog failure never rolls back an already committed formal
+Memory write.
 
 Each current Playbook exposes a stable `playbook_id`, canonical `file_path`, title, trigger, ordered
 steps, checks, active status, revision metadata, and reachable `source_refs` to Experience Review.

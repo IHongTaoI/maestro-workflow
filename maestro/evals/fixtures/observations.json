@@ -1096,6 +1096,101 @@
         ]
       },
       "judgments": []
+    },
+    {
+      "case_id": "memory-overview-uses-manifest",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "one-off",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": []
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null,
+        "manifest_loaded": true,
+        "retrieved_ids": [],
+        "detail_ids": [],
+        "retrieval_reasons": []
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "user_questions": [],
+      "files_modified": [],
+      "actions": [
+        "load-memory-manifest",
+        "present-memory-map"
+      ],
+      "judgments": []
+    },
+    {
+      "case_id": "progressive-memory-retrieval",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "investigation",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": []
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null,
+        "manifest_loaded": true,
+        "retrieved_ids": [
+          "lt-performance"
+        ],
+        "detail_ids": [
+          "lt-performance"
+        ],
+        "retrieval_reasons": [
+          "tags and summary match startup performance"
+        ]
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "user_questions": [],
+      "files_modified": [],
+      "actions": [
+        "load-memory-manifest",
+        "query-memory-index",
+        "load-memory-detail"
+      ],
+      "judgments": []
     }
   ]
 }
