@@ -3,15 +3,26 @@
   "version": "0.1.0",
   "description": "DeepSeek Harness (dsh) adapter for Maestro: registers the portable Maestro Core Skill as a dsh skill and provides deterministic state-protocol helpers on top of ctx.fs.",
   "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "src/"
+    "lib/",
+    "cordis.patch.yml"
   ],
   "scripts": {
+    "build": "node build.mjs",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/*.test.ts"
+    "test": "node --import tsx --test src/*.test.ts && node --test scripts/*.test.mjs",
+    "test:package": "npm run build && node scripts/check-package.mjs"
   },
   "keywords": [
     "maestro",
@@ -39,8 +50,14 @@
     "@deepseek-ai/dsh-agent": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-fs": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-skill": "^0.1.1-rc.2",
+    "esbuild": "^0.25.0",
     "tsx": "^4.23.12",
     "typescript": "^5.5.4"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   },
   "license": "MIT"
 }

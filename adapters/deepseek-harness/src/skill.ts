@@ -19,6 +19,7 @@
 
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SkillRegistration } from '@deepseek-ai/dsh-skill'
@@ -27,6 +28,7 @@ import { DEFAULT_CORE_DIRS, type AdapterConfig, type SkillFrontmatter } from './
 const SKILL_FILE = 'SKILL.md'
 const PROVIDER = 'maestro-adapter'
 const SOURCE = 'custom' as const
+const PACKAGED_CORE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'core')
 
 /**
  * Resolve the Maestro Core directory from config, probing default roots when
@@ -45,6 +47,7 @@ export async function resolveCoreDir(config: AdapterConfig, cwd: string): Promis
     for (const dir of DEFAULT_CORE_DIRS) {
       candidates.push(path.resolve(cwd, dir))
     }
+    candidates.push(PACKAGED_CORE_DIR)
   }
   for (const candidate of candidates) {
     try {

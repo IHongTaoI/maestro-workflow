@@ -37,6 +37,57 @@ dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #
 
 ## 用法
 
+### 本地仓库一键安装（无需发布 npm）
+
+在仓库根目录运行：
+
+```powershell
+npm run dsh:install:local -- --profile web
+```
+
+如果 PowerShell 的执行策略拦截 `npm.ps1`，把命令开头的 `npm` 换成 `npm.cmd` 即可。
+
+该命令会安装 adapter 的构建依赖，生成包含当前 Maestro Core 的本地 `.tgz`，并把它安装进
+`~/.dsh/profiles/web/`。DSH 会根据包内的 `dsh.bundle` 声明自动把它加入 profile，随后加载包内
+的 `cordis.patch.yml`：
+
+```yaml
+- insert:
+    - id: maestro-adapter
+      name: '@maestro-ai/dsh-adapter'
+      inject:
+        - skills
+```
+
+安装包保存在 `~/.dsh/local-packages/<profile>/`，不会使用容易在 Windows 上生成错误 junction
+的本地目录 `link:`。安装器最后会验证包入口、随包 Core、`dsh.profile.bundles` 和
+`dsh --dump-config`。如果旧 profile 里存在手工添加的 Maestro insert，安装器会移除该重复项，
+改由包的 bundle 激活；新 profile 默认使用包内 `lib/core/`。
+
+常用选项：
+
+```text
+--profile <name>       目标 profile，默认 web
+--dsh-home <path>      自定义 DSH home
+--skip-dependencies    已安装依赖时跳过 npm install
+--no-verify            跳过最终 DSH 配置验证
+```
+
+### 包构建
+
+adapter 通过 `prepack` 自动构建：
+
+```bash
+cd adapters/deepseek-harness
+npm install
+npm pack
+```
+
+构建会输出 ESM 入口、类型声明和当前 Maestro Core 到 `lib/`。`lib/` 不提交 Git，但会进入
+生成的 npm tarball。安装运行时不需要 TypeScript、tsx 或 esbuild。
+
+### Cordis 调用
+
 把 `maestro/` 目录作为 Core 传入，插件在 `apply()` 时读取 `SKILL.md` 的 frontmatter
 （`name` / `description`）并用 `ctx.skills.register()` 注册为运行时 skill，`references/`
 和 `schemas/` 通过 `resourceBase: { kind: 'directory' }` 暴露给模型按需加载。
@@ -47,15 +98,14 @@ import adapter from '@maestro-ai/dsh-adapter'
 // 在 Cordis profile / bundle 里挂载
 export const name = 'maestro-adapter'
 export const inject = ['skills']
-export const Config = adapter.Config
-
 export function apply(ctx, config) {
   adapter.apply(ctx, config)
 }
 ```
 
 `Config.coreDir` 指向 Maestro Core 的 `maestro/` 目录（含 `SKILL.md`）。缺省时按
-`process.cwd()/.dsh/skills/maestro` → `process.cwd()/maestro` 的顺序探测。
+`process.cwd()/.dsh/skills/maestro` → `process.cwd()/maestro` → adapter 包内 `lib/core/` 的
+顺序探测。
 
 ## Capability detection 与降级
 
@@ -108,9 +158,20 @@ dsh `ctx.fs` 目前没有 delete/remove 原语，锁不能像 `storage.md` 那�
 
 ```text
 adapters/deepseek-harness/
+├── build.mjs
+├── cordis.patch.yml
 ├── package.json
 ├── tsconfig.json
+├── tsconfig.build.json
 ├── README.md
+├── scripts/
+│   ├── install-local.mjs
+│   ├── install-local.test.mjs
+│   └── check-package.mjs
+├── lib/             # 构建产物，不入 Git；发布包中包含
+│   ├── index.js
+│   ├── index.d.ts
+│   └── core/        # 打包时从 ../../maestro/ 复制
 └── src/
     ├── index.ts        # 唯一插件入口，唯一 import dsh API 处；注册 Core skill + 提供 storage service
     ├── types.ts        # Config 与共享类型
@@ -130,6 +191,7 @@ cd adapters/deepseek-harness
 npm install
 npm run typecheck   # tsc --noEmit
 npm test            # tsx --test src/*.test.ts
+npm run test:package
 ```
 
 `storage` 与 `hooks` 模块只有 type-only 的 `@deepseek-ai/*` 导入，测试用一个内存 fake seam /

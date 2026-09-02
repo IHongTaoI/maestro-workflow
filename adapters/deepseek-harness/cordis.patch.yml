@@ -1,0 +1,5 @@
+- insert:
+    - id: maestro-adapter
+      name: '@maestro-ai/dsh-adapter'
+      inject:
+        - skills

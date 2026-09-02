@@ -55,6 +55,25 @@ The CLI stores its local installation selection in `.maestro/installation.json` 
 `.maestro-managed.json` ownership marker in each generated Skill. Updates overwrite canonical
 Maestro files but preserve unrelated user-authored files.
 
+## Install into DSH from a local checkout
+
+The DSH adapter can be installed without publishing either package to npm. From this repository,
+run:
+
+```bash
+npm run dsh:install:local -- --profile web
+```
+
+The installer builds a self-contained adapter archive with the current `maestro/` Core, installs
+that `.tgz` into the selected DSH profile, lets DSH activate its `inject: [skills]` bundle, and
+verifies the installed module plus `dsh --dump-config`. It uses a tarball rather than a local
+directory link, avoiding the broken Windows junction path seen with `dsh plugin add <absolute-dir>`.
+
+Use another profile with `--profile <name>`. Run the same command again after changing the Core or
+adapter to install a fresh local archive.
+
+If PowerShell blocks the `npm.ps1` shim, run the same command with `npm.cmd` instead of `npm`.
+
 ## Manual installation
 
 The complete portable Skill Core is the [`maestro/`](maestro/) directory. A host that implements
