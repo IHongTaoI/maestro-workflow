@@ -72,6 +72,8 @@ directory link, avoiding the broken Windows junction path seen with `dsh plugin 
 Use another profile with `--profile <name>`. Run the same command again after changing the Core or
 adapter to install a fresh local archive.
 
+If PowerShell blocks the `npm.ps1` shim, run the same command with `npm.cmd` instead of `npm`.
+
 ## Manual installation
 
 The complete portable Skill Core is the [`maestro/`](maestro/) directory. A host that implements

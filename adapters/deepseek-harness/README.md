@@ -45,6 +45,8 @@ dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #
 npm run dsh:install:local -- --profile web
 ```
 
+如果 PowerShell 的执行策略拦截 `npm.ps1`，把命令开头的 `npm` 换成 `npm.cmd` 即可。
+
 该命令会安装 adapter 的构建依赖，生成包含当前 Maestro Core 的本地 `.tgz`，并把它安装进
 `~/.dsh/profiles/web/`。DSH 会根据包内的 `dsh.bundle` 声明自动把它加入 profile，随后加载包内
 的 `cordis.patch.yml`：

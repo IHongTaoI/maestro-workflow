@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import test from 'node:test'
 import * as yaml from 'yaml'
 import { parseArguments, removeLegacyProfileInsert } from './install-local.mjs'
@@ -6,7 +7,7 @@ import { parseArguments, removeLegacyProfileInsert } from './install-local.mjs'
 test('local installer defaults to the web profile', () => {
   const options = parseArguments([], { DSH_HOME: '/tmp/dsh-home' })
   assert.equal(options.profile, 'web')
-  assert.equal(options.dshHome, '/tmp/dsh-home')
+  assert.equal(options.dshHome, path.resolve('/tmp/dsh-home'))
   assert.equal(options.installDependencies, true)
   assert.equal(options.verify, true)
 })
@@ -19,7 +20,7 @@ test('local installer parses explicit safe options', () => {
     '--no-verify',
   ], {})
   assert.equal(options.profile, 'headless-dev')
-  assert.equal(options.dshHome, '/tmp/custom-dsh')
+  assert.equal(options.dshHome, path.resolve('/tmp/custom-dsh'))
   assert.equal(options.installDependencies, false)
   assert.equal(options.verify, false)
 })
