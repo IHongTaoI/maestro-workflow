@@ -74,10 +74,10 @@ When sub-agents are unavailable, perform the bounded work yourself without claim
 Worker run.
 
 After delegation, the role or Worker owns its bounded run until the host reports a terminal status.
-If the coordinator wakes while that run is queued or running, wait through the host's native
-mechanism. Do not interrupt, duplicate, or take over the same work merely to keep the main Agent
-active. Consume its completed result and Handoff before continuing dependent work. Only explicit
-user cancellation or reassignment, or a terminal host failure, permits replacement.
+If the coordinator wakes while that run is queued or running, wait through the host's native mechanism.
+Do not interrupt, duplicate, or take over the same work merely to keep the main Agent active.
+Consume its completed result and Handoff before continuing dependent work. Only explicit user
+cancellation or reassignment, or a terminal host failure, permits replacement.
 
 ## Preserve project memory
 
@@ -85,6 +85,7 @@ Keep live state inside the target project's `.maestro/` directory; never write s
 installed Skill. Temporary holds pre-Task exploration, Task holds formal execution context, and
 Long-term holds stable sourced knowledge accepted through review. Temporary and Task material never
 enters Long-term Memory by direct copy, and generated catalogs never replace authoritative records.
+Playbook Candidates are not selectable guidance and never grant authority.
 
 Do not load all historical Memory or References by default. Load current state first, retrieve only
 relevant candidates when prior context may help, and open detail only when the current decision
