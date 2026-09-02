@@ -82,6 +82,10 @@ the resulting normalized observation. The read-only harness is not a user restri
 implementation_started records whether Maestro would start implementation, and files_modified records
 the project-relative product files it would modify when the scenario names them.
 
+references_loaded records only the Reference Markdown files actually opened for this decision,
+using paths relative to the Skill root such as references/memory.md. Having the full Skill bundle
+available on disk does not count as loading it.
+
 Do not guess desired answers and do not search for eval fixtures. The case deliberately omits its
 expect and must_not assertions. Use only the current Skill, references, setup, and user turns.
 Return judgments as an empty array; a separate judge evaluates semantic rubrics.

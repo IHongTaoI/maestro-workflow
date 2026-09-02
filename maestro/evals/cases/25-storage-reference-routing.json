@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "state-write-loads-only-storage-reference",
+  "name": "A bounded Maestro state write loads only Storage",
+  "category": "routing",
+  "regression": { "real_case": true, "source": "Issue #29: state writes lacked an explicit Reference route" },
+  "setup": {
+    "maestro_config": { "default_branch": "master" }
+  },
+  "turns": [{ "user_prompt": "把 `.maestro/config.yaml` 里的 default_branch 改成 main；只做这次 Maestro 状态更新。" }],
+  "expect": [
+    { "path": "/references_loaded", "operator": "equals", "value": ["references/storage.md"] },
+    { "path": "/files_modified", "operator": "contains", "value": ".maestro/config.yaml" },
+    { "path": "/read_only", "operator": "equals", "value": false }
+  ],
+  "must_not": [
+    { "path": "/references_loaded", "operator": "contains", "value": "references/memory.md" },
+    { "path": "/references_loaded", "operator": "contains", "value": "references/handoffs.md" }
+  ]
+}

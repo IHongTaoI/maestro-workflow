@@ -39,8 +39,8 @@ test('replays all checked-in Agent behavior cases', async () => {
   const report = JSON.parse(result.stdout);
 
   assert.equal(report.mode, 'observation-replay');
-  assert.equal(report.total, 23);
-  assert.equal(report.passed, 23);
+  assert.equal(report.total, 30);
+  assert.equal(report.passed, 30);
   assert.equal(report.failed, 0);
 });
 
@@ -104,12 +104,15 @@ test('observation validation reuses the full JSON Schema', async () => {
   duplicatePermission.workers[0].permissions.push('read-project');
   const additionalProperty = structuredClone(base);
   additionalProperty.workers[0].authority = 'unbounded';
+  const duplicateReference = structuredClone(base);
+  duplicateReference.references_loaded = ['references/memory.md', 'references/memory.md'];
 
   assert.deepEqual(validateJsonSchema(schema, base), []);
   assert.match(validateJsonSchema(schema, invalidMode).join('\n'), /\/mode: must be one of/);
   assert.match(validateJsonSchema(schema, invalidWorker).join('\n'), /\/workers\/0\/kind: must be one of/);
   assert.match(validateJsonSchema(schema, duplicatePermission).join('\n'), /\/workers\/0\/permissions\/1: must be unique/);
   assert.match(validateJsonSchema(schema, additionalProperty).join('\n'), /\/workers\/0\/authority: additional property is not allowed/);
+  assert.match(validateJsonSchema(schema, duplicateReference).join('\n'), /\/references_loaded\/1: must be unique/);
 });
 
 test('Codex schema projection removes only unsupported structured-output constraints', async () => {

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "direct-role-loads-only-role-reference",
+  "name": "A direct one-off role call loads only its role reference",
+  "category": "routing",
+  "regression": { "real_case": true, "source": "Issue #29: direct roles loaded the whole coordination tree" },
+  "setup": {},
+  "turns": [{ "user_prompt": "老陈，快速评审一下这个模块边界是否清晰，只给评审意见，不要持久化，也不要委派。" }],
+  "expect": [
+    { "path": "/references_loaded", "operator": "equals", "value": ["references/roles/architect.md"] },
+    { "path": "/workers/0/id", "operator": "equals", "value": "architect" },
+    { "path": "/task_created", "operator": "equals", "value": false }
+  ],
+  "must_not": [
+    { "path": "/references_loaded", "operator": "contains", "value": "references/coordination.md" },
+    { "path": "/references_loaded", "operator": "contains", "value": "references/workers.md" }
+  ]
+}

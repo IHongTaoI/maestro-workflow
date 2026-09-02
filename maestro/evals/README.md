@@ -4,6 +4,10 @@ These fixtures test the decisions made from `SKILL.md` and its references. Contr
 schemas and persisted records; evals check whether an Agent chooses the expected work shape,
 Worker, memory route, Handoff, and authorization boundary.
 
+`references_loaded` records the Reference Markdown files actually opened for a decision, relative
+to the Skill root. It is optional for legacy observations, but Progressive Disclosure cases assert
+it explicitly. Merely installing the Skill bundle does not count as loading every Reference.
+
 ## Case contract
 
 Every JSON file under `cases/` conforms to `case.schema.json` and contains:
