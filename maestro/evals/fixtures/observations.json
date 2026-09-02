@@ -1191,6 +1191,318 @@
         "load-memory-detail"
       ],
       "judgments": []
+    },
+    {
+      "case_id": "memory-query-loads-only-memory-reference",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "one-off",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": []
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null,
+        "manifest_loaded": true,
+        "retrieved_ids": ["lt-performance"],
+        "detail_ids": ["lt-performance"],
+        "retrieval_reasons": ["summary and tag match homepage performance"]
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "references_loaded": ["references/memory.md"],
+      "user_questions": [],
+      "files_modified": [],
+      "actions": ["load-memory-manifest", "query-memory-index", "load-memory-detail"],
+      "judgments": []
+    },
+    {
+      "case_id": "state-write-loads-only-storage-reference",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "one-off",
+      "read_only": false,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": []
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "references_loaded": ["references/storage.md"],
+      "user_questions": [],
+      "files_modified": [".maestro/config.yaml"],
+      "actions": [],
+      "judgments": []
+    },
+    {
+      "case_id": "direct-role-loads-only-role-reference",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "one-off",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [
+        {
+          "id": "architect",
+          "kind": "role",
+          "lifecycle": "session",
+          "permissions": ["read-project"]
+        }
+      ],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": [
+          {
+            "id": "architect",
+            "status": "completed",
+            "awaited": true,
+            "result_consumed": true
+          }
+        ]
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "references_loaded": ["references/roles/architect.md"],
+      "user_questions": [],
+      "files_modified": [],
+      "actions": ["invoke-direct-role"],
+      "judgments": []
+    },
+    {
+      "case_id": "worker-delegation-loads-worker-and-coordination",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "investigation",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [
+        {
+          "id": "api-timeout-inspector",
+          "kind": "generated",
+          "lifecycle": "session",
+          "permissions": ["read-project"]
+        }
+      ],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": [
+          {
+            "id": "api-timeout-inspector",
+            "status": "completed",
+            "awaited": true,
+            "result_consumed": true
+          }
+        ]
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "references_loaded": ["references/coordination.md", "references/workers.md"],
+      "user_questions": [],
+      "files_modified": [],
+      "actions": ["generate-bounded-worker", "wait-for-worker"],
+      "judgments": []
+    },
+    {
+      "case_id": "small-one-off-loads-no-references",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "one-off",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": []
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "references_loaded": [],
+      "user_questions": [],
+      "files_modified": [],
+      "actions": [],
+      "judgments": []
+    },
+    {
+      "case_id": "core-authorization-needs-no-reference",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "waiting-for-authorization",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [],
+      "execution": {
+        "main_agent": "completed",
+        "worker_runs": []
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": true,
+        "actions": ["deploy"]
+      },
+      "references_loaded": [],
+      "user_questions": ["是否授权把当前版本部署到生产环境？"],
+      "files_modified": [],
+      "actions": ["request-deploy-authorization"],
+      "judgments": []
+    },
+    {
+      "case_id": "core-waiting-needs-no-reference",
+      "task_created": false,
+      "implementation_started": false,
+      "mode": "investigation",
+      "read_only": true,
+      "temporary": {
+        "action": "none",
+        "id": null,
+        "source_preserved": null
+      },
+      "workers": [
+        {
+          "id": "trace-worker",
+          "kind": "generated",
+          "lifecycle": "session",
+          "permissions": ["read-project"]
+        }
+      ],
+      "execution": {
+        "main_agent": "waiting",
+        "worker_runs": [
+          {
+            "id": "trace-worker",
+            "status": "running",
+            "awaited": true,
+            "result_consumed": false
+          }
+        ]
+      },
+      "memory": {
+        "selected_temporary": null,
+        "routing_basis": null,
+        "evidence_precedence": null
+      },
+      "handoff": {
+        "created": false,
+        "status": "none",
+        "needs_user_input": false,
+        "questions": [],
+        "full_history_reloaded": false
+      },
+      "authorization": {
+        "requested": false,
+        "actions": []
+      },
+      "references_loaded": [],
+      "user_questions": [],
+      "files_modified": [],
+      "actions": ["wait-for-worker"],
+      "judgments": []
     }
   ]
 }

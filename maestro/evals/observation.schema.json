@@ -109,6 +109,12 @@
         "actions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       }
     },
+    "references_loaded": {
+      "type": "array",
+      "description": "Reference paths opened for the current decision, relative to the Skill root. Installing the Skill bundle does not count as loading a Reference.",
+      "items": { "type": "string", "pattern": "^references/.+\\.md$" },
+      "uniqueItems": true
+    },
     "user_questions": { "type": "array", "items": { "type": "string" } },
     "files_modified": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "actions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },

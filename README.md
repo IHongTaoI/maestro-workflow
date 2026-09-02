@@ -118,9 +118,9 @@ this local derived catalog; it does not replace formal Memory or add a backgroun
 
 ## Behavior evals
 
-Maestro includes 23 structured Agent behavior cases covering work-shape decisions, role and Worker
-routing, delegated-run waiting, Temporary/Task/Long-term Memory, Session Handoffs, and authorization
-boundaries. Run the deterministic runner/fixture self-test with:
+Maestro includes 30 structured Agent behavior cases covering work-shape decisions, Progressive
+Disclosure, role and Worker routing, delegated-run waiting, Temporary/Task/Long-term Memory,
+Session Handoffs, and authorization boundaries. Run the deterministic runner/fixture self-test with:
 
 ```text
 npm run test:evals:fixtures
