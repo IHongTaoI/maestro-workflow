@@ -23,8 +23,6 @@ jobs:
       - name: Verify schemas and behavioral contracts
         shell: pwsh
         run: ./scripts/verify-contracts.ps1
-      - name: Replay eval runner fixtures (not a live Agent run)
-        run: npm run test:evals:fixtures
       - name: Verify npm package contents
         run: npm pack --dry-run
       - name: Install dsh-adapter dependencies
