@@ -137,21 +137,6 @@ try {
         Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
     }
 
-    $evalCaseSchema = "maestro/evals/case.schema.json"
-    $evalObservationSchema = "maestro/evals/observation.schema.json"
-    $evalObservationSetSchema = "maestro/evals/observation-set.schema.json"
-    Get-ChildItem "maestro/evals" -Filter "*.schema.json" | ForEach-Object {
-        Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
-    }
-    $evalCaseFiles = @(Get-ChildItem "maestro/evals/cases" -Filter "*.json")
-    $evalCaseFiles | ForEach-Object {
-        Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
-    }
-    Invoke-AjvCase -Schema $evalCaseSchema -Data @($evalCaseFiles.FullName) -ExpectedExit 0
-    Invoke-AjvCase -Schema $evalObservationSetSchema `
-        -Data "maestro/evals/fixtures/observations.json" -ExpectedExit 0 `
-        -References @($evalObservationSchema)
-
     $validatorFixtureRoot = "maestro/references/scenarios/validator-fixtures"
     $handoffSchema = "maestro/references/schemas/handoff.schema.json"
     $memoryIndexSchema = "maestro/references/schemas/memory-index.schema.json"
@@ -712,8 +697,6 @@ try {
         @{ Path = "README.md"; Text = "It never schedules roles" },
         @{ Path = "maestro/SKILL.md"; Text = "it never performs orchestration" }
         @{ Path = "maestro/SKILL.md"; Text = "Playbook Candidates are not selectable guidance" }
-        @{ Path = "maestro/evals/README.md"; Text = "It is not evidence that a live model" }
-        @{ Path = "maestro/evals/README.md"; Text = "request.skill.files" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {

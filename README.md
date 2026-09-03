@@ -135,26 +135,15 @@ relevant candidates, and extracts one selected record by stable ID instead of in
 Long-term file. `maestro/scripts/memory_catalog.py` builds, checks, searches, and selectively reads
 this local derived catalog; it does not replace formal Memory or add a background Runtime.
 
-## Behavior evals
+## Manual behavior checks
 
-Maestro includes 30 structured Agent behavior cases covering work-shape decisions, Progressive
-Disclosure, role and Worker routing, delegated-run waiting, Temporary/Task/Long-term Memory,
-Session Handoffs, and authorization boundaries. Run the deterministic runner/fixture self-test with:
+Model-based behavior evals are intentionally not part of the automated test suite. Maestro is used
+through different hosts, and a Codex-only live runner was slow, costly, and did not validate the
+actual DSH or bare-Skill experience.
 
-```text
-npm run test:evals:fixtures
-```
-
-The replay checks the eval schema, observation contract, assertion engine, and expected baseline;
-it is not a live Agent regression result. To run the current Skill through the included Codex CLI
-reference adapter after changing `SKILL.md` or its references, use:
-
-```text
-npm run test:evals:live:codex
-```
-
-See [`maestro/evals/README.md`](maestro/evals/README.md) for the case format, normalized observation
-contract, optional LLM judge interface, and CI/live-run distinction.
+After meaningful instruction changes, spot-check the affected behavior in the real target host.
+Use [`docs/manual-acceptance.md`](docs/manual-acceptance.md) for the small release checklist.
+Deterministic unit and contract tests remain automated.
 
 ## npm package contents
 
@@ -170,9 +159,6 @@ maestro/
   scripts/
     memory_catalog.py
     validate.py
-  evals/
-    cases/
-    fixtures/
   references/
     coordination.md
     storage.md
