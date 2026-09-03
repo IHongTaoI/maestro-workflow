@@ -18,8 +18,8 @@
     "storageId": {
       "type": "string",
       "minLength": 1,
-      "description": "Filesystem-safe ID. Matches a Temporary/Task directory name, so it may contain CJK and other non-ASCII Unicode; path separators, whitespace, control characters and filesystem-unsafe punctuation are rejected.",
-      "pattern": "^[^./\\\\:*?\"<>|\\x00-\\x1f\\x7f\\s][^/\\\\:*?\"<>|\\x00-\\x1f\\x7f\\s]*$"
+      "description": "Filesystem-safe ID matching a Temporary/Task directory name. May contain CJK and other non-ASCII Unicode; only letters, numbers, '_', '.', '-' are allowed, with path separators, whitespace, control characters, shell metacharacters, filesystem-unsafe punctuation and leading/trailing dots rejected.",
+      "pattern": "^(?!\\.)(?!.*[.]$)[\\p{L}\\p{N}._-]+$"
     },
     "uniqueStrings": {
       "type": "array",

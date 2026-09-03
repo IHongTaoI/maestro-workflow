@@ -1,10 +1,10 @@
 {
   "id": "20260831-优化登录流程",
-  "objective": "Reduce homepage startup time without changing visible behavior",
+  "objective": "优化登录流程",
   "status": "active",
   "created_at": "2026-08-27T12:00:00Z",
   "updated_at": "2026-08-27T12:03:00Z",
   "updated_by": "old-zhou/example-session",
   "revision": 1,
-  "source_temporary": "20260831-首页启动性能"
+  "source_temporary": "20260831-登录流程梳理"
 }

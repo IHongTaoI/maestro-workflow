@@ -52,6 +52,12 @@
       "minLength": 1,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
     },
+    "storageId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Filesystem-safe ID matching a Temporary/Task directory name. May contain CJK and other non-ASCII Unicode; path separators, whitespace, control characters, shell metacharacters and filesystem-unsafe punctuation are rejected, as are leading and trailing dots.",
+      "pattern": "^(?!\\.)(?!.*[.]$)[\\p{L}\\p{N}._-]+$"
+    },
     "path": {
       "type": "string",
       "minLength": 1,
@@ -79,7 +85,7 @@
         "author": { "type": "string", "minLength": 1 },
         "branch": { "type": "string", "minLength": 1 },
         "commit": { "type": "string", "minLength": 1 },
-        "task_id": { "$ref": "#/$defs/stableId" },
+        "task_id": { "$ref": "#/$defs/storageId" },
         "memory_path": { "$ref": "#/$defs/path" },
         "claim": { "type": "string", "minLength": 1 },
         "source_refs": { "$ref": "#/$defs/sourceRefs" },

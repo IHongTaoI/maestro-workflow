@@ -276,6 +276,9 @@ Never overwrite an existing directory; a stale read must not reuse a claimed nam
 
 - Once created, the ID is stable. If the topic or objective is later reworded, update
   `meta.yaml` / `task.yaml` only; do not rename the directory.
+- Generate and compare the slug in Unicode **NFC**-normalized form. Host filesystems (for example
+  macOS HFS+/APFS) may store or compare file names under NFD, so normalizing on both write and
+  comparison keeps the directory name exactly equal to `meta.yaml.id` / `task.yaml.id`.
 - Keep the original `<yyyymmdd>-<slug>` when moving a Temporary between `active`, `archive`, and
   `trash`.
 - The previous `<utc-timestamp>-<random-suffix>` format (for example `20260827T103000Z-a1b2c3`)
