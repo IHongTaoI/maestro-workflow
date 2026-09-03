@@ -65,8 +65,8 @@
       "required": ["scope", "expires_at"],
       "properties": {
         "scope": { "enum": ["reusable", "task", "temporary", "session"] },
-        "task_id": { "type": "string", "minLength": 1 },
-        "temporary_id": { "type": "string", "minLength": 1 },
+        "task_id": { "$ref": "#/$defs/storageId" },
+        "temporary_id": { "$ref": "#/$defs/storageId" },
         "session_id": { "type": "string", "minLength": 1 },
         "expires_at": {
           "enum": ["never", "task-completion", "temporary-archive", "session-end"]
@@ -152,6 +152,12 @@
   ],
   "$defs": {
     "slug": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "storageId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Filesystem-safe ID matching a Temporary/Task directory name. May contain CJK and other non-ASCII Unicode; only letters, numbers, '_', '.', '-' are allowed, with path separators, whitespace, control characters, shell metacharacters, filesystem-unsafe punctuation and leading/trailing dots rejected.",
+      "pattern": "^(?!\\.)(?!.*[.]$)[\\p{L}\\p{N}._-]+$"
+    },
     "path": {
       "type": "string",
       "minLength": 1,

@@ -223,8 +223,8 @@ created_at: 2026-08-31T12:00:00Z
 updated_at: 2026-08-31T12:03:00Z
 updated_by: old-zhou/session-or-run-id
 revision: 1
-source_temporary: 20260831-首页启动性能
-promotion_transaction: 20260831-优化登录流程
+source_temporary: 20260831-登录流程梳理
+promotion_transaction: 20260831T120000Z-p7q8r9
 ```
 
 `source_temporary` is present only when the Task was promoted from Temporary Memory. A Task created
@@ -250,8 +250,15 @@ timestamp-plus-random suffix. The ID must equal the directory name and the value
   - Keep letters (including CJK), digits, `-`, `_`, and `.`.
   - Remove whitespace, path separators (`/`, `\`), and filesystem-unsafe characters
     (`: * ? " < > |`), plus control characters and leading/trailing dots.
-  - Collapse repeated separators. A slug must not begin with `.` (to avoid `.` and `..`).
+  - Collapse repeated separators. A slug must not begin **or end** with `.` (to avoid `.`, `..`,
+    and names whose trailing dot a host filesystem silently strips).
   - Keep it brief; truncate over-long topics rather than carrying the full sentence.
+  - Generate and compare the slug in Unicode **NFC**-normalized form: normalize both sides before
+    the equality check (`directory name == meta.yaml.id` / `task.yaml.id`). Note that a filesystem
+    such as macOS HFS+ stores file names under **NFD**, so a decomposed slug (for example a kana
+    followed by the combining-voiced-sound-mark U+3099) surfaces in NFD; that combining mark is
+    `Mn` and falls outside the ID validator's allow-list, so it is rejected rather than silently
+    mismatched. Keeping the slug NFC at generation makes this a non-issue.
 
 Examples:
 
@@ -276,9 +283,6 @@ Never overwrite an existing directory; a stale read must not reuse a claimed nam
 
 - Once created, the ID is stable. If the topic or objective is later reworded, update
   `meta.yaml` / `task.yaml` only; do not rename the directory.
-- Generate and compare the slug in Unicode **NFC**-normalized form. Host filesystems (for example
-  macOS HFS+/APFS) may store or compare file names under NFD, so normalizing on both write and
-  comparison keeps the directory name exactly equal to `meta.yaml.id` / `task.yaml.id`.
 - Keep the original `<yyyymmdd>-<slug>` when moving a Temporary between `active`, `archive`, and
   `trash`.
 - The previous `<utc-timestamp>-<random-suffix>` format (for example `20260827T103000Z-a1b2c3`)
@@ -286,6 +290,14 @@ Never overwrite an existing directory; a stale read must not reuse a claimed nam
   stored ID just because it predates this rule.
 - The schemas and validators accept both formats; they require only a filesystem-safe, non-empty
   ID that matches the directory name.
+- The storage schema encodes the allow-list as `^(?!\.)(?!.*[.]$)[\p{L}\p{N}._-]+$`. The `\p{...}`
+  property escapes rely on ajv's default `unicodeRegExp: true` (the `u` flag); without it the class
+  silently degrades and every CJK ID is rejected, so keep `unicodeRegExp` enabled. `validate.py`
+  mirrors the same set via `str.isalnum()`.
+- JS and Python bundle different Unicode versions, so their acceptance is only as strong as the
+  intersection of the two tables: a character assigned in a newer Unicode version (for example
+  U+105C0 Todhri) is accepted by the schema but rejected by `validate.py`. CJK and Latin slugs are
+  unaffected.
 
 ## Mutable-state write protocol
 

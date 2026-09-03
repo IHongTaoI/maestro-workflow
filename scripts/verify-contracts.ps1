@@ -605,7 +605,7 @@ try {
         throw "Temporary-scoped Worker exceeds its exploratory requirements"
     }
     if ($temporarySelection.selected_workers[0].snapshot_path -notmatch
-        "/temporary/active/$($temporaryWorker.lifecycle.temporary_id)/") {
+        "/temporary/active/$([regex]::Escape($temporaryWorker.lifecycle.temporary_id))/") {
         throw "Temporary Worker snapshot is not stored under its lifecycle owner"
     }
 
