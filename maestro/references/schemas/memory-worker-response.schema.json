@@ -35,6 +35,12 @@
       "minLength": 1,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
     },
+    "storageId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Filesystem-safe ID matching a Temporary/Task directory name. May contain CJK and other non-ASCII Unicode; path separators, whitespace, control characters, shell metacharacters and filesystem-unsafe punctuation are rejected, as are leading and trailing dots (so '.' and '..' and silently-normalized names are unusable).",
+      "pattern": "^(?!\\.)(?!.*[.]$)[\\p{L}\\p{N}._-]+$"
+    },
     "sourceRefs": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
@@ -61,8 +67,8 @@
       "required": ["type", "id", "created_at"],
       "properties": {
         "type": { "enum": ["temporary", "task"] },
-        "id": { "$ref": "#/$defs/stableId" },
-        "workspace_id": { "$ref": "#/$defs/stableId" },
+        "id": { "$ref": "#/$defs/storageId" },
+        "workspace_id": { "$ref": "#/$defs/storageId" },
         "created_at": { "type": "string", "format": "date-time" }
       },
       "additionalProperties": false

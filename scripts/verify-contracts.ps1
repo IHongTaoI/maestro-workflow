@@ -159,6 +159,10 @@ try {
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
         "$validatorFixtureRoot/memory-index-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
+        "$validatorFixtureRoot/memory-index-cjk-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
+        "$validatorFixtureRoot/memory-index-storage-id-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
         "$validatorFixtureRoot/memory-index-schema-invalid.json" 1
     Invoke-AjvCase $memoryIndexSchema `
         "$validatorFixtureRoot/memory-index-duplicate-id-invalid.json" 0
@@ -601,7 +605,7 @@ try {
         throw "Temporary-scoped Worker exceeds its exploratory requirements"
     }
     if ($temporarySelection.selected_workers[0].snapshot_path -notmatch
-        "/temporary/active/$($temporaryWorker.lifecycle.temporary_id)/") {
+        "/temporary/active/$([regex]::Escape($temporaryWorker.lifecycle.temporary_id))/") {
         throw "Temporary Worker snapshot is not stored under its lifecycle owner"
     }
 

@@ -15,10 +15,11 @@
     }
   },
   "$defs": {
-    "stableId": {
+    "storageId": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      "description": "Filesystem-safe ID matching a Temporary/Task directory name. May contain CJK and other non-ASCII Unicode; only letters, numbers, '_', '.', '-' are allowed, with path separators, whitespace, control characters, shell metacharacters, filesystem-unsafe punctuation and leading/trailing dots rejected.",
+      "pattern": "^(?!\\.)(?!.*[.]$)[\\p{L}\\p{N}._-]+$"
     },
     "uniqueStrings": {
       "type": "array",
@@ -44,7 +45,7 @@
         "updated_at"
       ],
       "properties": {
-        "memory_id": { "$ref": "#/$defs/stableId" },
+        "memory_id": { "$ref": "#/$defs/storageId" },
         "layer": { "enum": ["temporary", "task", "long-term"] },
         "record_type": {
           "enum": ["long-term-entry", "temporary", "task", "role-state", "worker-state"]

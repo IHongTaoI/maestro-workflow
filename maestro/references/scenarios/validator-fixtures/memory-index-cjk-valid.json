@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-01T06:30:00Z",
+  "source_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {
+      "memory_id": "20260831-首页启动性能",
+      "layer": "temporary",
+      "record_type": "temporary",
+      "title": "首页启动性能",
+      "summary": "首页启动性能",
+      "path": "files/source.md",
+      "locator": "routing-context",
+      "status": "active",
+      "memory_kind": null,
+      "tags": [],
+      "aliases": ["home startup performance"],
+      "search_hints": [],
+      "updated_at": "2026-09-01T06:29:00Z"
+    },
+    {
+      "memory_id": "20260827T103000Z-a1b2c3",
+      "layer": "temporary",
+      "record_type": "temporary",
+      "title": "legacy format",
+      "summary": "The old timestamp-plus-suffix format stays readable.",
+      "path": "files/source.md",
+      "locator": "routing-context",
+      "status": "active",
+      "memory_kind": null,
+      "tags": [],
+      "aliases": [],
+      "search_hints": [],
+      "updated_at": "2026-08-27T11:05:00Z"
+    }
+  ]
+}

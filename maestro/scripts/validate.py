@@ -17,6 +17,11 @@ Validator = Callable[[Any, str, list["Diagnostic"]], None]
 CAPABILITY_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:")
 STABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# Storage IDs (Temporary/Task directory names) are validated with a Unicode allow-list rather than
+# a regex because Python's stdlib `re` has no \p{...} property escapes. The evaluator mirrors the
+# schema pattern ^(?!\.)(?!.*[.]$)[\p{L}\p{N}._-]+$ : letters and numbers (including CJK), plus
+# "_", ".", "-", with a leading or trailing dot rejected so "." and ".." are unusable and the
+# directory name can never normalize away to something that differs from meta.yaml.id.
 RFC3339_DATE_TIME_PATTERN = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
@@ -144,6 +149,25 @@ def check_array(
 
 def check_plain_object(value: Any, path: str, errors: list[Diagnostic]) -> None:
     require_object(value, path, errors)
+
+
+def check_storage_id(value: Any, path: str, errors: list[Diagnostic]) -> bool:
+    if not check_string(value, path, errors, min_length=1):
+        return False
+    assert isinstance(value, str)
+    if (
+        value[0] == "."
+        or value[-1] == "."
+        or not all(character.isalnum() or character in "._-" for character in value)
+    ):
+        add_error(
+            errors,
+            path,
+            "must be a filesystem-safe ID matching the directory name: letters and "
+            "numbers (CJK ok) plus '_', '.', '-', with no leading or trailing dot",
+        )
+        return False
+    return True
 
 
 def check_stable_id(value: Any, path: str, errors: list[Diagnostic]) -> bool:
@@ -706,7 +730,7 @@ def validate_memory_index_entry(
     }
     check_object_shape(value, path, errors, required=required, allowed=required)
     if "memory_id" in value:
-        check_stable_id(value["memory_id"], f"{path}.memory_id", errors)
+        check_storage_id(value["memory_id"], f"{path}.memory_id", errors)
     if "layer" in value:
         check_enum(value["layer"], f"{path}.layer", errors, MEMORY_LAYERS)
     if "record_type" in value:
@@ -1071,9 +1095,9 @@ def validate_long_term_candidate(
                 {"temporary", "task"},
             )
         if "id" in source:
-            check_stable_id(source["id"], f"{path}.source.id", errors)
+            check_storage_id(source["id"], f"{path}.source.id", errors)
         if "workspace_id" in source:
-            check_stable_id(
+            check_storage_id(
                 source["workspace_id"], f"{path}.source.workspace_id", errors
             )
         if "created_at" in source:
@@ -1223,9 +1247,9 @@ def validate_playbook_candidate(
                 {"temporary", "task"},
             )
         if "id" in source:
-            check_stable_id(source["id"], f"{path}.source.id", errors)
+            check_storage_id(source["id"], f"{path}.source.id", errors)
         if "workspace_id" in source:
-            check_stable_id(
+            check_storage_id(
                 source["workspace_id"], f"{path}.source.workspace_id", errors
             )
         if "created_at" in source:
@@ -1407,7 +1431,7 @@ def validate_provenance(
         if key in value:
             check_string(value[key], f"{path}.{key}", errors, min_length=1)
     if "task_id" in value:
-        check_stable_id(value["task_id"], f"{path}.task_id", errors)
+        check_storage_id(value["task_id"], f"{path}.task_id", errors)
     if "memory_path" in value:
         check_canonical_path(value["memory_path"], f"{path}.memory_path", errors)
     if "source_refs" in value and check_array(
