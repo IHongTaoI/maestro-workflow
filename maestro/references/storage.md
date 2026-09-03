@@ -183,15 +183,15 @@ available model or perform the compression in the current agent.
 Each active Temporary's `meta.yaml` contains the smallest host-independent routing contract:
 
 ```yaml
-id: 20260827T103000Z-a1b2c3
-topic: home startup performance
+id: 20260831-首页启动性能
+topic: 首页启动性能
 status: active
-created_at: 2026-08-27T10:30:00Z
-updated_at: 2026-08-27T11:05:00Z
+created_at: 2026-08-31T10:30:00Z
+updated_at: 2026-08-31T11:05:00Z
 updated_by: old-zhou/session-or-run-id
 revision: 12
 aliases:
-  - 首页启动性能
+  - home startup performance
   - 首屏启动慢
 last_session_id: optional-stable-host-session-id
 ```
@@ -216,21 +216,73 @@ Validate parsed Temporary metadata against
 Each `task.yaml` contains only execution, recovery, lifecycle, and conflict-control fields:
 
 ```yaml
-id: 20260827T120000Z-d4e5f6
-objective: Reduce homepage startup time without changing visible behavior
+id: 20260831-优化登录流程
+objective: 优化登录流程
 status: active
-created_at: 2026-08-27T12:00:00Z
-updated_at: 2026-08-27T12:03:00Z
+created_at: 2026-08-31T12:00:00Z
+updated_at: 2026-08-31T12:03:00Z
 updated_by: old-zhou/session-or-run-id
 revision: 1
-source_temporary: 20260827T103000Z-a1b2c3
-promotion_transaction: 20260827T120000Z-p7q8r9
+source_temporary: 20260831-首页启动性能
+promotion_transaction: 20260831-优化登录流程
 ```
 
 `source_temporary` is present only when the Task was promoted from Temporary Memory. A Task created
 directly from an explicit execution request omits it. A promoted Task also records
 `promotion_transaction`, which identifies the transaction whose commit marker controls its initial
 visibility. Validate parsed Task metadata against [task.schema.json](schemas/task.schema.json).
+
+## Temporary and Task ID naming
+
+Temporary and Task directories use a readable, filesystem-safe ID derived from their `topic`
+(`meta.yaml.topic`) or `objective` (`task.yaml.objective`) rather than an opaque
+timestamp-plus-random suffix. The ID must equal the directory name and the value stored in
+`meta.yaml.id` / `task.yaml.id`.
+
+### Format
+
+```text
+<yyyymmdd>-<slug>
+```
+
+- `<yyyymmdd>` is the UTC date on which the directory is created.
+- `<slug>` is a short, readable topic name:
+  - Keep letters (including CJK), digits, `-`, `_`, and `.`.
+  - Remove whitespace, path separators (`/`, `\`), and filesystem-unsafe characters
+    (`: * ? " < > |`), plus control characters and leading/trailing dots.
+  - Collapse repeated separators. A slug must not begin with `.` (to avoid `.` and `..`).
+  - Keep it brief; truncate over-long topics rather than carrying the full sentence.
+
+Examples:
+
+```text
+20260831-首页启动性能
+20260831-优化登录流程
+```
+
+### Duplicate handling
+
+When the target path already exists, append an incrementing numeric suffix starting at `-2`:
+
+```text
+20260831-首页启动性能
+20260831-首页启动性能-2
+20260831-首页启动性能-3
+```
+
+Never overwrite an existing directory; a stale read must not reuse a claimed name.
+
+### Stability and compatibility
+
+- Once created, the ID is stable. If the topic or objective is later reworded, update
+  `meta.yaml` / `task.yaml` only; do not rename the directory.
+- Keep the original `<yyyymmdd>-<slug>` when moving a Temporary between `active`, `archive`, and
+  `trash`.
+- The previous `<utc-timestamp>-<random-suffix>` format (for example `20260827T103000Z-a1b2c3`)
+  remains readable and recoverable. Do not batch-migrate existing directories, and do not reject a
+  stored ID just because it predates this rule.
+- The schemas and validators accept both formats; they require only a filesystem-safe, non-empty
+  ID that matches the directory name.
 
 ## Mutable-state write protocol
 
@@ -331,7 +383,9 @@ update when no invariant requires a group.
 
 - Resolve every write beneath the selected project's `.maestro/` directory.
 - Reject traversal such as `../` and do not follow a supplied absolute path as a state destination.
-- Use stable, filesystem-safe IDs containing a UTC timestamp and a short random suffix.
+- Use stable, filesystem-safe IDs derived from the topic or objective as described in
+  "Temporary and Task ID naming"; a stored ID is always accepted even when it uses the older
+  timestamp-plus-random-suffix format.
 - Prefer Markdown for human-maintained state and YAML for small metadata/configuration.
 - Write mutable state only through the revision and lock protocol above, using the host's safest
   available atomic replacement mechanism after conflict checks pass.

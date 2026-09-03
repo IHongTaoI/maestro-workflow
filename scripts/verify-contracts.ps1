@@ -158,6 +158,8 @@ try {
         "$validatorFixtureRoot/handoff-schema-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
         "$validatorFixtureRoot/memory-index-valid.json" 0
+    Invoke-AjvCase $memoryIndexSchema `
+        "$validatorFixtureRoot/memory-index-cjk-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
         "$validatorFixtureRoot/memory-index-schema-invalid.json" 1
     Invoke-AjvCase $memoryIndexSchema `

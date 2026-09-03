@@ -45,14 +45,30 @@ MUST NOT:
 ```text
 GIVEN:
 - Current Session is bound to "home startup performance".
-- Another active Temporary has ID 20260827T103000Z-a1b2c3 and topic "login performance".
-USER: 继续 20260827T103000Z-a1b2c3
+- Another active Temporary has ID 20260831-登录性能 and topic "login performance".
+USER: 继续 20260831-登录性能
 
 EXPECT:
 - Select "login performance" and replace the Session binding.
 
 MUST NOT:
 - Prefer the previous binding or the most recently updated candidate.
+```
+
+## Legacy ID remains usable
+
+```text
+GIVEN:
+- A readable-ID Temporary "20260831-首页启动性能" exists from this naming rule.
+- A second active Temporary uses the legacy timestamp-plus-suffix ID 20260827T103000Z-a1b2c3.
+USER: 继续 20260827T103000Z-a1b2c3
+
+EXPECT:
+- Resolve the legacy ID to its Temporary (matching the directory name) exactly as an ID from the
+  newer readable format.
+
+MUST NOT:
+- Reject or fuzzy-match a legacy ID because it predates the current naming rule.
 ```
 
 ## Invalid explicit ID

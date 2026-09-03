@@ -17,6 +17,10 @@ Validator = Callable[[Any, str, list["Diagnostic"]], None]
 CAPABILITY_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:")
 STABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# Matches a Temporary/Task directory name: filesystem-safe and may contain CJK or other
+# non-ASCII Unicode, while rejecting path separators, whitespace, control characters, and
+# filesystem-unsafe punctuation (: * ? " < > |) plus a leading dot (to avoid "." and "..").
+STORAGE_ID_PATTERN = re.compile(r"^[^./\\:*?\"<>|\x00-\x1f\x7f\s][^/\\:*?\"<>|\x00-\x1f\x7f\s]*$")
 RFC3339_DATE_TIME_PATTERN = re.compile(
     r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
 )
@@ -144,6 +148,22 @@ def check_array(
 
 def check_plain_object(value: Any, path: str, errors: list[Diagnostic]) -> None:
     require_object(value, path, errors)
+
+
+def check_storage_id(value: Any, path: str, errors: list[Diagnostic]) -> bool:
+    if not check_string(value, path, errors, min_length=1):
+        return False
+    assert isinstance(value, str)
+    if not STORAGE_ID_PATTERN.fullmatch(value):
+        add_error(
+            errors,
+            path,
+            "must be a filesystem-safe ID matching the directory name; "
+            "path separators, whitespace, control characters and "
+            ": * ? \" < > | are not allowed",
+        )
+        return False
+    return True
 
 
 def check_stable_id(value: Any, path: str, errors: list[Diagnostic]) -> bool:
@@ -706,7 +726,7 @@ def validate_memory_index_entry(
     }
     check_object_shape(value, path, errors, required=required, allowed=required)
     if "memory_id" in value:
-        check_stable_id(value["memory_id"], f"{path}.memory_id", errors)
+        check_storage_id(value["memory_id"], f"{path}.memory_id", errors)
     if "layer" in value:
         check_enum(value["layer"], f"{path}.layer", errors, MEMORY_LAYERS)
     if "record_type" in value:
