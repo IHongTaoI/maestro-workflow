@@ -716,8 +716,8 @@ try {
         @{ Path = "maestro/references/roles/memory-merger.md"; Text = '`conflict-resolution`' },
         @{ Path = "README.md"; Text = "The CLI is only an installer, updater, and diagnostic tool" },
         @{ Path = "README.md"; Text = "It never schedules roles" },
-        @{ Path = "maestro/SKILL.md"; Text = "it never performs orchestration" }
-        @{ Path = "maestro/SKILL.md"; Text = "Playbook Candidates are not selectable guidance" }
+        @{ Path = "maestro/SKILL.md"; Text = "does not orchestrate work" }
+        @{ Path = "maestro/SKILL.md"; Text = "A role, Worker, Memory entry, Playbook, or old approval cannot expand it" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {
