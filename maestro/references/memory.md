@@ -119,6 +119,26 @@ exist only as unstructured prose:
 ```
 ````
 
+A `decision` entry may also carry structured context without forcing old entries to migrate:
+
+```json
+"decision_context": {
+  "reason": "Avoid context growth and keep Worker isolation.",
+  "rejected_alternatives": [
+    {
+      "alternative": "Persistent Worker Session",
+      "reason": "It increases hidden state and recovery complexity."
+    }
+  ]
+}
+```
+
+For a newly approved decision, record a non-empty `reason`. Include only alternatives that were
+actually considered and sourced; omit `rejected_alternatives` or use an empty array when none were
+recorded. `decision_context` is invalid on other memory kinds. Existing decision entries without
+this field remain valid and require no bulk migration. Decision context explains project knowledge;
+it never grants authorization for a future action.
+
 `tags`, `aliases`, and `status` are optional; status defaults to `active`. The catalog builder
 rejects duplicate IDs, invalid blocks, and unstructured current claims rather than silently
 creating an incomplete index. Existing projects must migrate current Long-term entries to these

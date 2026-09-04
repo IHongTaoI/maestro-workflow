@@ -148,6 +148,10 @@ rejected. Store unresolved merge conflicts under `memory/long-term/conflicts/` w
 `pending-confirmation`. A `SKIP` decision does not mutate `current.md`, but retaining it prevents
 the same duplicate or low-value claim from being reconsidered without new evidence.
 
+A newly approved `decision` may include the backward-compatible `decision_context` defined in
+[memory.md](memory.md). Preserve it through updates and semantic merges. It explains rationale and
+recorded rejected alternatives but never grants permission or replaces the immutable review record.
+
 Long-term entries use the fenced `maestro-memory-entry` JSON representation defined in
 [memory.md](memory.md). This gives the deterministic catalog builder an addressable record boundary
 while keeping `current.md` as the authoritative, reviewable source. The generated

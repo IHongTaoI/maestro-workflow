@@ -665,6 +665,41 @@ def validate_request_audit_reference(
         )
 
 
+def validate_decision_context(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {"reason"}
+    allowed = required | {"rejected_alternatives"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
+    if "reason" in value:
+        check_string(value["reason"], f"{path}.reason", errors, min_length=1)
+    if "rejected_alternatives" in value:
+        check_array(
+            value["rejected_alternatives"],
+            f"{path}.rejected_alternatives",
+            errors,
+            validate_rejected_alternative,
+        )
+
+
+def validate_rejected_alternative(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {"alternative", "reason"}
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    for key in required:
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+
+
 def validate_long_term_entry(
     value: Any,
     path: str,
@@ -674,7 +709,7 @@ def validate_long_term_entry(
     if not require_object(value, path, errors):
         return
     required = {"entry_id", "title", "memory_kind", "content", "source_refs"}
-    allowed = required | {"status"}
+    allowed = required | {"status", "decision_context"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
     if "entry_id" in value:
         check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
@@ -695,6 +730,16 @@ def validate_long_term_entry(
             errors,
             {"active", "superseded", "rejected"},
         )
+    if "decision_context" in value:
+        validate_decision_context(
+            value["decision_context"], f"{path}.decision_context", errors
+        )
+        if value.get("memory_kind") != "decision":
+            add_error(
+                errors,
+                f"{path}.decision_context",
+                "is allowed only when memory_kind is 'decision'",
+            )
     if "source_refs" in value and check_array(
         value["source_refs"],
         f"{path}.source_refs",
@@ -964,7 +1009,8 @@ def validate_long_term_candidate(
         "source",
         "source_refs",
     }
-    check_object_shape(value, path, errors, required=required, allowed=required)
+    allowed = required | {"decision_context"}
+    check_object_shape(value, path, errors, required=required, allowed=allowed)
 
     if "candidate_id" in value:
         check_stable_id(value["candidate_id"], f"{path}.candidate_id", errors)
@@ -995,6 +1041,16 @@ def validate_long_term_candidate(
     for key in ("content", "rationale"):
         if key in value:
             check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "decision_context" in value:
+        validate_decision_context(
+            value["decision_context"], f"{path}.decision_context", errors
+        )
+        if value.get("memory_kind") != "decision":
+            add_error(
+                errors,
+                f"{path}.decision_context",
+                "is allowed only when memory_kind is 'decision'",
+            )
 
     classification: str | None = None
     entry_ids: list[Any] | None = None
@@ -1518,7 +1574,7 @@ def validate_merged_long_term_entry(
         "source_refs",
         "action_taken",
     }
-    allowed = required | {"status", "superseded_entry_ids"}
+    allowed = required | {"status", "superseded_entry_ids", "decision_context"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
     if "entry_id" in value:
         check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
@@ -1546,6 +1602,16 @@ def validate_merged_long_term_entry(
             errors,
             {"active", "superseded", "rejected"},
         )
+    if "decision_context" in value:
+        validate_decision_context(
+            value["decision_context"], f"{path}.decision_context", errors
+        )
+        if value.get("memory_kind") != "decision":
+            add_error(
+                errors,
+                f"{path}.decision_context",
+                "is allowed only when memory_kind is 'decision'",
+            )
     if "superseded_entry_ids" in value and check_array(
         value["superseded_entry_ids"],
         f"{path}.superseded_entry_ids",

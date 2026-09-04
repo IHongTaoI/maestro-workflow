@@ -184,6 +184,40 @@ def require_string_list(mapping: dict[str, Any], key: str, source: Path) -> list
     return values
 
 
+def validate_decision_context(entry: dict[str, Any], source: Path) -> None:
+    context = entry.get("decision_context")
+    if context is None:
+        return
+    if entry.get("memory_kind") != "decision":
+        raise CatalogError(
+            f"{source}: 'decision_context' is allowed only for memory_kind 'decision'"
+        )
+    if not isinstance(context, dict):
+        raise CatalogError(f"{source}: 'decision_context' must be an object")
+    unknown = set(context) - {"reason", "rejected_alternatives"}
+    if unknown:
+        raise CatalogError(
+            f"{source}: 'decision_context' contains unknown fields: {sorted(unknown)}"
+        )
+    require_string(context, "reason", source)
+    alternatives = context.get("rejected_alternatives", [])
+    if not isinstance(alternatives, list):
+        raise CatalogError(
+            f"{source}: 'decision_context.rejected_alternatives' must be an array"
+        )
+    for alternative in alternatives:
+        if not isinstance(alternative, dict):
+            raise CatalogError(
+                f"{source}: each rejected alternative must be an object"
+            )
+        if set(alternative) != {"alternative", "reason"}:
+            raise CatalogError(
+                f"{source}: each rejected alternative requires only 'alternative' and 'reason'"
+            )
+        require_string(alternative, "alternative", source)
+        require_string(alternative, "reason", source)
+
+
 def parse_long_term_entries(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -224,6 +258,7 @@ def parse_long_term_entries(path: Path) -> list[dict[str, Any]]:
             raise CatalogError(f"{path}: invalid status '{status}'")
         optional_string_list(entry, "tags", path)
         optional_string_list(entry, "aliases", path)
+        validate_decision_context(entry, path)
         entries.append(entry)
     return entries
 
