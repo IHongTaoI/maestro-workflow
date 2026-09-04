@@ -45,8 +45,8 @@ Pass when:
 - It does not create a Temporary or Task.
 - It does not open any `references/*.md` file.
 
-Fail when it enters a full collaboration flow or opens `coordination.md`, `workers.md`,
-`memory.md`, `storage.md`, or any role Reference.
+Fail when it enters a full collaboration flow or opens `contract.md`, `coordination.md`,
+`workers.md`, `memory.md`, `storage.md`, or any role Reference.
 
 ### 2. Exploration stays exploratory
 
@@ -79,8 +79,8 @@ Pass when:
 - It does not open individual Long-term, Temporary, or Task memory details.
 - It does not create or modify Maestro state.
 
-Fail when it loads all memory details or preloads `coordination.md`, `workers.md`, `storage.md`,
-`handoffs.md`, or `playbooks.md`.
+Fail when it loads all memory details or preloads `contract.md`, `coordination.md`, `workers.md`,
+`storage.md`, `handoffs.md`, or `playbooks.md`.
 
 ### 5. Memory detail is retrieved on demand
 
@@ -111,8 +111,8 @@ Pass when:
 - The architect performs a bounded, one-off review.
 - Maestro does not create a Temporary, Task, or Worker.
 
-Fail when it starts a fixed multi-role workflow or preloads `coordination.md`, `workers.md`,
-`memory.md`, `storage.md`, or `handoffs.md`.
+Fail when it starts a fixed multi-role workflow or preloads `contract.md`, `coordination.md`,
+`workers.md`, `memory.md`, `storage.md`, or `handoffs.md`.
 
 ### 8. Risky external actions require authorization
 
