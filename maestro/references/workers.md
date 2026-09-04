@@ -20,6 +20,22 @@ instruction dependencies. Every run receives a separately materialized Delegatio
 only the resolved instructions, context references, tools, and effective permissions needed for
 that delegation.
 
+Interpret every reusable or generated Worker boundary from the existing fields; do not create a
+second `can_do` / `cannot_do` contract:
+
+- **Can do** is the intersection of `capabilities`, `responsibility`, `scope`, available `tools`,
+  `context`, and effective `permissions` for the current delegation.
+- **Cannot do** is everything outside that intersection. In particular, a Worker cannot redefine
+  requirements, expand scope, approve its own proposal, modify Long-term Memory directly, promote
+  itself to reusable status, or bypass Old Zhou and user authorization.
+- **Required input** is `inputs` plus the minimum current context materialized in the Delegation
+  Packet. Missing required input blocks or degrades the run; the Worker must not invent it.
+- **Expected output** is `outputs` plus the applicable Detailed Result and Handoff. Output reports
+  work; it cannot grant permission or mutate the immutable packet.
+
+These semantics apply equally to built-in, project, learned, and generated Workers. The Worker
+schema remains the single machine-readable boundary contract.
+
 `preferred_model` is an optional compatibility hint, not a requirement or permission. A null or
 unavailable preference uses the host's appropriate available model and must not make the registry
 host-specific.
