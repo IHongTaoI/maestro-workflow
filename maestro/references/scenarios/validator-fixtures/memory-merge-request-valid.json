@@ -6,6 +6,10 @@
       "title": "Module initialization",
       "memory_kind": "decision",
       "content": "Module initialization should happen during bootstrap.",
+      "decision_context": {
+        "reason": "Bootstrap previously provided the only verified initialization boundary.",
+        "rejected_alternatives": []
+      },
       "source_refs": [
         "maestro/references/scenarios/validator-fixtures/files/source.md"
       ]

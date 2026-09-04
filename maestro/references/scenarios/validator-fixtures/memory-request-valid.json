@@ -8,8 +8,17 @@
       {
         "entry_id": "lt-fixture-validation",
         "title": "Fixture validation",
-        "memory_kind": "principle",
+        "memory_kind": "decision",
         "content": "Durable fixture claims require reachable evidence.",
+        "decision_context": {
+          "reason": "Unsourced claims cannot be audited across Sessions.",
+          "rejected_alternatives": [
+            {
+              "alternative": "Store claims without source references",
+              "reason": "Later Agents could not distinguish evidence from generated text."
+            }
+          ]
+        },
         "source_refs": [
           "files/source.md"
         ]

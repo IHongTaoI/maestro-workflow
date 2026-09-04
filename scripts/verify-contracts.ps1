@@ -174,6 +174,10 @@ try {
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
         "$validatorFixtureRoot/memory-request-schema-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-decision-context-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-decision-context-missing-reason-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
         "$validatorFixtureRoot/memory-request-playbook-revision-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
         "$validatorFixtureRoot/memory-request-playbook-path-invalid.json" 1
@@ -487,6 +491,14 @@ try {
         }
     }
 
+    $coderWorker = @($builtinRegistry.workers | Where-Object id -eq "coder")
+    if ($coderWorker.Count -ne 1 -or
+        $coderWorker[0].capabilities -notcontains "code-implementation" -or
+        $coderWorker[0].permissions.conditional -notcontains "edit-project-files" -or
+        $coderWorker[0].permissions.autonomous -contains "edit-project-files") {
+        throw "Built-in Coder boundary must keep project edits conditional"
+    }
+
     foreach ($alias in $builtinRegistry.aliases.PSObject.Properties) {
         if ($alias.Name -notmatch $canonicalCapabilityPattern -or
             $alias.Value -notmatch $canonicalCapabilityPattern) {
@@ -657,6 +669,11 @@ try {
         @{ Path = "maestro/references/handoffs.md"; Text = 'requires `status: blocked`' },
         @{ Path = "maestro/references/memory.md"; Text = "current code or runtime evidence" },
         @{ Path = "maestro/references/workers.md"; Text = "Worker permissions are requested action categories, never grants" },
+        @{ Path = "maestro/references/workers.md"; Text = "**Can do** is the intersection" },
+        @{ Path = "maestro/references/workers.md"; Text = "modify Long-term Memory directly" },
+        @{ Path = "maestro/references/contract.md"; Text = "Only `user_request` is always required" },
+        @{ Path = "maestro/references/contract.md"; Text = "A proposal never approves itself" },
+        @{ Path = "maestro/references/memory.md"; Text = "`decision_context` is invalid on other memory kinds" },
         @{ Path = "maestro/references/workers.md"; Text = "Task or Temporary resumption uses this snapshot" },
         @{ Path = "maestro/references/workers.md"; Text = "A Worker never inherits the parent Agent's complete Skill" },
         @{ Path = "maestro/references/workers.md"; Text = "delegation-packet.schema.json" },
