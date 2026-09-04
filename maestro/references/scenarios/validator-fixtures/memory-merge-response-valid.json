@@ -15,9 +15,18 @@
     {
       "entry_id": "lt-novel-ours",
       "title": "Independent feature caching",
-      "memory_kind": "principle",
+      "memory_kind": "decision",
       "action_taken": "novel_ours",
       "content": "Cache verified query responses locally when offline mode is requested.",
+      "decision_context": {
+        "reason": "Verified local caching preserves the requested offline behavior.",
+        "rejected_alternatives": [
+          {
+            "alternative": "Require a network response in offline mode",
+            "reason": "It cannot satisfy the offline requirement."
+          }
+        ]
+      },
       "source_refs": [
         "maestro/references/scenarios/validator-fixtures/files/source.md"
       ]

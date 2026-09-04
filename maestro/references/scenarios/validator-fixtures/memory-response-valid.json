@@ -12,12 +12,16 @@
   "long_term_candidates": [
     {
       "candidate_id": "candidate-create",
-      "title": "Stable fixture fact",
-      "memory_kind": "fact",
+      "title": "Stable fixture decision",
+      "memory_kind": "decision",
       "action": "CREATE",
       "match": { "classification": "novel", "entry_ids": [] },
       "conflict_status": "none",
-      "content": "The validator fixture has a reachable source.",
+      "content": "The validator fixture must retain a reachable source.",
+      "decision_context": {
+        "reason": "The source makes the decision auditable across Sessions.",
+        "rejected_alternatives": []
+      },
       "rationale": "No current Long-term entry covers this verified fact.",
       "source": {
         "type": "task",

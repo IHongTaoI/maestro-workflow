@@ -18,7 +18,7 @@
         "ref": "policy:safety-boundary",
         "source_scope": "core",
         "source_paths": ["references/workers.md", "references/coordination.md"],
-        "sha256": "b6fcc4b84cf99c7b07586ec0c32b284ed2e5930941998dc99cd3cf43fe8df82b"
+        "sha256": "c312d09ea42aa8d44f7f8f7d991d75b9a989ad06a2b833f8fc5ab2c7101d6df6"
       }
     ]
   },

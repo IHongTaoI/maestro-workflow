@@ -1,0 +1,20 @@
+{
+  "operation": "role-compress",
+  "source_files": ["files/source.md"],
+  "current_memory": {
+    "long_term_entries": [
+      {
+        "entry_id": "lt-missing-reason",
+        "title": "Missing decision reason",
+        "memory_kind": "decision",
+        "content": "A decision context must explain the decision.",
+        "decision_context": {
+          "rejected_alternatives": []
+        },
+        "source_refs": ["files/source.md"]
+      }
+    ]
+  },
+  "current_playbooks": [],
+  "memory_hints": {}
+}

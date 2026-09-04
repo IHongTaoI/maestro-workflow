@@ -51,7 +51,7 @@ updated_by: old-zhou/test
 \`\`\`
 
 \`\`\`maestro-memory-entry
-{"entry_id":"lt-old-workflow","title":"Old workflow preference","memory_kind":"decision","content":"Always use a fixed workflow.","source_refs":[".maestro/evidence/performance.md"],"tags":["workflow"],"status":"superseded"}
+{"entry_id":"lt-old-workflow","title":"Old workflow preference","memory_kind":"decision","content":"Always use a fixed workflow.","decision_context":{"reason":"The original design optimized for predictable stage order.","rejected_alternatives":[{"alternative":"Dynamic role selection","reason":"It was initially considered harder to test."}]},"source_refs":[".maestro/evidence/performance.md"],"tags":["workflow"],"status":"superseded"}
 \`\`\`
 `);
   await writeProjectFile(projectRoot, '.maestro/memory/temporary/active/temp-home/meta.yaml', `id: temp-home
@@ -206,4 +206,20 @@ test('rejects unstructured Long-term Memory instead of silently creating a weak 
   const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(failure.code, 2);
   assert.match(failure.stderr, /maestro-memory-entry/);
+});
+
+test('rejects decision context on a non-decision Long-term entry', async (t) => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-decision-invalid-'));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await writeProjectFile(projectRoot, '.maestro/evidence/source.md', '# Evidence\n');
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/current.md', `# Long-term Memory
+
+\`\`\`maestro-memory-entry
+{"entry_id":"lt-invalid","title":"Invalid context","memory_kind":"fact","content":"Facts do not carry decision context.","decision_context":{"reason":"Invalid fixture."},"source_refs":[".maestro/evidence/source.md"]}
+\`\`\`
+`);
+
+  const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(failure.code, 2);
+  assert.match(failure.stderr, /decision_context.*only.*decision/);
 });

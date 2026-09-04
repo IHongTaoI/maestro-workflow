@@ -1,0 +1,20 @@
+{
+  "operation": "role-compress",
+  "source_files": ["files/source.md"],
+  "current_memory": {
+    "long_term_entries": [
+      {
+        "entry_id": "lt-invalid-context",
+        "title": "Invalid decision context",
+        "memory_kind": "fact",
+        "content": "A fact cannot carry decision-only context.",
+        "decision_context": {
+          "reason": "This field belongs only to decisions."
+        },
+        "source_refs": ["files/source.md"]
+      }
+    ]
+  },
+  "current_playbooks": [],
+  "memory_hints": {}
+}
