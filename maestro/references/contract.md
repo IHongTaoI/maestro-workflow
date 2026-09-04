@@ -3,6 +3,7 @@
 Use this Reference when a Host Adapter, role, or Worker must interpret or expose Maestro's common
 input and output semantics. This is an Agent behavior contract, not a Runtime API. It does not
 require JSON output, persistent state, or delegation for ordinary requests.
+Do not load it for ordinary user-facing introductions to Maestro, a role, or how Maestro works.
 
 ## Input contract
 
