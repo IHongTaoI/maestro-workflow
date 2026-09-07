@@ -1,5 +1,10 @@
 # @maestro-ai/dsh-adapter
 
+Checkpoint M1 的接入证据、拟定协议与后续验收见
+[checkpoint contract](../../docs/architecture/checkpoint-contract.md)。可在仓库根目录运行
+`node adapters/deepseek-harness/scripts/audit-checkpoint.mjs` 复核已安装 DSH 声明与 lockfile。
+该检查不访问 Session、不启动宿主，也不代表 checkpoint 已接线；持久日志补存和真实工具调用仍待验收。
+
 DeepSeek Harness (dsh) 的 Maestro 适配层。它把可移植的 Maestro Core Skill 挂进 dsh，并在
 dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #14][issue-14]「Core 可移植 +
 可选 Harness Plugin / Adapter」方向的第一个宿主实现。
