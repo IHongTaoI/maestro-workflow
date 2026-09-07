@@ -10,6 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  codex-windows:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Codex plugin on Windows
+        run: node --test test/codex-adapter.test.js
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10

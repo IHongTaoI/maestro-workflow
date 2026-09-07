@@ -1,0 +1,17 @@
+{
+  "name": "maestro-codex",
+  "version": "0.1.0",
+  "description": "Restore Maestro rules and memory entry points at Codex session boundaries.",
+  "author": {
+    "name": "IHongTaoI"
+  },
+  "interface": {
+    "displayName": "Maestro Codex",
+    "shortDescription": "Restore Maestro context after compaction.",
+    "longDescription": "A read-only SessionStart hook for projects with the portable Maestro Skill installed for Codex. Provides a minimal guard and memory paths without loading historical content or selecting a task.",
+    "developerName": "IHongTaoI",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Help me use Maestro Codex."
+  }
+}

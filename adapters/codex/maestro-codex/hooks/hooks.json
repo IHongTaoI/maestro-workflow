@@ -1,0 +1,18 @@
+{
+  "description": "Restore Maestro entry points in opted-in local projects. No automatic checkpoint writes.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('node:url').pathToFileURL(require('node:path').join(process.env.PLUGIN_ROOT,'scripts','session-start.mjs')).href).then(m=>m.run())\"",
+            "timeout": 5,
+            "additionalContextLimit": 4000
+          }
+        ]
+      }
+    ]
+  }
+}
