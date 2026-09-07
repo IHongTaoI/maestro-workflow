@@ -9,8 +9,49 @@ delegate a stable role, or resolve a Worker from the current work's required cap
 Maestro preserves continuity through Temporary, Task, and Long-term project memory without forcing
 every request through a fixed workflow.
 
+## Install from source (no npm publication required)
+
+Requires Node.js 20.19 or newer. From the root of your local Maestro checkout, run the
+CLI directly; these installer commands need no global install, build, or `npm install`:
+
+```bash
+node ./bin/maestro.js init "/path/to/your-project" --tools codex
+node ./bin/maestro.js doctor "/path/to/your-project"
+```
+
+On Windows, for example, run from `D:\code\maestro-workflow` and replace the target path
+with the project where you want to use Maestro:
+
+```powershell
+node .\bin\maestro.js init "D:\code\your-project" --tools codex
+node .\bin\maestro.js doctor "D:\code\your-project"
+```
+
+This copies the current checkout's `maestro/` Core to the target project's
+`.agents/skills/maestro/`. Use `.` as the target to install into the Maestro checkout itself:
+
+```bash
+node ./bin/maestro.js init . --tools codex
+```
+
+After updating your Maestro checkout, refresh the installed copy from the same checkout:
+
+```powershell
+node .\bin\maestro.js update "D:\code\your-project"
+node .\bin\maestro.js doctor "D:\code\your-project"
+```
+
+Updates use local source files; they do not download a release from npm. Other supported
+hosts use the same commands with their tool IDs from the table below.
+
+For Codex working on a local project, open the target project and start a new conversation,
+then ask it to use Maestro. The target must be the project directory visible to that Codex
+session; installing into a local Windows folder does not also install into a remote environment.
+This installs the portable Skill, not a Codex plugin or automatic checkpoint hooks.
+
 ## Install with the multi-host CLI
 
+Once the package is published to npm, you can instead install the CLI globally.
 Requires Node.js 20.19 or newer. Install the CLI once:
 
 ```bash
