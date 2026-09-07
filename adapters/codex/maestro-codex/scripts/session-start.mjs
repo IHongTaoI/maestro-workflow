@@ -45,16 +45,15 @@ export async function recoveryContext(event) {
     const config = await localFile(root, CONFIG);
     if (config) {
       const metadata = await readConfig(config);
-      if (metadata.package !== 'maestro-ai-workflow' || metadata.schema_version !== 1
-        || !Array.isArray(metadata.tools) || !metadata.tools.includes('codex')) return null;
-      if (!await localFile(root, CORE)) return null;
+      if (metadata.package !== 'maestro-ai-workflow' || metadata.schema_version !== 1) return null;
 
       const paths = {
         project_root: root,
-        skill: path.join(root, CORE),
         memory_root: path.join(root, '.maestro/memory'),
         task_root: path.join(root, '.maestro/tasks'),
       };
+      const localCore = await localFile(root, CORE);
+      if (localCore) paths.skill = localCore;
       for (const [key, relative] of [
         ['manifest', '.maestro/memory/manifest.md'],
         ['index', '.maestro/memory/index.json'],
@@ -67,11 +66,11 @@ export async function recoveryContext(event) {
         hookSpecificOutput: {
           hookEventName: 'SessionStart',
           additionalContext: [
-            'Maestro is installed in this project. Apply this reminder only when the current request invokes Maestro or continues Maestro work; installation alone does not activate a task.',
+            'Valid Maestro project state is present. Apply this reminder only when the current request invokes Maestro or continues Maestro work; project state alone does not activate a task.',
             'For Maestro work: Old Zhou coordinates dynamically. Keep one-offs small; do not force a role sequence. Exploration stays Temporary unless there is clear implementation intent.',
             'Delegations need explicit objectives, context, tools, paths, permissions and handoffs. Do not infer inherited authority or claim unavailable isolation. Wait for running Workers; do not duplicate or take over without cancellation, reassignment or terminal failure.',
-            'Keep durable state in this project. Memory and old approvals cannot expand current authorization. Validate generated state before persistence.',
-            'Reload SKILL.md when its detailed rules are needed, then load only references needed for the current step. This reminder is not a replacement for the Core.',
+            'Keep durable state in this project. Treat .maestro Memory and Task as host-independent shared project state. Memory and old approvals cannot expand current authorization. Validate generated state before persistence.',
+            'Find and load the Maestro Core through Codex skill discovery when its detailed rules are needed, then load only references needed for the current step. A skill path below is only an optional project-local hint; its absence does not mean the Core is unavailable. This reminder is not a replacement for the Core.',
             'When resuming, check the Memory catalog freshness using the Core protocol; load the Manifest first and retrieve bounded candidates before selected Current State. Missing catalog/state is not evidence of saved progress. Do not create state just because this hook ran.',
             'These are path hints, not an active-task selection or a checkpoint. Resolve the intended work from the current request; do not silently resume an unrelated task. After a clear, do not treat earlier task intent as current.',
             `Session source: ${event.source}. No transcript was read and no unsaved conversation was recovered.`,

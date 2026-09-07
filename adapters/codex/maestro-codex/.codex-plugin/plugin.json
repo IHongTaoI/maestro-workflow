@@ -8,7 +8,7 @@
   "interface": {
     "displayName": "Maestro Codex",
     "shortDescription": "Restore Maestro context after compaction.",
-    "longDescription": "A read-only SessionStart hook for projects with the portable Maestro Skill installed for Codex. Provides a minimal guard and memory paths without loading historical content or selecting a task.",
+    "longDescription": "A read-only SessionStart hook for Maestro projects. Provides shared project memory paths and an optional project-local Core hint without loading historical content or selecting a task.",
     "developerName": "IHongTaoI",
     "category": "Productivity",
     "capabilities": [],
