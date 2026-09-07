@@ -55,6 +55,24 @@ The CLI stores its local installation selection in `.maestro/installation.json` 
 `.maestro-managed.json` ownership marker in each generated Skill. Updates overwrite canonical
 Maestro files but preserve unrelated user-authored files.
 
+## Optional Codex desktop recovery plugin
+
+For Codex working on local projects in the ChatGPT desktop app, the optional Codex plugin restores
+minimal Maestro rules and memory entry points when a session starts, resumes, clears, or compacts.
+It reuses the existing project-local Core Skill and does not bundle a second copy.
+
+From this checkout, first install Core into the target project and prepare the personal plugin source:
+
+```bash
+node ./bin/maestro.js init "/path/to/your-project" --tools codex
+npm run codex:install:local
+```
+
+Then install/enable the plugin from the desktop app's personal marketplace, review and trust its
+Hook, and start a new conversation in the target project. Source preparation alone does not activate
+the plugin. This first version is read-only recovery guidance, not automatic pre-compaction saving.
+See the [Codex adapter guide](adapters/codex/README.md) for Windows commands, updates, and acceptance.
+
 ## Install into DSH from a local checkout
 
 The DSH adapter can be installed without publishing either package to npm. From this repository,
