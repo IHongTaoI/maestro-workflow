@@ -7,20 +7,41 @@
 ## 已实现的范围
 
 - 提供协调、授权、Worker 等待和按需加载等少量 Core 提醒。
+- 提醒 Codex 将有界 Maestro Worker 映射到当前可用的原生 subagent 能力，不把独立 task / conversation 当作替代品。
 - 提供当前项目的 Memory 和 Task 路径；项目级 `SKILL.md` 存在时仅作为额外 hint。
 - 提醒 Agent 依照 Core 检查索引是否过期，再按当前请求选择需要恢复的工作。
 - 不读取 Memory 正文、Session transcript 或整份 Core，不把所有历史注入上下文。
 - 没有有效 Maestro 项目元数据时安静退出；嵌套仓库 / worktree 不借用父项目的状态。
 - 输入或安装信息异常时跳过并输出诊断，不阻止 Codex，也不声称恢复成功。
 
-**这不是自动 checkpoint**：尚未实现压缩前总结、写入进度、失败补存，也没有接通
-`SubagentStart` 的 Worker Packet 映射或权限隔离。它只能帮助重新找到已经保存的状态，
-无法恢复从未落盘的结论。因此这只是 #14 / #26 的部分落地。
+**这不是自动 checkpoint，也不是完整的 subagent 接线**：尚未实现压缩前总结、写入进度、
+失败补存，也没有接通 `SubagentStart` 的 Worker Packet 映射或权限隔离。当前只通过
+`SessionStart` reminder 澄清宿主工具选择。它只能帮助重新找到已经保存的状态，无法恢复
+从未落盘的结论。因此这只是 #14 / #26 的部分落地。
 
 插件没有第二份 `skills/maestro`，避免重复注册。Core 可以由 Codex 从用户级或项目级 Skill
 目录发现；`.maestro/` 则是项目级、跨宿主共享的 Memory / Task 状态。Hook 不自行实现完整的
 Skill 搜索规则，也不会因为项目内缺少 `.agents/skills/maestro/SKILL.md` 而跳过状态恢复。
 卸载插件后，裸 Skills 仍然可用。
+
+### Codex Worker 宿主映射
+
+在已安装、启用并信任该插件，且 `SessionStart` Hook 已为有效 Maestro 项目运行的会话中，
+reminder 使用以下边界：
+
+- 有界 Maestro Worker 优先使用当前可见的 Codex 原生 subagent capability，例如可用时的
+  `spawn_agent`。
+- `create_thread` 或其他独立 task / conversation API 只用于用户明确要求新开独立 Codex
+  任务或会话的情况，不能代替 Worker。
+- 工具侧标识始终服从当前可见工具的 schema；若只允许小写字母、数字和下划线，可使用
+  `render_pipeline_scout` 之类简短的 `snake_case` 标识。
+- 主 Agent 在派工说明、进度和汇总中优先使用“渲染链路侦察员”之类中文称呼。只有宿主
+  提供独立且支持中文的 display-name 字段时，才承诺把中文称呼写入该字段；否则不保证 UI
+  内部线程名显示中文。
+- 当前环境没有原生 subagent capability 时，必须如实降级，不能虚构已派工。
+
+该映射不改变 Core 的 Worker 选择、权限、上下文或等待规则，也不让裸 Core 依赖 Codex
+专有 API。未启用插件、Hook 未执行或项目没有有效 Maestro 元数据时，不保证存在这条提醒。
 
 ## 从源码安装到桌面端（无需 npm 发布）
 
@@ -94,6 +115,10 @@ Codex 使用安装缓存，不应假设修改来源文件会立即影响已安�
 | 有效 Maestro 项目且存在项目级 Core | Hook 输出共享状态路径，并额外包含项目级 Core 路径；不会自动创建 Task |
 | 只有用户级 / 全局 Core，项目内没有 Core | Hook 仍输出项目 `.maestro/` 状态路径；Core 由 Codex 自己发现 |
 | `.maestro/` 状态由其他宿主创建 | 即使 `tools` 不含 `codex`，Hook 仍恢复 Memory / Task 入口 |
+| 明确要求 Maestro 派一个有界 Worker | 有原生 subagent capability 时直接使用它，不先尝试 `create_thread` |
+| 明确要求新开独立 Codex task / conversation | 可以使用 `create_thread`，不误判为 Maestro Worker |
+| 当前环境没有原生 subagent capability | 如实说明或按 Core 规则降级，不声称已派工 |
+| 并行派出多个 Worker | 工具侧标识合法且能区分分工；派工说明、进度和汇总优先使用简短中文称呼 |
 | 保存好一次进度后触发手动或自动压缩 | `SessionStart` 的 `source=compact` 执行；继续模型请求前补入提醒，再按需读取原有 Current State |
 | 项目没有 Memory 或有多个候选任务 | 不虚构保存结果，不自行选一个旧任务继续 |
 | 清空会话后问一个新问题 | 不把旧任务意图当成当前指令 |
@@ -117,6 +142,7 @@ CI 另在 Windows 运行此套件。
 ## 官方接口依据
 
 - [Codex Hooks](https://learn.chatgpt.com/docs/hooks)：`SessionStart`、`additionalContext`、插件默认 Hook 路径、Hook 信任。
+- [Codex 子智能体](https://learn.chatgpt.com/zh-Hans/docs/agent-configuration/subagents)：委派触发、agent thread、等待和汇总语义。
 - [插件打包和本地 marketplace](https://developers.openai.com/plugins/build/plugins)：个人来源、安装缓存和插件结构。
 
 Hook 通过 Node 读取 `PLUGIN_ROOT`，避免把插件路径拼进 shell 代码；同一条命令用于 Windows 和 POSIX。
