@@ -100,9 +100,11 @@ Maestro files but preserve unrelated user-authored files.
 
 For Codex working on local projects in the ChatGPT desktop app, the optional Codex plugin restores
 minimal Maestro rules and memory entry points when a session starts, resumes, clears, or compacts.
-It reuses the existing project-local Core Skill and does not bundle a second copy.
+It lets Codex discover the Core Skill at user or project scope and does not bundle a second copy.
+The project-local `.maestro/` Memory and Task state remains shared across supported hosts; a local
+`.agents/skills/maestro/SKILL.md` is only an optional path hint for the Hook.
 
-From this checkout, first install Core into the target project and prepare the personal plugin source:
+For a new project, install Core and create Maestro metadata, then prepare the personal plugin source:
 
 ```bash
 node ./bin/maestro.js init "/path/to/your-project" --tools codex

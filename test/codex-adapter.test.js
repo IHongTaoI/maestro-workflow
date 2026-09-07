@@ -25,9 +25,9 @@ async function put(root, file, text) {
   await writeFile(path.join(root, file), text);
 }
 
-async function project(root, config = metadata) {
+async function project(root, config = metadata, { core = true } = {}) {
   await put(root, '.maestro/installation.json', JSON.stringify(config));
-  await put(root, '.agents/skills/maestro/SKILL.md', 'CORE_CONTENT_MUST_NOT_BE_PRELOADED');
+  if (core) await put(root, '.agents/skills/maestro/SKILL.md', 'CORE_CONTENT_MUST_NOT_BE_PRELOADED');
 }
 
 async function invoke(input) {
@@ -56,16 +56,39 @@ test('Codex restores bounded entry points for each SessionStart source without l
   assert.deepEqual(await readdir(path.join(root, '.maestro')), ['installation.json', 'memory']);
 });
 
-test('Codex hook stays silent outside opted-in projects and for other events', async t => {
+test('Codex hook stays silent without valid Maestro metadata and for other events', async t => {
   const root = await fixture(t);
   assert.equal(await recoveryContext(event(root)), null);
   assert.deepEqual(await readdir(root), []);
-  await project(root, { ...metadata, tools: ['claude'] });
+  await project(root, { ...metadata, package: 'other-package' });
+  assert.equal(await recoveryContext(event(root)), null);
+  await project(root, { ...metadata, schema_version: 2 });
   assert.equal(await recoveryContext(event(root)), null);
   await project(root);
   assert.equal(await recoveryContext({ ...event(root), hook_event_name: 'SubagentStart' }), null);
   assert.equal(await recoveryContext(event(root, 'unknown')), null);
   assert.equal(await recoveryContext(event('relative/path')), null);
+});
+
+test('Codex restores cross-host state without a project-local Core or codex tool selection', async t => {
+  const root = await fixture(t);
+  await project(root, { ...metadata, tools: ['claude'] }, { core: false });
+  await put(root, '.maestro/memory/manifest.md', 'SHARED_MEMORY_MUST_NOT_BE_INJECTED');
+  await put(root, '.maestro/tasks/current.md', 'SHARED_TASK_MUST_NOT_BE_INJECTED');
+
+  for (const config of [
+    { ...metadata, tools: ['claude'] },
+    { package: metadata.package, schema_version: metadata.schema_version },
+  ]) {
+    await put(root, '.maestro/installation.json', JSON.stringify(config));
+    const result = await recoveryContext(event(root));
+    const context = result.hookSpecificOutput.additionalContext;
+    assert.match(context, /host-independent shared project state/);
+    assert.match(context, /memory_root/);
+    assert.match(context, /task_root/);
+    assert.match(context, /manifest\.md/);
+    assert.doesNotMatch(context, /SKILL\.md|SHARED_MEMORY|SHARED_TASK/);
+  }
 });
 
 test('Codex does not cross a nested repository or worktree boundary', async t => {
@@ -101,7 +124,7 @@ test('Codex rejects malformed and oversized input without echoing private data',
   assert.match(result.stderr, /skipped/);
 });
 
-test('Codex ignores an external symlinked Core', async t => {
+test('Codex ignores an external symlinked Core hint but still restores project state', async t => {
   const root = await fixture(t);
   await project(root);
   const core = path.join(root, '.agents/skills/maestro/SKILL.md');
@@ -110,7 +133,9 @@ test('Codex ignores an external symlinked Core', async t => {
   await rm(core);
   try { await symlink(path.join(outside, 'SKILL.md'), core); }
   catch (error) { if (error.code === 'EPERM') return t.skip('Symlink privilege unavailable'); throw error; }
-  assert.equal(await recoveryContext(event(root)), null);
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /SKILL\.md/);
 });
 
 test('shipped hook command runs from an installed plugin path with spaces and shell metacharacters', async t => {

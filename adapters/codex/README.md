@@ -1,30 +1,32 @@
 # Maestro Codex 插件（首版）
 
-这是已有 Maestro Core Skill 的可选增强层，目标是 Codex 在 ChatGPT 桌面端的**本地项目**。
+这是 Maestro Core Skill 的可选增强层，目标是 Codex 在 ChatGPT 桌面端的**本地项目**。
 首版接通 `SessionStart`，覆盖 `startup / resume / clear / compact`。
 压缩后，该 Hook 可在下一次模型请求前提供精简规则和记忆入口。
 
 ## 已实现的范围
 
 - 提供协调、授权、Worker 等待和按需加载等少量 Core 提醒。
-- 提供当前项目的 `SKILL.md`、Memory 和 Task 路径；只在文件存在时提供 Manifest / Index 路径。
+- 提供当前项目的 Memory 和 Task 路径；项目级 `SKILL.md` 存在时仅作为额外 hint。
 - 提醒 Agent 依照 Core 检查索引是否过期，再按当前请求选择需要恢复的工作。
 - 不读取 Memory 正文、Session transcript 或整份 Core，不把所有历史注入上下文。
-- 没有有效 Codex 安装记录或 Core 文件时安静退出；嵌套仓库 / worktree 不借用父项目的状态。
+- 没有有效 Maestro 项目元数据时安静退出；嵌套仓库 / worktree 不借用父项目的状态。
 - 输入或安装信息异常时跳过并输出诊断，不阻止 Codex，也不声称恢复成功。
 
 **这不是自动 checkpoint**：尚未实现压缩前总结、写入进度、失败补存，也没有接通
 `SubagentStart` 的 Worker Packet 映射或权限隔离。它只能帮助重新找到已经保存的状态，
 无法恢复从未落盘的结论。因此这只是 #14 / #26 的部分落地。
 
-插件没有第二份 `skills/maestro`，避免与已安装的 `.agents/skills/maestro/` 重复注册。
-Core 仍由现有安装器维护；卸载插件后，裸 Skills 仍然可用。
+插件没有第二份 `skills/maestro`，避免重复注册。Core 可以由 Codex 从用户级或项目级 Skill
+目录发现；`.maestro/` 则是项目级、跨宿主共享的 Memory / Task 状态。Hook 不自行实现完整的
+Skill 搜索规则，也不会因为项目内缺少 `.agents/skills/maestro/SKILL.md` 而跳过状态恢复。
+卸载插件后，裸 Skills 仍然可用。
 
 ## 从源码安装到桌面端（无需 npm 发布）
 
 需要 Node.js 20.19+。在你的 Maestro 仓库根目录运行，例如 `D:\code\maestro-workflow`。
 
-先确认目标项目已经安装 Core；如果已经安装，可直接执行 `doctor`：
+新项目可以通过 CLI 安装项目级 Core 并生成 Maestro 元数据；已有的跨宿主 Maestro 项目可直接执行 `doctor`：
 
 ```powershell
 node .\bin\maestro.js init "D:\code\your-project" --tools codex
@@ -67,7 +69,7 @@ node .\adapters\codex\install-local.mjs
 
 ### 更新
 
-更新 Maestro 仓库后，分别刷新 Core 和插件来源：
+更新 Maestro 仓库后，如果项目级 Core 由 CLI 管理，可刷新 Core；然后刷新插件来源：
 
 ```powershell
 node .\bin\maestro.js update "D:\code\your-project"
@@ -89,11 +91,13 @@ Codex 使用安装缓存，不应假设修改来源文件会立即影响已安�
 
 | 场景 | 应观察到的结果 |
 | --- | --- |
-| 已安装 Core 的本地项目，新开 Maestro 对话 | Hook 执行记录成功，输出包含当前项目的 Core 路径；不会自动创建 Task |
+| 有效 Maestro 项目且存在项目级 Core | Hook 输出共享状态路径，并额外包含项目级 Core 路径；不会自动创建 Task |
+| 只有用户级 / 全局 Core，项目内没有 Core | Hook 仍输出项目 `.maestro/` 状态路径；Core 由 Codex 自己发现 |
+| `.maestro/` 状态由其他宿主创建 | 即使 `tools` 不含 `codex`，Hook 仍恢复 Memory / Task 入口 |
 | 保存好一次进度后触发手动或自动压缩 | `SessionStart` 的 `source=compact` 执行；继续模型请求前补入提醒，再按需读取原有 Current State |
 | 项目没有 Memory 或有多个候选任务 | 不虚构保存结果，不自行选一个旧任务继续 |
 | 清空会话后问一个新问题 | 不把旧任务意图当成当前指令 |
-| 未安装 Core 的另一个项目 | Hook 无上下文输出、不写 `.maestro/` |
+| 没有有效 `.maestro/installation.json` 的普通项目 | Hook 无上下文输出、不写 `.maestro/` |
 | 禁用插件 / Hook 未信任 | 不再声称自动恢复 Hook 生效；已安装的 Core Skills 仍可显式使用 |
 
 记录桌面端版本、执行环境、触发方式、Hook 执行状态和实际读取路径。
