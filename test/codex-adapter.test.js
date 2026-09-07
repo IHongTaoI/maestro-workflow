@@ -56,6 +56,19 @@ test('Codex restores bounded entry points for each SessionStart source without l
   assert.deepEqual(await readdir(path.join(root, '.maestro')), ['installation.json', 'memory']);
 });
 
+test('Codex maps bounded Workers to native subagents without conflating separate tasks', async t => {
+  const root = await fixture(t);
+  await project(root);
+  const result = await recoveryContext(event(root));
+  const context = result.hookSpecificOutput.additionalContext;
+
+  assert.match(context, /bounded Maestro Worker.*Codex-native subagent capability/i);
+  assert.match(context, /spawn_agent.*visible/i);
+  assert.match(context, /separate user-owned Codex task or conversation.*explicitly requests/i);
+  assert.match(context, /tool-facing identifiers.*visible tool schema/i);
+  assert.match(context, /Chinese role labels.*user-facing text/i);
+});
+
 test('Codex hook stays silent without valid Maestro metadata and for other events', async t => {
   const root = await fixture(t);
   assert.equal(await recoveryContext(event(root)), null);
