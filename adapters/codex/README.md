@@ -45,9 +45,13 @@ node .\adapters\codex\install-local.mjs
 
 该命令不需要构建、额外依赖或 Codex CLI。它会：
 
-1. 将插件源文件准备到当前用户的 `~/plugins/maestro-codex/`。
+1. 将插件源文件准备到 Codex 推荐的个人插件目录 `~/.codex/plugins/maestro-codex/`。
 2. 在 `~/.agents/plugins/marketplace.json` 添加个人来源条目，保留其他插件及已有展示名称和策略。
 3. 输出准备完成的位置；**不会直接安装到 Codex 缓存、启用插件或授予 Hook 信任**。
+
+本安装器不再创建或引用旧的 `~/plugins/maestro-codex/`。Codex 插件尚未正式使用，
+因此不提供旧路径迁移；如果曾测试 PR #40，请手动清理旧目录和冲突的 marketplace entry 后重装。
+安装器不会自动移动、删除或覆盖它们。
 
 这里的 `~` 指当前用户主目录（Windows 通常是 `C:\Users\你的用户名`）。从 Windows 原生
 终端运行，以便桌面端能访问同一目录；在 WSL、容器或远程机器运行不会安装到 Windows 的用户目录。

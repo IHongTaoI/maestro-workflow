@@ -135,11 +135,12 @@ test('local installer prepares a hooks-only personal source without activation o
   const catalog = JSON.parse(await readFile(result.marketplace, 'utf8'));
   const manifest = JSON.parse(await readFile(path.join(result.pluginDir, '.codex-plugin/plugin.json'), 'utf8'));
   assert.equal(catalog.name, 'personal');
-  assert.equal(catalog.plugins[0].source.path, './plugins/maestro-codex');
+  assert.equal(result.pluginDir, path.join(homeDir, '.codex/plugins/maestro-codex'));
+  assert.equal(catalog.plugins[0].source.path, './.codex/plugins/maestro-codex');
   assert.equal(catalog.plugins[0].policy.installation, 'AVAILABLE');
   assert.equal(manifest.skills, undefined);
   assert.match(manifest.version, /^0\.1\.0\+codex\.[a-f0-9]{16}$/);
-  assert.ok(!(await readdir(homeDir)).includes('.codex'));
+  assert.ok(!(await readdir(homeDir)).includes('plugins'));
   assert.ok(!(await readdir(homeDir)).includes('.maestro'));
 });
 
@@ -175,7 +176,7 @@ test('local installer refuses a foreign destination or conflicting marketplace e
   for (const scenario of ['directory', 'catalog']) {
     const homeDir = await fixture(t);
     if (scenario === 'directory') {
-      await put(homeDir, 'plugins/maestro-codex/custom.txt', 'keep');
+      await put(homeDir, '.codex/plugins/maestro-codex/custom.txt', 'keep');
     } else {
       await put(homeDir, '.agents/plugins/marketplace.json', JSON.stringify({
         name: 'personal', plugins: [{ name: 'maestro-codex', source: { source: 'local', path: './elsewhere' } }],
@@ -183,9 +184,18 @@ test('local installer refuses a foreign destination or conflicting marketplace e
     }
     await assert.rejects(installLocal({ homeDir }), /not managed|points elsewhere/);
     if (scenario === 'directory') {
-      assert.equal(await readFile(path.join(homeDir, 'plugins/maestro-codex/custom.txt'), 'utf8'), 'keep');
+      assert.equal(await readFile(path.join(homeDir, '.codex/plugins/maestro-codex/custom.txt'), 'utf8'), 'keep');
     }
   }
+});
+
+test('local installer rejects a symlinked Codex directory instead of writing outside home', async t => {
+  const homeDir = await fixture(t);
+  const outside = await fixture(t);
+  try { await symlink(outside, path.join(homeDir, '.codex'), 'dir'); }
+  catch (error) { if (error.code === 'EPERM') return t.skip('Symlink privilege unavailable'); throw error; }
+  await assert.rejects(installLocal({ homeDir }), /real directory/);
+  assert.deepEqual(await readdir(outside), []);
 });
 
 test('local installer preserves invalid marketplace contents and refuses an occupied lock', async t => {

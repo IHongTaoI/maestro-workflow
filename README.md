@@ -109,6 +109,10 @@ node ./bin/maestro.js init "/path/to/your-project" --tools codex
 npm run codex:install:local
 ```
 
+The source installer uses Codex's standard personal plugin directory at
+`~/.codex/plugins/maestro-codex/` and points the personal marketplace entry at
+`./.codex/plugins/maestro-codex`.
+
 Then install/enable the plugin from the desktop app's personal marketplace, review and trust its
 Hook, and start a new conversation in the target project. Source preparation alone does not activate
 the plugin. This first version is read-only recovery guidance, not automatic pre-compaction saving.

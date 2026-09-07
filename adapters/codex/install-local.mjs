@@ -8,7 +8,7 @@ const SOURCE = fileURLToPath(new URL('./maestro-codex/', import.meta.url));
 const NAME = 'maestro-codex';
 const OWNER = 'maestro-ai-workflow/codex-adapter';
 const FILES = ['.codex-plugin/plugin.json', 'hooks/hooks.json', 'scripts/session-start.mjs'];
-const ENTRY_PATH = `./plugins/${NAME}`;
+const ENTRY_PATH = `./.codex/plugins/${NAME}`;
 const MARKER = '.maestro-source.json';
 
 async function optionalText(file) {
@@ -44,7 +44,9 @@ async function atomicText(file, content) {
 
 // Prepares a personal marketplace source. Activation and hook trust stay with Codex.
 export async function installLocal({ homeDir = homedir(), sourceDir = SOURCE } = {}) {
-  const pluginDir = path.join(homeDir, 'plugins', NAME);
+  const codexDir = path.join(homeDir, '.codex');
+  const pluginRoot = path.join(codexDir, 'plugins');
+  const pluginDir = path.join(pluginRoot, NAME);
   const marketplace = path.join(homeDir, '.agents/plugins/marketplace.json');
   const sourceFiles = await Promise.all(FILES.map(file => readFile(path.join(sourceDir, file), 'utf8')));
   const manifest = JSON.parse(sourceFiles[0]);
@@ -75,7 +77,8 @@ export async function installLocal({ homeDir = homedir(), sourceDir = SOURCE } =
       && (matches[0].source?.source !== 'local' || matches[0].source?.path !== ENTRY_PATH))) {
       throw new Error('Existing maestro-codex marketplace entry points elsewhere; left unchanged');
     }
-    await directory(path.join(homeDir, 'plugins'));
+    await directory(codexDir);
+    await directory(pluginRoot);
     const targetStat = await optionalStat(pluginDir);
     if (targetStat) {
       if (!targetStat.isDirectory() || targetStat.isSymbolicLink()) throw new Error('Invalid plugin destination');
