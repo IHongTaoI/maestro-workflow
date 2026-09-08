@@ -55,8 +55,8 @@ function yamlObject(text: string): Record<string, unknown> {
   requireThat(value && typeof value === 'object' && !Array.isArray(value), 'invalid_yaml')
   return value
 }
-function markdown(text: string) {
-  requireThat(Buffer.byteLength(text) <= LIMIT, 'state_too_large')
+function markdown(text: string, tooLargeCode = 'state_too_large') {
+  requireThat(Buffer.byteLength(text) <= LIMIT, tooLargeCode)
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(text)
   requireThat(match, 'invalid_frontmatter')
   const meta = yamlObject(match[1])
@@ -205,7 +205,7 @@ export class CheckpointWriter {
     const r = value as RecordData
     requireThat(r.project === this.project && r.source_hash === hash(json(r.snapshot))
       && r.proposal_hash === hash(r.proposal), 'checkpoint_hash_mismatch')
-    const proposal = markdown(r.proposal)
+    const proposal = markdown(r.proposal, 'proposal_too_large')
     requireThat(Number(proposal.meta.revision) === r.base_revision + 1, 'checkpoint_revision_mismatch')
     requireThat(json(proposal.meta.checkpoint_receipt) === json({ request_id: r.request_id,
       source_hash: r.source_hash, revision: r.base_revision + 1 }), 'invalid_receipt')
@@ -304,11 +304,12 @@ export class CheckpointWriter {
   async status(kind: 'temporary' | 'task', id: string, rid: string) {
     const r = await this.load(kind, id, rid)
     requireThat(r, 'request_not_found')
-    await this.active(kind, id)
+    // status is read-only: unlike save/retry it must stay queryable after the target is
+    // archived, so it does not gate on the target still being `active`.
     const state = await this.store.readSnapshot(target(kind, id).state)
     const observation = await this.store.readSnapshot(this.observationPath(r))
     if (observation) requireThat(observation.content === this.observation(r), 'invalid_observation')
-    return { status: observation || (state && hash(state.content) === r.proposal_hash) ? 'committed' : 'pending',
+    return { status: (observation || (state && hash(state.content) === r.proposal_hash)) ? 'committed' : 'pending',
       request_id: rid, proposed_revision: r.base_revision + 1, recovery: this.recovery }
   }
 
@@ -368,7 +369,7 @@ export class CheckpointWriter {
       : this.signal.aborted ? 'cancelled' : code === 'FS_STALE_VERSION' ? 'conflict'
         : error instanceof Error && error.message.includes('lock contention') ? 'lock_contention'
           : 'storage_or_validation_error', recovery: this.recovery,
-    commit_may_have_succeeded: this.recovery !== 'none' }
+    has_recoverable_record: this.recovery !== 'none' }
   }
 
   async reportFailure(error: unknown) {

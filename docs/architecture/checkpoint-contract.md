@@ -44,6 +44,7 @@ are the operator's responsibility. A separate path can still share a disk/backen
 - save(..., request_id, base_revision, base_hash, snapshot): persist a bounded immutable
   source/proposal request, then attempt guarded commit.
 - status(kind, target_id, request_id): inspect that exact request and its commit evidence.
+  Read-only and queryable after the target is archived; it does not gate on an active lifecycle.
 - retry(kind, target_id, request_id): revalidate and reconcile that exact persisted proposal;
   it does not regenerate a summary or invent newer coverage.
 
@@ -55,8 +56,9 @@ conservatively, including completed bundles. Do not delete evidence to bypass th
 
 The seven snapshot fields are objective, confirmed, rejected, in_progress, next,
 open_questions and source_refs. Facts are current-Agent supplied; required arrays can be empty.
-Snapshot JSON is limited to 16 KiB, tool arguments to 32 KiB, proposed state to 128 KiB,
-and request reads to 384 KiB. No silent truncation. source_refs must resolve to existing
+Snapshot JSON is limited to 16 KiB, tool arguments to 32 KiB, proposed state to 128 KiB
+(measured in UTF-8 bytes; a proposal that passes the schema character limit but exceeds the
+byte limit reports `proposal_too_large`), and request reads to 384 KiB. No silent truncation. source_refs must resolve to existing
 project-contained paths. The snapshot does not prove that every Session fact was supplied.
 
 ## Actual record layout and commit authority
@@ -114,9 +116,10 @@ requests. On conflicts, preserve the old record and explicitly reconcile facts i
 No silent supersession/deletion is implemented.
 
 All write paths stop for cancellation, invalid schema, missing refs, lifecycle changes or CAS
-conflicts. Failure reports recovery=none/project/secondary and warns that a commit may have
-succeeded. The same request ID is returned when valid, for status/retry. Status reports the
-proposed revision, not an unconditionally committed revision.
+conflicts. Failure reports recovery=none/project/secondary and has_recoverable_record states
+whether a validated source/proposal request is durable enough to status/retry. The same request
+ID is returned when valid, for status/retry. Status reports the proposed revision, not an
+unconditionally committed revision.
 
 If both primary and secondary request publication fail, do not promise recoverability.
 If the original source refs disappear before an uncommitted retry, stop. A fully failed storage

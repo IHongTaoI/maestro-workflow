@@ -325,3 +325,24 @@ test('tool persists failure reason on secondary channel and status remains read-
   await tool.execute({ operation: 'status', kind: 'temporary', target_id: 'test', request_id: 'save_1' }, exec)
   assert.deepEqual([...f.files.entries()], before)
 })
+
+test('status stays queryable after the target is archived', async () => {
+  const f = fixture(), w = await f.writer()
+  await w.save(f.input)
+  const meta = f.files.get(f.key(metaPath))!
+  f.files.set(f.key(metaPath), { content: meta.content.replace('status: active', 'status: archive'), version: 2 })
+  assert.equal((await (await f.writer()).status('temporary', 'test', 'save_1')).status, 'committed')
+})
+
+test('multibyte proposal over the byte limit reports proposal_too_large', async () => {
+  const f = fixture(), w = await f.writer()
+  // 40000 CJK chars = 120000 UTF-8 bytes: under the 131072-character schema max, but
+  // combined with a large snapshot the proposal crosses the 128 KiB byte limit in
+  // markdown(). This must surface as proposal_too_large, not state_too_large.
+  const content = `---\nrevision: 0\nupdated_at: ${stamp}\nupdated_by: user\n---\n# 正文\n${'中'.repeat(40000)}\n`
+  f.files.set(f.key(statePath), { content, version: 2 })
+  f.input.base_hash = hash(content)
+  f.input.snapshot = { ...f.input.snapshot, confirmed: Array(32).fill('证'.repeat(150)) }
+  await assert.rejects(w.save(f.input), /proposal_too_large/)
+  assert.equal(f.files.get(f.key(statePath))!.content, content)
+})
