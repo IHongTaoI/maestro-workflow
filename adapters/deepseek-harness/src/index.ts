@@ -14,14 +14,13 @@
  * ## What is actually wired today
  *
  * - **Product A (complete)**: the Maestro Core Skill is registered.
- * - **Product B (mechanism only)**: when `ctx.fs` exists, the deterministic
+ * - **Product B**: when `ctx.fs` exists, the deterministic
  *   `MaestroStateStore` and `MaestroSchemaValidator` are constructed and
  *   registered as Cordis services (`maestro.stateStore` /
  *   `maestro.schemaValidator`). They are reachable via `ctx.get(...)` but are
- *   **not yet exposed as a model-facing tool**, so the Core Skill's storage
- *   protocol does not yet flow through them — the Core still drives its own
- *   reads/writes by following `storage.md` in prose. Wiring a tool (or other
- *   model-visible seam) is the remaining `TODO(next)`.
+ *   not exposed as unrestricted raw tools. An explicitly configured checkpoint
+ *   tool uses them for single-target snapshot saves when `ctx.tools` exists.
+ *   Other Core reads/writes still follow `storage.md` through host tools.
  * - **Lifecycle hooks**: `ctx.agents` is detected for status only; no handler
  *   is registered yet because Maestro's Handoff / session-boundary decision
  *   logic lives in the Core Skill and has not been implemented.
@@ -32,6 +31,8 @@
 import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
+import type { ToolRuntime } from '@deepseek-ai/dsh-tools'
+import { checkpointTool } from './checkpoint-tool'
 import { assertSkills, detectCapabilities, planActivation } from './detect'
 import { loadCoreSkill, registerCoreSkill, resolveCoreDir } from './skill'
 import { MaestroStateStore } from './storage'
@@ -80,15 +81,30 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     }
 
     // Provide both as Cordis services so the rest of the runtime can reach them.
-    // TODO(next): also expose the store (and validator) as a model-facing tool,
-    // so the Core's storage protocol runs through this CAS implementation rather
-    // than the model following storage.md in prose.
+    // The optional checkpoint tool below exposes a bounded validated workflow;
+    // arbitrary Core storage operations are not automatically routed through it.
     const disposeValidator = ctx.provide(SCHEMA_VALIDATOR_SERVICE, validator)
     const disposeStore = ctx.provide(STATE_STORE_SERVICE, store)
     ctx.effect(() => () => {
       disposeStore()
       disposeValidator()
     }, 'maestro-adapter: storage services')
+
+    const tools = ctx.get('tools') as ToolRuntime | undefined
+    if (config.checkpoint && tools && validator.has('https://maestro.local/schemas/checkpoint.schema.json')) {
+      if (!path.isAbsolute(config.checkpoint.projectRoot)
+        || (config.checkpoint.recoveryRoot && !path.isAbsolute(config.checkpoint.recoveryRoot))) {
+        throw new Error('maestro-adapter: checkpoint roots must be absolute operator configuration')
+      }
+      const disposeCheckpoint = tools.register(checkpointTool(fs, validator, config.checkpoint))
+      ctx.effect(() => disposeCheckpoint, 'maestro-adapter: checkpoint tool')
+      ctx.logger.info('maestro-adapter: checkpoint tool registered (snapshot mode; live durability not verified)')
+    } else if (config.checkpoint) {
+      ctx.logger.warn('maestro-adapter: checkpoint not activated; tools or schemas unavailable')
+    }
+  }
+  if (config.checkpoint && !activation.storage) {
+    ctx.logger.warn('maestro-adapter: checkpoint not activated; filesystem unavailable')
   }
 
   // TODO(next): when Maestro's Handoff / session-boundary logic lands in the

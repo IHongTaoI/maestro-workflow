@@ -2,6 +2,26 @@
 
 Use memory to preserve continuity, not to reproduce the conversation or execution log.
 
+## Optional snapshot checkpoints
+
+When an available host checkpoint tool is used for an explicit save/handoff request, first select
+one active Temporary or Task and inspect its current revision/hash. Supply bounded facts:
+objective, confirmed findings, rejected directions, work in progress, next steps, open questions
+and reachable project-relative source refs. This is coverage of supplied facts, not a claim that
+the complete Session transcript was backed up. Do not include credentials or unrelated work.
+
+The writer may preserve a managed `Saved checkpoint` JSON section and `checkpoint_receipt` in
+Temporary `current.md` or Task `progress.md`. On resuming that selected work, read this snapshot
+alongside user-authored context; stale older headings must not override newer verified progress.
+The receipt is a recovery hint, not authorization. Follow the checkpoint rules in [storage.md](storage.md)
+before replacing/removing it. Rebuild the catalog after a successful formal state write using
+the existing freshness protocol; catalog failure does not undo the checkpoint.
+
+After an uncertain result, query status or retry the same request ID. Do not manufacture a new
+ID to bypass a conflict or claim unsaved work was recovered. Pending requests remain pending
+even if a newer request succeeds; report stale conflicts explicitly. Hosts without a checkpoint
+tool still follow the ordinary Memory and storage protocols.
+
 ## Temporary Memory
 
 Temporary Memory represents valuable discussion before a formal Task. Keep `current.md` short:

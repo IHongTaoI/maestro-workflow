@@ -3,17 +3,18 @@
 Checkpoint M1 的接入证据、拟定协议与后续验收见
 [checkpoint contract](../../docs/architecture/checkpoint-contract.md)。可在仓库根目录运行
 `node adapters/deepseek-harness/scripts/audit-checkpoint.mjs` 复核已安装 DSH 声明与 lockfile。
-该检查不访问 Session、不启动宿主，也不代表 checkpoint 已接线；持久日志补存和真实工具调用仍待验收。
+该检查不访问 Session、不启动宿主，也不代表功能启用。现已有显式配置启用的 snapshot checkpoint
+工具；真实模型提供方与持久文件系统的端到端验收仍未完成。
 
 DeepSeek Harness (dsh) 的 Maestro 适配层。它把可移植的 Maestro Core Skill 挂进 dsh，并在
 dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #14][issue-14]「Core 可移植 +
 可选 Harness Plugin / Adapter」方向的第一个宿主实现。
 
-> **当前接线状态（如实）**：本 PR 只完整交付了 **Product A**（把 Core 注册成 dsh skill）。
+> **当前接线状态（如实）**：**Product A**（把 Core 注册成 dsh skill）已接线。
 > `ctx.fs` 存在时，确定性的 `MaestroStateStore` 与 `MaestroSchemaValidator` 会被构建并注册成
 > Cordis service（`maestro.stateStore` / `maestro.schemaValidator`），但**尚未暴露成
-> model-facing tool**，因此 Core 的实际执行链还不经过它们——锁 / CAS / 校验目前是"机制就绪、
-> 未接入模型"的状态。`ctx.agents` 仅用于能力探测，没有注册任何生命周期 handler（Handoff /
+> 任意 model-facing storage tool**。启用下述 checkpoint 工具后，单目标快照保存会经过锁 / CAS /
+> 校验；其他 Core 写入不会自动改道。`ctx.agents` 仅用于能力探测，没有注册任何生命周期 handler（Handoff /
 > session-boundary 决策逻辑还在 Core Skill 里，属 TODO）。详见下文「落地顺序」。
 
 > **Worker Delegation Contract**：当前 Adapter 尚未实现 Worker Delegation Packet 到 dsh
@@ -189,7 +190,47 @@ adapters/deepseek-harness/
     └── hooks.test.ts   # hooks 监听原语单元测试（fake ctx）
 ```
 
-## 测试
+## 手动 checkpoint（显式启用）
+
+在宿主的 Maestro 插件配置中加入（路径由部署者配置，不接受模型参数）：
+
+```yaml
+checkpoint:
+  projectRoot: 'E:\projects\my-app'
+  recoveryRoot: 'E:\maestro-recovery'
+```
+
+`recoveryRoot` 可省略；指定时必须位于项目之外，不能与项目互相包含。它保存有界快照、
+目标绑定及完整提案的写前副本，不是新的 Memory 层，也不会自动备份整个 transcript。
+同一磁盘/后端仍可能同时故障，路径分离不等于故障域独立。目录应由部署者配置访问权限和保留期；
+工具不会自动清理、扩权或将源材料发送到外部服务。
+
+宿主必须同时提供 `fs`、`tools`，并加载带 checkpoint schema 的 Core。配置生效后注册
+`maestro_checkpoint`，保持原生 tools 审批/取消管线；缺少能力时日志说明未启用，裸 Skill 继续运行。
+调用 Agent 的 `session.header.cwd` 必须与配置项目的 canonical root 一致，不能借此操作其他项目。
+
+操作顺序：
+
+1. `inspect`：提供 `kind`（temporary/task）、`target_id`，获得当前内容、revision 与 base_hash。
+2. `save`：额外提供稳定 `request_id`、`base_revision`、`base_hash` 和 `snapshot`。快照字段为
+   objective、confirmed、rejected、in_progress、next、open_questions、source_refs；除 objective
+   为字符串外，其余为字符串数组。总快照限制 16 KiB；source_refs 为存在的项目内相对路径。
+3. 出错后用相同 kind/target_id/request_id 调用 `status` 或 `retry`。`failed` 可能发生在提交后，
+   不要因未收到成功结果就再次生成新请求。`recovery` 表示当前已核验来源，`none` 不保证可补存。
+   save/retry 还会尽力落盘失败原因，`failure_recorded` 表示该诊断是否确认保存；取消时停止新增写入。
+4. 成功后按 Core 协议刷新 Memory catalog。此工具不回滚已提交状态来处理 catalog 错误。
+
+Temporary 更新既有 current.md，Task 更新既有 progress.md；保留用户正文，仅替换 managed
+checkpoint 区段并推进 revision。完整请求保存在目标 references/checkpoints/，原子状态替换是
+提交点，随后发布 committed observation。不同请求之间的 pending 不会被自动清除；conflict
+需要重新查看当前事实，旧 pending 保留作为证据。
+
+本版不支持 Worker 目标、自动触发、事务 overlay 或 Task 晋升。存在任何 transaction bundle
+（即使已完成）时保守拒绝写入，空 transactions 目录允许。不要删除事务记录来绕过限制。
+进程被强制终止后若留下 held 锁，必须先由已有存储恢复流程核验 owner 已失活；工具不按过期时间
+抢锁。测试验证的是机制和真实 ToolRuntime 管线，完整 DSH 模型提供方/磁盘后端的人工验收仍待完成。
+
+## 测试命令
 
 ```sh
 cd adapters/deepseek-harness
@@ -208,7 +249,7 @@ fake ctx 即可覆盖锁 / CAS / 边界 / await 语义，无需真实 dsh runtim
 2. ~~detect 骨架 + fallback~~（本 PR）
 3. ~~storage 的锁 / CAS 写 + `.maestro/` 边界强制~~（本 PR，含单测）
 4. ~~hooks 的 turn-stopping 监听原语（正确 await）~~（本 PR，含单测，但未接线）
-5. 把 store / validator 暴露成 model-facing tool，让 Core 的 storage 协议真正跑在 CAS 实现上——后续
+5. 已接通显式启用的 snapshot checkpoint 工具；通用 storage / validator 工具仍属后续
 6. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
 7. session hooks 的完整生命周期联动（Handoff / Memory 保存）——后续
 8. 将 Worker Delegation Packet 映射到 dsh subagent 指令、上下文、工具与权限隔离，并返回真实

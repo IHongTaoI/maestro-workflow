@@ -26,6 +26,10 @@ export interface ValidationResult {
 export class MaestroSchemaValidator {
   private readonly ajv = new Ajv2020({ allErrors: true, strict: false })
 
+  has(schemaId: string): boolean {
+    return this.ajv.getSchema(schemaId) !== undefined
+  }
+
   /**
    * Load every `*.json` schema from the Core's `schemas/` directory and
    * register it under its `$id` so {@link validate} can address it.
