@@ -1,199 +1,148 @@
-# Recoverable checkpoint: M1 contract and DSH evidence
+# Recoverable checkpoint: snapshot writer and DSH evidence
 
-Status: **proposed implementation contract; checkpoint is not activated**.
-Scope: the first implementation increment for [#26](https://github.com/IHongTaoI/maestro-workflow/issues/26), within [#14](https://github.com/IHongTaoI/maestro-workflow/issues/14).
-Audited on 2026-09-07 against installed DSH `0.1.1-rc.2` declarations and the adapter lockfile.
+Status: **opt-in snapshot tool implemented; live model/backend acceptance remains open**.
+Scope: second increment for [#26](https://github.com/IHongTaoI/maestro-workflow/issues/26),
+within [#14](https://github.com/IHongTaoI/maestro-workflow/issues/14).
+Updated 2026-09-08. Core owns target selection and saved facts; Adapter owns validation,
+write-ahead records, locks, CAS and recovery. No automatic triggers or new Memory layer.
 
-## Evidence and capability boundary
+## Verified host seams
 
-Reproduce from the repository root:
+Run `node adapters/deepseek-harness/scripts/audit-checkpoint.mjs` from the repository root.
+It reports installed/locked versions, declaration locations and hashes, not live availability.
+The audited packages are DSH 0.1.1-rc.2. Their package.json repository provenance identifies
+deepseek-ai/deepseek-harness; this is versioned npm declaration evidence, not a claim about
+an uninspected current upstream checkout.
 
-```sh
-node adapters/deepseek-harness/scripts/audit-checkpoint.mjs
-```
-
-The script reads installed package declarations, not a live Harness. It reports versions,
-lockfile agreement, source lines and SHA-256 hashes. A successful audit proves only that the
-selected declarations exist. Upgrades require re-reading their semantics, not merely passing
-the string scan. Upstream package provenance is `deepseek-ai/deepseek-harness`, recorded in
-each installed package's `package.json` repository field.
-
-Paths below are relative to `adapters/deepseek-harness/node_modules/@deepseek-ai/`.
-
-| Seam | Versioned declaration evidence | Maestro state / implementation consequence |
+| Seam | Evidence under @deepseek-ai package lib/types/ | Actual use |
 | --- | --- | --- |
-| Bounded Session input | `dsh-session/lib/types/index.d.ts`: `Session.events` is an immutable array snapshot; `Session.seq` is the NEXT event number | Available in installed types, live service unverified; no source capture wired. Use a captured array and an exclusive `end_seq`, not a moving live upper bound. |
-| Durability barrier | Same file: `SessionStore.flush(session): Promise<boolean>` awaits participating listeners; false means none participated; errors propagate after listeners settle | Not a persistence implementation. The file explicitly describes an in-memory store and persistence plugins. No durable reread or independent failure store has been verified. |
-| Lifecycle | `dsh-agent/lib/types/runtime-types.d.ts`: session-start is emit; pre-step is waterfall; turn-stopping is awaited serial | Adapter has a turn-stopping helper but does not mount a handler. Emit is not an awaited save barrier; turn-stopping is not Session End or pre-compaction. |
-| Next-step context | Same file: `Agent.inject` queues context without waking, may miss an already claimed pre-step and may be discarded on cancellation | Candidate recovery mechanism only; no guarantee of immediate or persistent injection. |
-| Native agent creation | `dsh-agent/lib/types/index.d.ts`: factory creation and scoped setup | Registry needs an installed factory. No Maestro Worker Packet / tools / permission mapping exists; fresh context cannot supply missing parent facts. M1 uses the current Agent. |
-| Dynamic prompt | `dsh-system-prompt/lib/types/index.d.ts`: section/context providers evaluated per assembly | Declaration present, Maestro provider not registered. A complete prompt section can override ordinary sections; actual model inclusion requires integration verification. |
-| Guarded state store | Repository `src/storage.ts`: containment, snapshot, guarded replacement, exclusive create and lock leases | Internal Cordis service exists; no model-facing checkpoint tool. FsVersion is a host token, distinct from Core revision. |
-| Validation | Repository `src/validate.ts`: loaded Core JSON Schemas | Internal service exists. No checkpoint envelope schema yet; Markdown/frontmatter and semantic checks need explicit implementation. |
-| Tool execution | No tool-executor registration in current Adapter entry point; prompt tool schemas alone do not execute tools | Exact runtime tool registry / profile is still a prerequisite for the next PR. Do not invent a `ctx.tools` API from other hosts. |
-| Context pressure / pre-compaction | No verified pressure meter or awaited pre-compaction contract in this audit | Unknown, not proven globally absent. M2 must inspect the actual compaction/profile packages. The `compact` session-start source is not proof of a pre-compaction hook. |
+| Native tool | dsh-tools/index.d.ts: ToolRuntime.register(ToolDefinition); ToolRunContext.agent/signal; tools/pre-execute pipeline | Implemented in checkpoint-tool.ts and registered by index.ts only with explicit config, fs/tools and checkpoint schema. Real ToolRuntime tests verify registration, denial and dispatch with a fixture Agent. |
+| Source log | dsh-session/index.d.ts: events snapshot, seq as next/exclusive event number | Not captured by this snapshot tool. No transcript watermarks claimed. |
+| Flush | dsh-session/index.d.ts: SessionStore.flush returns participating-listener status | Not proof of backend storage independence or retention; not used as a substitute for publishing our request. |
+| Physical persistence read | dsh-session-persistence/index.d.ts: readFrom(id, fromSeq, signal) returns stored prefix/suffix without synthetic closers | Verified interface, not connected here. Needed for a future session-events mode. May parse the entire artifact on sequential backends. |
+| Logical inspection | Same file: inspect can return a live immutable view with open turns | Not used to claim durable recovery. load can repair cold history and rejects unsafe repair of live turns. |
+| Lifecycle | dsh-agent/runtime-types.d.ts: session-start emit, pre-step waterfall, turn-stopping serial | No automatic checkpoint handler mounted. turn-stopping is not pre-compaction or Session End. |
+| Worker / prompt | dsh-agent/index.d.ts factory; dsh-system-prompt/index.d.ts providers | Not activated by checkpoint. Current Agent supplies facts; fresh Worker context is not assumed. |
+| State store / validator | Adapter storage.ts / validate.ts | Used by checkpoint only; other Core writes do not automatically route through these services. |
 
-The locked interface packages do not establish an installed, runnable DSH profile with a
-model provider, tool executor and persistence backend. M1's live acceptance remains open.
-`ctx.get('sessionPersistence') !== undefined` alone cannot establish durable coverage,
-retention, read permissions or recovery while `.maestro/` storage is unavailable.
+## Activation and trust boundary
 
-## Core and Adapter ownership
+The operator configures an absolute projectRoot and optional absolute recoveryRoot outside
+the project. The tool takes neither root as model input. Canonical caller Session cwd must
+equal the configured project root. Filesystem operations use the host fs service with that
+explicit cwd, containment checks and cooperative cancellation; no Node filesystem escape
+hatch or implicit sandbox escalation is added.
 
-Core selects the current work from user intent, decides what is worth saving and supplies
-the bounded summary. Adapter captures/verifies sources, validates the packet, serializes
-writes and reports outcomes. A checkpoint never promotes Temporary to Task, approves
-Long-term memory, changes a Playbook or expands current authorization.
+The tool goes through native DSH tool policy. Invocation is for a current explicit save/handoff
+request; old checkpoints are data, not renewed authorization. A shared recovery directory
+partitions records by canonical project identity hash and target, but its permissions/retention
+are the operator's responsibility. A separate path can still share a disk/backend failure domain.
 
-This document is outside the active Skill on purpose. Proposed metadata below becomes an
-active protocol only when schemas, semantic validators and the writer/reader are delivered
-together. Existing [memory](../../maestro/references/memory.md) and
-[storage](../../maestro/references/storage.md) rules remain authoritative meanwhile.
+## Implemented operations and destinations
 
-## M1 target and input
+- inspect(kind, target_id): read existing content, Core revision and byte hash.
+- save(..., request_id, base_revision, base_hash, snapshot): persist a bounded immutable
+  source/proposal request, then attempt guarded commit.
+- status(kind, target_id, request_id): inspect that exact request and its commit evidence.
+- retry(kind, target_id, request_id): revalidate and reconcile that exact persisted proposal;
+  it does not regenerate a summary or invent newer coverage.
 
-Explicit save/handoff requests start M1. Resolve one existing active target first; ambiguous
-or missing targets return `needs_target`. Do not auto-create state to make a checkpoint work.
+Temporary targets use memory/temporary/active/<id>/current.md; Task targets use
+tasks/<id>/progress.md, both under .maestro/. Metadata must identify that same active target.
+Worker targets, promoted Tasks and transaction overlays are unsupported. Until overlay
+resolution lands, any nonempty .maestro/transactions directory blocks the operation
+conservatively, including completed bundles. Do not delete evidence to bypass the check.
 
-| Work | One mutable destination per request |
-| --- | --- |
-| Temporary | `.maestro/memory/temporary/active/<id>/current.md` |
-| Task-level progress | `.maestro/tasks/<id>/progress.md` |
-| Worker-level progress | Existing selected Worker's `current-state.md` inside that Task/Temporary; validate ownership, do not infer arbitrary paths |
+The seven snapshot fields are objective, confirmed, rejected, in_progress, next,
+open_questions and source_refs. Facts are current-Agent supplied; required arrays can be empty.
+Snapshot JSON is limited to 16 KiB, tool arguments to 32 KiB, proposed state to 128 KiB,
+and request reads to 384 KiB. No silent truncation. source_refs must resolve to existing
+project-contained paths. The snapshot does not prove that every Session fact was supplied.
 
-Do not introduce `.maestro/tasks/<id>/current.md`. Preserve unrelated content and existing
-revision frontmatter. If the requested change also requires metadata/catalog/lifecycle
-updates to maintain an invariant, narrow the request or use the existing multi-file transaction
-protocol; never claim a sequence of independent writes is atomic. Catalog refresh follows
-formal commit and must not roll it back.
+## Actual record layout and commit authority
 
-The request carries schema version, stable request ID, normalized project/target binding,
-base Core revision, source descriptor and bounded replacement proposal. Runtime target handles
-and host freshness tokens remain Adapter-owned; the model cannot supply a trusted snapshot.
-
-Source descriptor alternatives:
-
-- `session_events`: host/session identity, immutable captured interval `[start_seq, end_seq)`,
-  hash of captured lossless-JSON input, selected evidence refs and a durable reread locator.
-  `Session.seq` is exclusive; for an empty log it is zero. Event position is not a model
-  token percentage or a Core revision. Capture once before asynchronous summarization.
-- `snapshot`: immutable bounded source file under the selected target's `references/`,
-  its SHA-256 and an explicit origin. This records what the current Agent supplied; it cannot
-  prove that all original conversation facts were included. Persist before claiming retryability.
-
-An interval describes input examined, not proof of perfect summarization. Record omitted or
-unprocessed ranges; never silently truncate and claim coverage through the original end.
-Large tool bodies should use reachable artifacts where useful. Avoid saving credentials or
-unrelated sessions. If the required source exceeds the configured byte/event budget, split
-into explicit requests or fail visibly instead of dropping data.
-
-For DSH durable source mode, capture the selected prefix, await the participating flush barrier,
-then verify that the backend can reread that prefix with matching identity/hash. A successful
-flush alone does not prove retention or independent storage. Cancellation, false return or
-failed reread leaves durable recovery unverified.
-
-## Proposed recovery records and commit authority
-
-Use recovery metadata inside the selected target, not a fourth Memory layer:
+The first design proposed separate request/source/proposal preparation files. Implementation
+embeds those bytes in ONE exclusive JSON request, eliminating orphan preparation ordering:
 
 ```text
-<target>/references/checkpoints/<request-id>/
-  request.json       # immutable binding, base revision, source and intended result hash
-  source.json        # optional immutable bounded snapshot, when source mode requires it
-  proposal.md        # immutable complete replacement bytes, including commit receipt
-  events/<id>.json   # immutable failed-attempt / committed / superseded observations
+<selected-target>/references/checkpoints/
+  <request-id>.json
+  <request-id>.committed.json
+  <request-id>.failed-<attempt-id>.json  # best-effort diagnostic evidence
+
+<configured-recovery-root>/<project-key-hash>/<kind>/<target-id>/
+  <request-id>.json                 # optional identical write-ahead copy
 ```
 
-Use schema-validated filesystem-safe IDs and canonical containment for every path. Publish
-complete files exclusively; never replace an immutable request with different content. Prepare
-source and proposal first, then publish `request.json` last as the ready marker. Orphaned
-preparation files are not runnable. Do not delete them as part of ordinary recovery.
+The request follows [checkpoint.schema.json](../../maestro/references/schemas/checkpoint.schema.json).
+It contains project/target/Session binding, input hash, base Core revision/hash, bounded source
+facts/hash and exact proposal/hash. Recovery rereads and validates the schema, hashes, binding,
+revision and receipt. Hashes detect mismatch/corruption; they are not signatures or extra authority.
 
-These are proposed formats, not files already recognized by current validators. Next PR adds
-envelope/event schemas, target-aware Markdown checks and fixtures. Do not pass arbitrary
-Markdown to a JSON Schema validator and call it validated.
+Write the optional secondary copy and verify it, then exclusively publish/verify the project
+request. If a configured secondary cannot be written, fail before modifying current state.
+A failed project publication can be retried from the already verified secondary request.
+A request ID cannot name a different payload.
 
-The atomic replacement of the ONE current-state destination is the checkpoint's commit point.
-Include a proposed `checkpoint_receipt` in its frontmatter: request ID, source identity/hash,
-coverage boundary and committed Core revision. The immutable request records the SHA-256 of
-the exact proposed bytes. The receipt and summary land together, so success does not depend on
-a second mutable pending flag write. This is not the `storage.md` multi-file transaction protocol.
+The one atomic current-state replacement is the commit point. It adds checkpoint_receipt
+(request_id, source_hash, revision), increments Core revision once and updates timestamps/actor.
+User text is preserved; only the single managed Saved checkpoint JSON section is replaced.
+No Long-term entries, task lifecycle metadata or multi-file business state change in this operation.
 
-Before publication, validate replacement content, receipt and `base_revision + 1` together.
-Use the Core lock/revision protocol plus host CAS, reread and verify the committed bytes. While
-holding the target lock, write a committed observation to its request record. Only then admit
-another checkpoint for the target. On failure to persist that observation, reconcile the target
-receipt before any later checkpoint can replace it.
+Hold metadata and state locks in lexical path order, recheck active lifecycle and base revision/hash,
+and use host FsVersion CAS. FsVersion and Core revision are distinct. Re-read the committed
+bytes before publishing the immutable committed observation (request hash, proposal hash,
+revision). Release all locks even when another release fails. Lock waiting is bounded/nonblocking;
+expired held locks are never automatically stolen.
 
-Recovery of a request after lost confirmation:
+## Retry, concurrency and failure behavior
 
-- Target bytes match the intended hash and receipt: already committed; reconstruct observation,
-  return the existing revision, do not write the summary again.
-- A matching committed observation exists: validate it against the immutable request. It proves
-  this request completed, not that it covers later target edits.
-- Target still matches the recorded base revision AND base content hash: retry guarded commit
-  after lifecycle/source/authorization checks.
-- Target differs from both base and intended state, including a matching revision but different
-  content: conflict. Never infer success from timestamps or force old content over new work.
+- Matching committed observation: return already_committed without changing current state.
+- Exact proposal bytes already in current state: reconstruct missing observation, no second write.
+- Exact recorded base revision AND bytes still present: retry guarded publication.
+- Different target bytes/version: visible conflict. Never infer success from age or overwrite newer work.
 
-A later unrelated writer that removed the receipt before observation repair can leave the
-result ambiguous. Report that ambiguity; supporting arbitrary nonparticipating writers with
-exactly-once guarantees is not an M1 claim.
+Before a later checkpoint replaces an earlier receipt, verify or repair its observation.
+An unrelated writer that changed the bytes and erased unconfirmed evidence can make the
+previous outcome ambiguous; stop rather than infer success. Strong process termination may
+leave held locks. Owner liveness must be established by the existing storage recovery procedure;
+the tool does not claim autonomous dead-owner recovery.
 
-## Pending, failures and concurrency
+Pending means an immutable request without verified commit. status is request-scoped; it is
+not a global queue or automatic catalog. A newer successful request does not clear older pending
+requests. On conflicts, preserve the old record and explicitly reconcile facts into a new request.
+No silent supersession/deletion is implemented.
 
-`pending` is derived from a ready request without a verified commit or explicit supersession.
-There is no independently authoritative mutable `memory_pending` Boolean. Runtime context can
-display a derived Boolean plus affected request IDs and source ranges. A failed attempt leaves
-the request pending; successful resolution of one request does not clear newer requests.
+All write paths stop for cancellation, invalid schema, missing refs, lifecycle changes or CAS
+conflicts. Failure reports recovery=none/project/secondary and warns that a commit may have
+succeeded. The same request ID is returned when valid, for status/retry. Status reports the
+proposed revision, not an unconditionally committed revision.
 
-Idempotency uses the stable request ID plus immutable payload identity. Same ID/different
-payload is an error. Coalesce a repeated trigger for the same target/source/proposal; newer
-source input must receive its own request. Same source can yield a changed proposal after a
-conflict; explicitly supersede the old request and rebase rather than mutating its envelope.
+If both primary and secondary request publication fail, do not promise recoverability.
+If the original source refs disappear before an uncommitted retry, stop. A fully failed storage
+backend may prevent reading even the target; a secondary record preserves input but does not
+make that backend operational. No background retry or undeclared Session-persistence writes occur.
 
-Allow only one active checkpoint writer per target, with bounded lock waiting. An expired
-lease is not proof of owner death. Recheck target lifecycle and Core revision after acquiring
-the lock; coordinate with the existing lifecycle write protocol. Refuse an operation requiring
-multiple locks/invariants until its transaction path is implemented.
+## Core compatibility and remaining acceptance
 
-Failure to summarize, validation errors, cancellation and CAS conflicts all return explicit
-outcomes. If `.maestro/` writes fail before the ready request exists, recovery requires an
-independent durable backend containing BOTH the source and request-to-target binding. A session
-log containing only conversation text cannot reconstruct an unsaved intended destination.
-The Adapter must verify this independent channel before promising automatic retry. If every
-durable channel fails, return `unrecoverable` with the unsaved coverage range; a console message
-is visibility, not persistence. M1 may initially expose manual retry without claiming stronger
-failure recovery; #26 stays open until its accepted recovery scenarios are demonstrated.
+For failed save/retry operations with a verified source request, the tool attempts to publish
+an immutable failure observation containing request/hash, reason code, time and recovery source.
+If project writes fail it tries the configured secondary directory. failure_recorded reports
+whether that diagnostic was confirmed. It does not replace the request or prove the summary
+was committed. Cancellation stops new diagnostic writes; status and inspect never write them.
 
-## Resume behavior
+The [Memory](../../maestro/references/memory.md) and [storage](../../maestro/references/storage.md)
+references describe optional checkpoint recovery. Read the selected target's managed snapshot
+alongside its user-authored context; refresh the Memory catalog after successful formal writes.
+Catalog failure does not roll back the committed checkpoint. Bare Core remains usable.
 
-Resolve work from the new request, validate target lifecycle and current authorization, then
-follow Core catalog freshness and bounded retrieval. Load current state and relevant request
-records, compare source boundaries and pending status, and reload detailed Skill/references as
-needed. Saved input through N does not cover new work after N. Do not automatically resume
-an unrelated target after clear, merge across Sessions, or treat historical permissions as current.
+Automated tests cover receipt/no-op retries, changed-payload IDs, new input, lost acknowledgements,
+observation repair, CAS races, source/lifecycle changes, invalid records, path escape,
+primary failure with secondary recovery, total storage failure, cancellation and native DSH policy.
+The filesystem and Agent used in those tests are fixtures; actual ToolRuntime is used.
 
-## Next implementation and acceptance gates
-
-1. Verify an actual DSH profile's model-facing tool executor and persistence read/write API,
-   including independent recovery storage. Record exact versions and callable signatures.
-2. Add checkpoint envelope/event schemas and semantic checks with positive/negative fixtures;
-   update active Core storage/memory docs in the same change that introduces the implementation.
-3. Add a single-target writer and recovery reader using existing store/validator services.
-   Bind project, Session and permissions from trusted execution context, not model parameters.
-4. Register the actual tool; run real DSH save, process exit and fresh-session resume. Keep
-   capability availability separate from successfully activated and verified behavior.
-
-Required writer tests: success and no-op retry; reused ID with changed payload; new input while
-save runs; target conflict; invalid Markdown/envelope; interrupted preparation; commit succeeds
-but observation fails; target archived before retry; source expired; main storage failure with
-independent recovery; both stores unavailable. Assertions inspect persisted bytes/revisions and
-recoverability, not only result labels. Include a nonparticipating-writer ambiguity case.
-
-Live acceptance must record actual tool calls, selected destination, source boundary, committed
-revision, fresh-session recovery and an induced storage failure. Do not check off live acceptance
-using declaration scans, mock flush listeners or Codex's existing recovery reminder.
-
-M2 pressure thresholds/pre-compaction and M3 independent Worker/per-step prompt providers remain
-separate work. No 70–75% threshold is claimed safe by this contract.
+Still open for the next acceptance stage: a configured DSH model/provider and persistent
+filesystem, actual model-issued save, process exit, fresh-session request selection/status/retry,
+and induced storage failure. Record destination, exact revision and recovery source. Do not
+close #26 based solely on mocked storage, declaration scans or the Codex recovery reminder.
+M2 pressure/pre-compaction and M3 independent Worker/per-step injection remain separate.

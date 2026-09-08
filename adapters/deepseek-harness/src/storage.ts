@@ -112,10 +112,12 @@ function isFsError(error: unknown, code: string): boolean {
  */
 export class MaestroStateStore {
   /** Resolved `.maestro/` root target, used as the containment boundary. */
-  private readonly root: Promise<FsTarget>
+  private rootPromise?: Promise<FsTarget>
 
-  constructor(private readonly fs: StateFileSystem, rootPath: string = STATE_ROOT) {
-    this.root = fs.resolve(rootPath)
+  constructor(private readonly fs: StateFileSystem, private readonly rootPath: string = STATE_ROOT) {}
+
+  private root(): Promise<FsTarget> {
+    return this.rootPromise ??= this.fs.resolve(this.rootPath)
   }
 
   /**
@@ -128,7 +130,7 @@ export class MaestroStateStore {
    */
   private async resolveGuarded(statePath: string): Promise<FsTarget> {
     assertSafeStatePath(statePath)
-    const [root, target] = await Promise.all([this.root, this.fs.resolve(statePath)])
+    const [root, target] = await Promise.all([this.root(), this.fs.resolve(statePath)])
     if (!this.fs.contains(root, target)) {
       throw new StatePathError(
         `@maestro-ai/dsh-adapter: state path "${statePath}" resolves outside the state ` +
@@ -174,7 +176,7 @@ export class MaestroStateStore {
     // a public interface, so a caller could hand us a fabricated snapshot whose
     // target escapes `.maestro/`. The canonical contains() check makes that
     // impossible regardless of how the snapshot was obtained.
-    const root = await this.root
+    const root = await this.root()
     if (!this.fs.contains(root, snapshot.target)) {
       throw new StatePathError(
         `@maestro-ai/dsh-adapter: snapshot target escapes the state root (${STATE_ROOT}/).`,

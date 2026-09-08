@@ -4,6 +4,11 @@ import { createHash } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
 const specifications = [
+  ['dsh-tools', 'lib/types/index.d.ts', ['register(definition: ToolDefinition): () => void;']],
+  ['dsh-session-persistence', 'lib/types/index.d.ts', [
+    'abstract readFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise<{',
+    'abstract inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection>;',
+  ]],
   ['dsh-session', 'lib/types/index.d.ts', [
     'get events(): readonly SessionEvent[];',
     'get seq(): number;',

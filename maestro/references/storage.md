@@ -400,6 +400,36 @@ update when no invariant requires a group.
 
 ## File rules
 
+### Snapshot checkpoint records
+
+An opted-in Adapter may persist a single immutable request under the selected target's
+`references/checkpoints/<request-id>.json`. It embeds bounded source facts, the source Session
+identity, project/target binding, base revision/hash and exact replacement bytes/hash. Validate
+against [checkpoint.schema.json](schemas/checkpoint.schema.json) and the Adapter's semantic
+checks before any replacement. Request IDs are lowercase ASCII letters/digits/underscore/hyphen,
+1–64 characters, starting with a letter/digit. Different payloads cannot reuse an ID.
+
+The entire request is published exclusively before current state changes. The single atomic
+replacement of `current.md` (Temporary) or `progress.md` (Task) commits summary and
+`checkpoint_receipt` together; the receipt has `request_id`, `source_hash` and `revision`.
+This does not replace the multi-file transaction protocol. A verified immutable
+`<request-id>.committed.json` records request hash, proposal hash and committed revision.
+The marker is evidence of that request's completion, not coverage of later edits.
+
+Before removing/replacing a receipt, verify the corresponding request and committed observation.
+If confirmation was interrupted, exact proposal bytes plus the matching receipt permit repair of
+the observation without repeating the state write. If neither the original base nor proposed
+state matches, report a conflict; do not infer success or overwrite new work. Requests with no
+verified commit remain pending. Recovery does not silently supersede or delete them.
+
+Host configuration may explicitly select an external write-ahead recovery directory. It holds
+the same bounded request for failure recovery, not Long-term Memory. A model cannot choose it.
+Without an independently reachable copy, failure of the project storage may prevent recovery;
+if all channels fail, report that limit. Recovery always rechecks the selected target's current
+lifecycle, permissions and source reachability. Held locks are not reclaimed based on age alone.
+
+### General file rules
+
 - Resolve every write beneath the selected project's `.maestro/` directory.
 - Reject traversal such as `../` and do not follow a supplied absolute path as a state destination.
 - Use stable, filesystem-safe IDs derived from the topic or objective as described in
