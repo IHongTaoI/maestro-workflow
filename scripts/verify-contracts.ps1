@@ -680,7 +680,7 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = "此校验不得创建或转换 Task" },
         @{ Path = "maestro/references/memory.md"; Text = "UPDATE $([char]0x2192) MERGE $([char]0x2192) CREATE" },
         @{ Path = "maestro/references/memory.md"; Text = "这些动作是提案，不是写入" },
-        @{ Path = "maestro/references/memory.md"; Text = "不能替代 `source_refs`" },
+        @{ Path = "maestro/references/memory.md"; Text = '不能替代 `source_refs`' },
         @{ Path = "maestro/references/memory.md"; Text = "绝不要把 Temporary 或 Task 内容直接" },
         @{ Path = "maestro/references/memory.md"; Text = '`current_playbooks`' },
         @{ Path = "maestro/references/memory.md"; Text = '`request_file`' },
