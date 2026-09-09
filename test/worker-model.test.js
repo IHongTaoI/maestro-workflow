@@ -16,7 +16,7 @@ test('new work has no built-in execution Workers and uses capability practices',
 
   const knownRefs = new Map(instructions.instructions.map(item => [item.ref, item]));
   assert.ok([...knownRefs.keys()].some(ref => ref.startsWith('practice:')));
-  assert.ok([...knownRefs.keys()].some(ref => ref.startsWith('role:')));
+  assert.ok([...knownRefs.keys()].every(ref => !ref.startsWith('role:')));
 
   for (const worker of projectWorkers.workers) {
     assert.ok(worker.instructions.required.includes('contract:handoff'));
@@ -45,27 +45,14 @@ test('generated Worker examples use task-specific Chinese display names', async 
   }
 });
 
-test('Maestro entry point exposes only Old Zhou while legacy role files stay unlinked', async () => {
+test('Maestro entry point exposes only Old Zhou and ships no fixed role files', async () => {
   const skill = await readFile('maestro/SKILL.md', 'utf8');
   assert.doesNotMatch(skill, /\]\(references\/roles\//);
   assert.match(skill, /老周（Old Zhou）.*唯一预置、直接面向用户的角色/);
-
-  for (const role of [
-    'architect',
-    'coder',
-    'delivery',
-    'laborer',
-    'memory-merger',
-    'orchestrator',
-    'test-designer',
-    'test-runner',
-    'tpm',
-  ]) {
-    await access(`maestro/references/roles/${role}.md`);
-  }
+  await assert.rejects(access('maestro/references/roles'), { code: 'ENOENT' });
 });
 
-test('active Core guidance is Chinese while legacy role bytes remain compatibility data', async () => {
+test('active Core guidance is Chinese and has no legacy Role compatibility contract', async () => {
   for (const file of [
     'maestro/SKILL.md',
     'maestro/references/contract.md',
@@ -79,6 +66,10 @@ test('active Core guidance is Chinese while legacy role bytes remain compatibili
     assert.match(await readFile(file, 'utf8'), /[\p{Script=Han}]/u, `${file} must contain Chinese guidance`);
   }
 
-  const workers = await readFile('maestro/references/workers.md', 'utf8');
-  assert.match(workers, /不得移动或翻译旧角色文件/);
+  const combined = await Promise.all([
+    readFile('maestro/SKILL.md', 'utf8'),
+    readFile('maestro/references/workers.md', 'utf8'),
+    readFile('maestro/references/storage.md', 'utf8'),
+  ]);
+  assert.doesNotMatch(combined.join('\n'), /role_state_path|role:\*|roles\/<|历史角色快照/);
 });

@@ -24,7 +24,7 @@
     "schema_version": { "const": 2 },
     "id": { "$ref": "#/$defs/slug" },
     "name": { "type": "string", "minLength": 1 },
-    "source": { "enum": ["builtin", "project", "learned", "temporary"] },
+    "source": { "enum": ["project", "learned", "temporary"] },
     "status": { "enum": ["active", "disabled"] },
     "capabilities": {
       "type": "array",
@@ -136,7 +136,7 @@
     },
     {
       "if": {
-        "properties": { "source": { "enum": ["builtin", "project", "learned"] } },
+        "properties": { "source": { "enum": ["project", "learned"] } },
         "required": ["source"]
       },
       "then": {

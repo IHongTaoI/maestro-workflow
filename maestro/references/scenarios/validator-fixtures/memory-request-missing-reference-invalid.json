@@ -1,5 +1,5 @@
 {
-  "operation": "role-compress",
+  "operation": "worker-compress",
   "source_files": [
     "files/missing.md"
   ],

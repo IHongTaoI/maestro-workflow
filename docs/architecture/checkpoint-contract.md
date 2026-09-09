@@ -3,8 +3,10 @@
 Status: **opt-in snapshot tool implemented; live model/backend acceptance remains open**.
 Scope: second increment for [#26](https://github.com/IHongTaoI/maestro-workflow/issues/26),
 within [#14](https://github.com/IHongTaoI/maestro-workflow/issues/14).
-Updated 2026-09-08. Core owns target selection and saved facts; Adapter owns validation,
+Updated 2026-09-09. Core owns target selection and saved facts; Adapter owns validation,
 write-ahead records, locks, CAS and recovery. No automatic triggers or new Memory layer.
+Checkpoint and recovery only support the current Worker-based protocol. Legacy Role directories,
+`role:*`, `role_state_path` and old Role tasks are not discovered, migrated or restored.
 
 ## Verified host seams
 
@@ -149,3 +151,4 @@ filesystem, actual model-issued save, process exit, fresh-session request select
 and induced storage failure. Record destination, exact revision and recovery source. Do not
 close #26 based solely on mocked storage, declaration scans or the Codex recovery reminder.
 M2 pressure/pre-compaction and M3 independent Worker/per-step injection remain separate.
+Use the Issue #26 section in [manual-acceptance.md](../manual-acceptance.md) to record this evidence.

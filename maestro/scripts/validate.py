@@ -36,7 +36,6 @@ MEMORY_RECORD_TYPES = {
     "long-term-entry",
     "temporary",
     "task",
-    "role-state",
     "worker-state",
 }
 MEMORY_STATUSES = {"active", "disputed", "superseded", "rejected", "archived"}
@@ -393,21 +392,15 @@ def validate_question(value: Any, path: str, errors: list[Diagnostic]) -> None:
 def validate_recommended_next(value: Any, path: str, errors: list[Diagnostic]) -> None:
     if not require_object(value, path, errors):
         return
-
-    has_role = "role" in value
-    has_capabilities = "capabilities" in value
-    if has_role == has_capabilities:
-        add_error(errors, path, "must contain exactly one of 'role' or 'capabilities'")
-
-    allowed = {"role", "reason"} if has_role and not has_capabilities else {
-        "capabilities",
-        "reason",
-    }
-    required = allowed
-    check_object_shape(value, path, errors, required=required, allowed=allowed)
-
+    required = {"capabilities", "reason"}
+    check_object_shape(value, path, errors, required=required, allowed=required)
     if "role" in value:
-        check_string(value["role"], f"{path}.role", errors, min_length=1)
+        add_error(
+            errors,
+            f"{path}.role",
+            "legacy role field is no longer supported; use capabilities",
+        )
+
     if "reason" in value:
         check_string(value["reason"], f"{path}.reason", errors, min_length=1)
     if "capabilities" in value:
@@ -448,15 +441,18 @@ def validate_handoff(
         "status",
         "summary",
         "result_path",
+        "worker_state_path",
         "needs_user_input",
         "recommended_next",
     }
-    allowed = required | {
-        "role_state_path",
-        "worker_state_path",
-        "questions",
-    }
+    allowed = required | {"questions"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
+    if "role_state_path" in value:
+        add_error(
+            errors,
+            "$.role_state_path",
+            "legacy role_state_path field is no longer supported; use worker_state_path",
+        )
 
     if "status" in value:
         check_enum(
@@ -467,7 +463,7 @@ def validate_handoff(
         )
     if "summary" in value:
         check_string(value["summary"], "$.summary", errors, min_length=1)
-    for key in ("result_path", "role_state_path", "worker_state_path"):
+    for key in ("result_path", "worker_state_path"):
         if key in value:
             file_reference(value[key], f"$.{key}", errors)
     if "needs_user_input" in value:
@@ -481,10 +477,6 @@ def validate_handoff(
             errors,
             validate_recommended_next,
         )
-
-    state_paths = [key for key in ("role_state_path", "worker_state_path") if key in value]
-    if len(state_paths) != 1:
-        add_error(errors, "$", "must contain exactly one role_state_path or worker_state_path")
 
     if value.get("needs_user_input") is True:
         if value.get("status") != "blocked":
@@ -517,7 +509,7 @@ def validate_memory_request(
             value["operation"],
             "$.operation",
             errors,
-            {"role-compress", "session-handoff", "task-bootstrap", "task-complete"},
+            {"worker-compress", "session-handoff", "task-bootstrap", "task-complete"},
         )
     if "source_files" in value:
         if check_array(
@@ -823,7 +815,7 @@ def validate_memory_index_entry(
         if memory_kind is not None:
             add_error(errors, f"{path}.memory_kind", "must be null outside the Long-term layer")
     elif layer == "task":
-        if record_type not in {"task", "role-state", "worker-state"}:
+        if record_type not in {"task", "worker-state"}:
             add_error(errors, f"{path}.record_type", "must be a Task current-state record type")
         if memory_kind is not None:
             add_error(errors, f"{path}.memory_kind", "must be null outside the Long-term layer")

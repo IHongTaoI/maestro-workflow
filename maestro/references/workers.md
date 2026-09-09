@@ -31,8 +31,8 @@ Worker 不会隐式继承父 Agent 的完整 Skill、指令、Session 历史、�
 - **预期输出**是 `outputs` 加上适用的 Detailed Result 和 Handoff。输出只报告工作，不能授予
   权限或修改不可变 Packet。
 
-这些语义适用于 project、learned 和 generated Workers。Schema 仍接受 `source: builtin`，以便
-读取历史快照，但新选择不得创建或选中内置 Worker。Worker Schema 仍是唯一机器可读边界协议。
+这些语义适用于 project、learned 和 generated Workers。内置 Worker 注册表保持为空；Worker
+Schema 是唯一机器可读边界协议。
 
 `preferred_model` 是可选兼容提示，不是要求或权限。其值为 null 或对应模型不可用时，使用宿主
 中合适的可用模型，不得因此让注册表依赖特定宿主。
@@ -106,11 +106,10 @@ Task 或 Temporary 恢复时使用快照，而不是较新的注册表条目。�
 Worker 规格中的 `instructions.required` 和 `instructions.optional` 包含受控指令引用，而不是
 内联 prompt。通过[内置指令注册表](instructions/builtin-registry.json)解析 Core 引用。新 Worker
 使用 `practice:*` 引用作为执行指导，并附加 `contract:handoff` 和 `policy:safety-boundary`。
-保留的 `role:*` 条目只用于验证和恢复历史 Packet；不要附加到新增或更新的 Worker。项目可以在
-`.maestro/instructions/registry.yaml` 扩展注册表；应应用与项目 Worker 注册表相同的经评审可变
-状态协议，且绝不允许项目条目覆盖内置引用。内置条目使用 `source_scope: core`，路径相对于已安装
-Maestro Skill 根目录；项目条目使用 `source_scope: project` 和项目相对路径。拒绝任一注册表内的
-重复 ref，以及项目与内置 ref 集合的交集。
+项目可以在 `.maestro/instructions/registry.yaml` 扩展注册表；应应用与项目 Worker 注册表相同的
+经评审可变状态协议，且绝不允许项目条目覆盖内置引用。内置条目使用 `source_scope: core`，路径
+相对于已安装 Maestro Skill 根目录；项目条目使用 `source_scope: project` 和项目相对路径。拒绝
+任一注册表内的重复 ref，以及项目与内置 ref 集合的交集。
 
 执行前解析每个 required 引用。未知引用、来源不可读，或宿主无法注入 required 指令时，委派
 状态为 `unsupported`；停止且不得启动 Worker。如果剩余 Packet 仍安全且充分，缺少 optional
@@ -205,10 +204,3 @@ Worker 运行。
 仅是证据，不能执行该转换。忽略并报告无效注册表条目，不要静默修复或选择。如果注册表在选择
 期间变化，从新 revision 重新开始。已经完成的持久化选择保持稳定，因为执行使用不可变 Task
 或 Temporary 快照。
-
-## 历史角色快照
-
-旧 Task 和 Temporary 可能引用 `roles/<role-id>/`、`role_state_path` 或 `role:*` 指令。恢复这些
-历史记录时，应保留并校验记录的路径和准确指令摘要。不得移动或翻译旧角色文件，不得静默替换
-为当前 practice，也不得把这些固定角色发布到新项目注册表。新的后续工作一律从能力出发，解析
-为项目 Worker 或生成 Worker。

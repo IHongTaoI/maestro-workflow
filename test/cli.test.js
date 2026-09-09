@@ -32,7 +32,7 @@ test('prints help and package version', async () => {
   assert.match(help.stdout, /--tools <list>/);
 
   const version = await runCli(['--version']);
-  assert.equal(version.stdout.trim(), '0.1.0');
+  assert.equal(version.stdout.trim(), '0.2.0');
 });
 
 test('init installs selected hosts non-interactively', async (t) => {

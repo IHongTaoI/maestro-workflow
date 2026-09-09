@@ -46,15 +46,7 @@
           "revision": false,
           "updated_at": false,
           "updated_by": false,
-          "workers": {
-            "type": "array",
-            "items": {
-              "allOf": [
-                { "$ref": "worker.schema.json" },
-                { "type": "object", "properties": { "source": { "const": "builtin" } } }
-              ]
-            }
-          }
+          "workers": { "type": "array", "maxItems": 0 }
         }
       }
     }

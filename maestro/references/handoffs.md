@@ -71,9 +71,8 @@ Worker 因等待用户而阻塞时，Handoff 携带老周需要询问的准确�
 不代表一定需要用户输入：Worker 也可能正在等待其他依赖。当 `needs_user_input` 为 false 时，
 省略 `questions` 或使用空数组；不得沿用过期问题。
 
-新工作必须且只能提供一个 `worker_state_path`。Schema 继续接受 `role_state_path` 和推荐的
-`role`，但仅用于历史记录。恢复历史记录时，保留原始路径和角色指令摘要；新的后续工作一律
-按能力重新解析。
+每个持久化 Handoff 必须提供一个 `worker_state_path`。下一步只使用非空 `capabilities` 重新
+解析；旧 `role_state_path` 和 `role` 字段不再接受，也不提供旧任务迁移或恢复。
 
 校验器是由工件触发的协议守卫，不是 Workflow 触发器。持久化机器生成的 Handoff 前立即运行：
 

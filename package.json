@@ -1,6 +1,6 @@
 {
   "name": "maestro-ai-workflow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "面向结果的 AI 协作 Skill，支持动态 Worker 和多宿主安装 CLI",
   "type": "module",
   "bin": {
@@ -10,12 +10,15 @@
     "bin/",
     "cli/",
     "maestro/",
+    "!maestro/**/__pycache__/**",
+    "!maestro/**/*.pyc",
     "README.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:contracts": "pwsh -File scripts/verify-contracts.ps1",
     "dsh:install:local": "node adapters/deepseek-harness/scripts/install-local.mjs",
+    "dsh:audit:checkpoint": "node adapters/deepseek-harness/scripts/audit-checkpoint.mjs",
     "codex:install:local": "node adapters/codex/install-local.mjs",
     "verify": "npm test && npm run test:contracts && npm pack --dry-run"
   },

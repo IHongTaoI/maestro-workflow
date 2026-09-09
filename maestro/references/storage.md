@@ -1,9 +1,7 @@
 # 项目存储
 
-Maestro 状态属于目标项目，绝不能写入已安装 Skill。
-
-布局中的 `roles/` 分支是只读兼容存储，用于早期 Maestro 版本创建的 Task。新的执行状态写入
-`workers/<worker-id>/`；不得仅为采用新模型而移动或改写旧角色状态。
+Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态统一写入
+`workers/<worker-id>/`；不读取、迁移或恢复旧 Role 目录。
 
 ## 最小布局
 
@@ -51,10 +49,6 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。
       artifacts/
       handoffs/
       worker-selections/
-      roles/<legacy-role>/
-        current-state.md
-        references/
-        runs/
       workers/<worker-id>/
         spec.yaml
         current-state.md

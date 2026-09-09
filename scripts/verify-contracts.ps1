@@ -156,6 +156,14 @@ try {
         "$validatorFixtureRoot/handoff-valid.json" 0
     Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
         "$validatorFixtureRoot/handoff-schema-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
+        "$validatorFixtureRoot/handoff-legacy-role-invalid.json" 1
+    Invoke-ProtocolDiagnosticCase "handoff" `
+        "$validatorFixtureRoot/handoff-legacy-role-invalid.json" `
+        '$.role_state_path' "legacy role_state_path field is no longer supported"
+    Invoke-ProtocolDiagnosticCase "handoff" `
+        "$validatorFixtureRoot/handoff-legacy-role-invalid.json" `
+        '$.recommended_next[0].role' "legacy role field is no longer supported"
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
         "$validatorFixtureRoot/memory-index-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
@@ -467,8 +475,11 @@ try {
     }
     $legacyRoleRefs = @($instructionRegistry.instructions |
         Where-Object { $_.ref.StartsWith("role:") })
-    if ($legacyRoleRefs.Count -lt 1) {
-        throw "Legacy role instruction refs must remain available for historical snapshot validation"
+    if ($legacyRoleRefs.Count -ne 0) {
+        throw "Built-in instruction registry must not expose legacy role refs"
+    }
+    if (Test-Path -LiteralPath "maestro/references/roles") {
+        throw "Legacy role reference directory must not be shipped"
     }
 
     $projectRegistry = Get-Content -Raw "$fixtureRoot/worker-registry-valid.json" | ConvertFrom-Json
@@ -701,7 +712,7 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = "防止已取代/拒绝 Memory 复活" },
         @{ Path = "maestro/references/storage.md"; Text = "团队共享 Memory（纳入 Git）" },
         @{ Path = "maestro/references/storage.md"; Text = "本地 Runtime 状态（不纳入 Git）" },
-        @{ Path = "maestro/references/workers.md"; Text = "历史角色快照" },
+        @{ Path = "maestro/references/storage.md"; Text = "不读取、迁移或恢复旧 Role 目录" },
         @{ Path = "README.md"; Text = "CLI 只负责安装、更新和诊断" },
         @{ Path = "README.md"; Text = "绝不调度 Worker" },
         @{ Path = "maestro/SKILL.md"; Text = "不负责编排工作" }
