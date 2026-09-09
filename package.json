@@ -1,7 +1,7 @@
 {
   "name": "maestro-ai-workflow",
   "version": "0.1.0",
-  "description": "Portable multi-role AI workflow skill with a multi-host installer CLI",
+  "description": "Outcome-focused AI collaboration skill with dynamic Workers and a multi-host installer CLI",
   "type": "module",
   "bin": {
     "maestro": "bin/maestro.js"

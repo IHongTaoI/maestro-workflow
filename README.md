@@ -1,13 +1,13 @@
 # Maestro
 
-Maestro is a portable Agent Skill for dynamic multi-role software collaboration. A small npm CLI
+Maestro is a portable Agent Skill for outcome-focused software collaboration. A small npm CLI
 installs the same Skill Core into the project-local directory expected by each supported AI coding
 host.
 
-The user works primarily with **Old Zhou**, who decides whether to handle a request directly,
-delegate a stable role, or resolve a Worker from the current work's required capabilities.
-Maestro preserves continuity through Temporary, Task, and Long-term project memory without forcing
-every request through a fixed workflow.
+The user talks with **Old Zhou**, Maestro's only preset role. Old Zhou understands the goal,
+delegates technical work to capability-selected project or generated Workers, judges their evidence,
+and reports the result in plain language. Maestro preserves continuity through Temporary, Task, and
+Long-term project memory without forcing every request through a fixed workflow.
 
 ## Install from source (no npm publication required)
 
@@ -147,7 +147,7 @@ that `SKILL.md` is at the Skill root. Hosts without Agent Skills require a separ
 
 Alternatively, package the contents of `maestro/` as a ZIP and upload/install it as one Skill.
 
-The CLI is only an installer, updater, and diagnostic tool. It never schedules roles, interprets
+The CLI is only an installer, updater, and diagnostic tool. It never schedules Workers, interprets
 Memory, grants permissions, or runs a workflow state machine. Once installed, Maestro runs through
 the selected AI host's native filesystem and agent capabilities; no background Runtime is needed.
 
@@ -165,18 +165,21 @@ Or address Old Zhou:
 老周，我想先讨论一下新架构，暂时不要正式开工。
 ```
 
-Direct role calls are supported:
+Talk to Old Zhou in ordinary language; users do not need to choose a specialist:
 
 ```text
-老陈帮我 review 这个设计。
-阿强调查一下当前调用链，先不要改代码。
-大春实现这个已经确认的修改。
+老周，评审一下这个设计，只告诉我主要风险和建议。
+老周，调查当前调用链，先不要改代码。
+老周，按刚才确定的方案开始修改。
 ```
 
-Capability routing can reuse or compose registered Workers and can create a bounded Worker when no
-safe reusable match exists. Generated Workers follow the existing Task, Temporary, or one-off
-Session lifecycle, cannot grant themselves permissions, and never become permanent roles
-automatically.
+Capability routing can reuse or compose Workers from `.maestro/workers/registry.yaml` and creates
+a bounded Worker when no safe reusable match exists. Generated Workers receive task-specific
+Chinese display names, follow the existing Task, Temporary, or one-off Session lifecycle, cannot
+grant themselves permissions, and never become reusable automatically.
+
+The fixed role files and `role:*` instruction references shipped by earlier versions remain
+unchanged for historical Task and Handoff recovery. Maestro does not select them for new work.
 
 Workers do not rely on implicit inheritance from the parent Agent. Each Worker declares required
 and optional instruction references, and each run materializes a minimal Delegation Packet with
@@ -232,7 +235,8 @@ maestro/
     playbooks.md
     workers.md
     workers/
-    roles/
+    practices/
+    roles/      # historical snapshot compatibility
     schemas/
 ```
 

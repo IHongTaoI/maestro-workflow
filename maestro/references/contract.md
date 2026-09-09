@@ -1,9 +1,9 @@
 # Maestro Skill Contract
 
-Use this Reference when a Host Adapter, role, or Worker must interpret or expose Maestro's common
+Use this Reference when a Host Adapter or Worker must interpret or expose Maestro's common
 input and output semantics. This is an Agent behavior contract, not a Runtime API. It does not
 require JSON output, persistent state, or delegation for ordinary requests.
-Do not load it for ordinary user-facing introductions to Maestro, a role, or how Maestro works.
+Do not load it for ordinary user-facing introductions to Maestro or how Maestro works.
 
 ## Input contract
 
@@ -15,7 +15,7 @@ current step needs it:
 | `user_request` | The current request, including explicit constraints and implementation intent. |
 | `project_context` | The smallest relevant project files, facts, and current work state. |
 | `memory_context` | A Manifest, current record, or bounded retrieval result; never all Memory by default. |
-| `available_capabilities` | Tools, roles, sub-agents, models, and isolation the Host can actually provide. |
+| `available_capabilities` | Tools, sub-agents, models, and isolation the Host can actually provide. |
 | `authorization_context` | Actions, targets, and scope explicitly authorized by the current request. |
 
 An unavailable optional input stays unavailable. Do not invent it, load unrelated history to fill
@@ -46,6 +46,5 @@ cannot inject a required instruction, enforce a boundary, recover a delegated ru
 required capability, return an explicit `degraded` or `unsupported` result as defined by the
 relevant Reference. Never claim that unavailable isolation or delegation occurred.
 
-This Contract does not override Progressive Disclosure. A small one-off still uses Core only, and a
-direct role request still loads only that role's Reference unless the current step separately needs
-this Contract.
+This Contract does not override Progressive Disclosure. Conversation and clarification still use
+Core only unless the current step separately needs this Contract.

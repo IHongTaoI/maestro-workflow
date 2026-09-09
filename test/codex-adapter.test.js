@@ -66,7 +66,9 @@ test('Codex maps bounded Workers to native subagents without conflating separate
   assert.match(context, /spawn_agent.*visible/i);
   assert.match(context, /separate user-owned Codex task or conversation.*explicitly requests/i);
   assert.match(context, /tool-facing identifiers.*visible tool schema/i);
-  assert.match(context, /Chinese role labels.*user-facing text/i);
+  assert.match(context, /task-specific Chinese Worker names.*user-facing text/i);
+  assert.match(context, /Old Zhou is the only preset user-facing role/i);
+  assert.match(context, /keep routine code search.*inside bounded Workers/i);
 });
 
 test('Codex hook stays silent without valid Maestro metadata and for other events', async t => {

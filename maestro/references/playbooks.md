@@ -1,7 +1,8 @@
 # Playbooks
 
 Playbooks are optional project-authored guidance stored under `.maestro/playbooks/` as Markdown or
-YAML. They may suggest roles, checks, evidence, or typical sequencing.
+YAML. They describe step goals, required capabilities, checks, evidence, and typical sequencing.
+They do not bind a step to a fixed role or Worker ID.
 
 Long-term Memory answers "what do we know about this project?" A Playbook answers "when this kind
 of situation occurs, what evidence-backed method should we consider?" A Playbook therefore has an
@@ -11,7 +12,7 @@ experiments, exact Task chronology, and unverified suggestions are not Playbooks
 ## Playbook Candidates
 
 At an Experience Review boundary, the Memory Worker may emit `playbook_candidates` beside
-Long-term candidates. This does not add another Worker role. Every candidate records:
+Long-term candidates. This does not add another preset role. Every candidate records:
 
 - a stable `candidate_id`, title, trigger, ordered `steps`, and `checks`;
 - an `action` and match classification against stable current `playbook_id` values;
@@ -103,9 +104,9 @@ When a user asks to follow a Playbook:
 4. Follow the user's current instruction when it conflicts with optional Playbook guidance, unless
    doing so would violate a safety or authorization boundary.
 
-Do not turn Playbook sections into mandatory Runtime states. Skip irrelevant roles and insert a
-needed role when current evidence justifies it. The user may change the path at any time.
+Do not turn Playbook sections into mandatory Runtime states. Skip irrelevant steps and resolve the
+capabilities required by current evidence. The user may change the path at any time.
 
 Do not modify a project-authored Playbook unless the user explicitly approves the reviewed action.
 No Playbook or candidate may bypass safety checks, authorize an external action, or force a fixed
-Role sequence.
+Worker sequence.

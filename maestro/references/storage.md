@@ -2,6 +2,10 @@
 
 Maestro state belongs to the target project, never the installed Skill.
 
+The `roles/` branch in the layout is read-only compatibility storage for Tasks created by earlier
+Maestro versions. New execution state is written under `workers/<worker-id>/`; never move or
+rewrite an old role state merely to adopt the new model.
+
 ## Minimal layout
 
 Create directories lazily as the current work needs them:
@@ -48,7 +52,7 @@ Create directories lazily as the current work needs them:
       artifacts/
       handoffs/
       worker-selections/
-      roles/<role>/
+      roles/<legacy-role>/
         current-state.md
         references/
         runs/
@@ -81,7 +85,7 @@ separates local execution state from team shared memory:
   - `memory/temporary/`: pre-Task exploration, scratchpads, active Worker state.
   - `memory/pending/`: raw uncompressed or unparsed memory worker inputs.
   - `locks/` and `transactions/`: concurrency and filesystem lock markers.
-  - `tasks/`: local active task execution state, role current-state, and transient selections.
+  - `tasks/`: local active task execution state, Worker current-state, and transient selections.
 
 - **Team Shared Memory (Tracked in Git)**:
   - `memory/long-term/`: `current.md`, `candidates/`, `decisions/`, and `conflicts/`.
@@ -179,7 +183,7 @@ models:
   memory: null
 ```
 
-Do not invent fine-grained per-role model settings in v1. A null memory model means use the host's
+Do not invent fine-grained per-Worker model settings in v1. A null memory model means use the host's
 available model or perform the compression in the current agent.
 
 ## Temporary routing metadata
@@ -306,7 +310,7 @@ Never overwrite an existing directory; a stale read must not reuse a claimed nam
 ## Mutable-state write protocol
 
 Mutable state includes Temporary `meta.yaml` and `current.md`, Task `task.yaml`, `context.md`,
-`decisions.md`, and `progress.md`, role or Worker `current-state.md`, project Worker
+`decisions.md`, and `progress.md`, Worker `current-state.md`, project Worker
 `registry.yaml`, Long-term `current.md`, and every canonical formal Playbook Markdown or YAML file.
 Each listed
 mutable YAML file carries `revision`, `updated_at`, and `updated_by`. Each listed mutable Markdown

@@ -14,11 +14,11 @@
     },
     "constraints": []
   },
-  "registry_versions": [{ "registry_id": "maestro-builtins", "version": "sha256:example" }],
+  "registry_versions": [{ "registry_id": "project-workers", "version": "revision:3" }],
   "resolution": "composed",
   "selected_workers": [
-    { "id": "architect", "snapshot_path": ".maestro/tasks/example/workers/architect/spec.yaml" },
-    { "id": "laborer", "snapshot_path": ".maestro/tasks/example/workers/laborer/spec.yaml" }
+    { "id": "runtime-investigator", "snapshot_path": ".maestro/tasks/example/workers/runtime-investigator/spec.yaml" },
+    { "id": "system-boundary-reviewer", "snapshot_path": ".maestro/tasks/example/workers/system-boundary-reviewer/spec.yaml" }
   ],
-  "rationale": "No single Worker covers both requirements; Architect and Laborer form the smallest safe set."
+  "rationale": "No single project Worker covers both requirements; the two selected Workers form the smallest safe set."
 }

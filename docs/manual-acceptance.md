@@ -29,30 +29,30 @@ For Progressive Disclosure scenarios:
 
 ## Core scenarios
 
-### 1. A small one-off request uses Core only
+### 1. Conversation and clarification use Core only
 
 Preparation:
 
 - Start a fresh Session.
-- Choose a real, simple function in the target project.
+- Choose a product question that needs no code inspection.
 
-Prompt: `老周，解释一下这个函数的作用。只解释，不保存状态，也不委派其他角色。`
+Prompt: `老周，Maestro 会要求我选择固定角色吗？只简单回答，不保存状态。`
 
 Pass when:
 
 - Maestro handles the request directly with Core rules.
-- It may read the project code required to explain the function.
 - It does not create a Temporary or Task.
 - It does not open any `references/*.md` file.
 
 Fail when it enters a full collaboration flow or opens `contract.md`, `coordination.md`,
 `workers.md`, `memory.md`, `storage.md`, or any role Reference.
 
-### 2. Exploration stays exploratory
+### 2. Technical exploration uses a bounded Worker
 
 Prompt: `帮我分析一下首页为什么启动慢，先不要改代码。`
 
-Pass when Maestro investigates without modifying product code or creating a formal Task. It may
+Pass when Old Zhou delegates the detailed investigation to a native bounded Worker when available,
+reports only meaningful findings, and does not modify product code or create a formal Task. It may
 create or resume a Temporary when persistence is useful.
 
 ### 3. Execution intent is explicit
@@ -96,23 +96,25 @@ Use a task where a Worker is already running, then ask Old Zhou for progress.
 Pass when Old Zhou waits or reports status. It must not interrupt the Worker or take over its work
 without a real blocker or explicit user direction.
 
-### 7. Direct roles stay direct
+### 7. Old Zhou creates a task-specific Worker
 
 Preparation:
 
 - Start a fresh Session.
 - Include enough design context in the request so the review does not depend on prior conversation.
 
-Prompt: `老陈，请评审这个设计：应用启动时同步读取本地配置文件。只给设计意见，不实施、不保存状态。`
+Prompt: `老周，请评审这个设计：应用启动时同步读取本地配置文件。只给结论和主要风险，不实施、不保存状态。`
 
 Pass when:
 
-- Maestro opens only `references/roles/architect.md` among the References.
-- The architect performs a bounded, one-off review.
-- Maestro does not create a Temporary, Task, or Worker.
+- Maestro loads `workers.md` and `coordination.md`, then uses a Session-scoped generated Worker
+  when a native sub-agent is available.
+- The Worker has a schema-safe internal ID and a concise task-specific Chinese display name.
+- Old Zhou does not expose capability routing or routine investigation steps.
+- Maestro does not create a Temporary or Task.
 
-Fail when it starts a fixed multi-role workflow or preloads `contract.md`, `coordination.md`,
-`workers.md`, `memory.md`, `storage.md`, or `handoffs.md`.
+Fail when it invokes a preset Architect role, creates persistent state, or narrates the full
+technical process.
 
 ### 8. Risky external actions require authorization
 

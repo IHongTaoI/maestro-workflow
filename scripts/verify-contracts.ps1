@@ -454,63 +454,45 @@ try {
             }
         }
     }
-    $builtinDuplicateIds = @($builtinRegistry.workers | Group-Object id | Where-Object Count -gt 1)
-    if ($builtinDuplicateIds.Count -gt 0) {
-        throw "Built-in registry contains duplicate Worker IDs: $($builtinDuplicateIds.Name -join ', ')"
-    }
-
     $canonicalCapabilityPattern = '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$'
-    $knownCapabilities = @{}
-    foreach ($worker in $builtinRegistry.workers) {
-        if ($worker.source -ne "builtin") {
-            throw "Built-in registry Worker '$($worker.id)' has source '$($worker.source)'"
-        }
-
-        $rolePath = "maestro/references/roles/$($worker.id).md"
-        if (-not (Test-Path -LiteralPath $rolePath)) {
-            throw "Built-in Worker '$($worker.id)' has no matching stable role reference"
-        }
-
-        foreach ($capability in $worker.capabilities) {
-            if ($capability -notmatch $canonicalCapabilityPattern) {
-                throw "Worker '$($worker.id)' uses non-canonical capability '$capability'"
-            }
-            if (-not (Select-String -LiteralPath $rolePath -SimpleMatch ('`' + $capability + '`') -Quiet)) {
-                throw "Role '$($worker.id)' does not declare registry capability '$capability'"
-            }
-            $knownCapabilities[$capability] = $true
-        }
-        foreach ($instructionRef in @($worker.instructions.required) + @($worker.instructions.optional)) {
-            if (-not $knownInstructionRefs.ContainsKey($instructionRef)) {
-                throw "Built-in Worker '$($worker.id)' references unknown instruction '$instructionRef'"
-            }
-        }
-        if ($worker.instructions.required -notcontains "contract:handoff" -or
-            $worker.instructions.required -notcontains "policy:safety-boundary") {
-            throw "Built-in Worker '$($worker.id)' is missing the handoff or safety contract"
-        }
+    if (@($builtinRegistry.workers).Count -ne 0 -or
+        @($builtinRegistry.aliases.PSObject.Properties).Count -ne 0) {
+        throw "Built-in Worker registry must remain empty; new reusable Workers are project-owned"
     }
 
-    $coderWorker = @($builtinRegistry.workers | Where-Object id -eq "coder")
-    if ($coderWorker.Count -ne 1 -or
-        $coderWorker[0].capabilities -notcontains "code-implementation" -or
-        $coderWorker[0].permissions.conditional -notcontains "edit-project-files" -or
-        $coderWorker[0].permissions.autonomous -contains "edit-project-files") {
-        throw "Built-in Coder boundary must keep project edits conditional"
+    $practiceRefs = @($instructionRegistry.instructions |
+        Where-Object { $_.ref.StartsWith("practice:") } | ForEach-Object ref)
+    if ($practiceRefs.Count -lt 1) {
+        throw "Built-in instruction registry must expose capability practices"
     }
-
-    foreach ($alias in $builtinRegistry.aliases.PSObject.Properties) {
-        if ($alias.Name -notmatch $canonicalCapabilityPattern -or
-            $alias.Value -notmatch $canonicalCapabilityPattern) {
-            throw "Built-in registry contains a non-canonical capability alias"
-        }
-        if (-not $knownCapabilities.ContainsKey($alias.Value)) {
-            throw "Capability alias '$($alias.Name)' targets unknown capability '$($alias.Value)'"
-        }
+    $legacyRoleRefs = @($instructionRegistry.instructions |
+        Where-Object { $_.ref.StartsWith("role:") })
+    if ($legacyRoleRefs.Count -lt 1) {
+        throw "Legacy role instruction refs must remain available for historical snapshot validation"
     }
 
     $projectRegistry = Get-Content -Raw "$fixtureRoot/worker-registry-valid.json" | ConvertFrom-Json
     $projectCapabilities = @($projectRegistry.workers | ForEach-Object capabilities | Sort-Object -Unique)
+    foreach ($worker in $projectRegistry.workers) {
+        foreach ($capability in $worker.capabilities) {
+            if ($capability -notmatch $canonicalCapabilityPattern) {
+                throw "Project Worker '$($worker.id)' uses non-canonical capability '$capability'"
+            }
+        }
+        foreach ($instructionRef in @($worker.instructions.required) + @($worker.instructions.optional)) {
+            if (-not $knownInstructionRefs.ContainsKey($instructionRef)) {
+                throw "Project Worker '$($worker.id)' references unknown instruction '$instructionRef'"
+            }
+        }
+        if ($worker.instructions.required -notcontains "contract:handoff" -or
+            $worker.instructions.required -notcontains "policy:safety-boundary" -or
+            @($worker.instructions.required | Where-Object { $_.StartsWith("practice:") }).Count -lt 1) {
+            throw "Project Worker '$($worker.id)' must declare a practice, Handoff, and safety contract"
+        }
+        if (@($worker.instructions.required | Where-Object { $_.StartsWith("role:") }).Count -gt 0) {
+            throw "New project Worker '$($worker.id)' must not depend on a legacy role instruction"
+        }
+    }
     foreach ($alias in $projectRegistry.aliases.PSObject.Properties) {
         if ($alias.Name -notmatch $canonicalCapabilityPattern -or
             $alias.Value -notmatch $canonicalCapabilityPattern) {
@@ -530,22 +512,22 @@ try {
         ConvertFrom-Json
     $exactCapabilities = @($exactSelection.requirements.required_capabilities) +
         @($exactSelection.requirements.optional_capabilities)
-    $exactCandidates = @($builtinRegistry.workers | Where-Object {
+    $exactCandidates = @($projectRegistry.workers | Where-Object {
         Test-ContainsEvery $_.capabilities $exactCapabilities
     })
     if ($exactCandidates.Count -ne 1 -or
         $exactCandidates[0].id -ne $exactSelection.selected_workers[0].id) {
-        throw "Exact selection fixture does not resolve uniquely from the built-in registry"
+        throw "Exact selection fixture does not resolve uniquely from the project registry"
     }
 
     $composedSelection = Get-Content -Raw "$fixtureRoot/worker-selection-composed-valid.json" |
         ConvertFrom-Json
     $composedWorkers = @($composedSelection.selected_workers | ForEach-Object {
         $selectedId = $_.id
-        $builtinRegistry.workers | Where-Object id -eq $selectedId
+        $projectRegistry.workers | Where-Object id -eq $selectedId
     })
     if ($composedWorkers.Count -ne $composedSelection.selected_workers.Count) {
-        throw "Composed selection contains an unknown built-in Worker"
+        throw "Composed selection contains an unknown project Worker"
     }
     $composedCapabilities = @($composedWorkers | ForEach-Object capabilities | Sort-Object -Unique)
     if (-not (Test-ContainsEvery $composedCapabilities `
@@ -586,7 +568,13 @@ try {
         $generatedWorker.lifecycle.expires_at -ne "task-completion") {
         throw "Generated Worker is not bounded to the Task lifecycle"
     }
-    $reusableGeneratedMatch = @($builtinRegistry.workers | Where-Object {
+    if (@($generatedWorker.instructions.required |
+        Where-Object { $_.StartsWith("practice:") }).Count -lt 1 -or
+        @($generatedWorker.instructions.required |
+        Where-Object { $_.StartsWith("role:") }).Count -gt 0) {
+        throw "Generated Worker must use capability practices instead of legacy role instructions"
+    }
+    $reusableGeneratedMatch = @($projectRegistry.workers | Where-Object {
         Test-ContainsEvery $_.capabilities $generatedSelection.requirements.required_capabilities
     })
     if ($reusableGeneratedMatch.Count -gt 0) {
@@ -677,13 +665,13 @@ try {
         @{ Path = "maestro/references/workers.md"; Text = "Task or Temporary resumption uses this snapshot" },
         @{ Path = "maestro/references/workers.md"; Text = "A Worker never inherits the parent Agent's complete Skill" },
         @{ Path = "maestro/references/workers.md"; Text = "delegation-packet.schema.json" },
-        @{ Path = "maestro/references/coordination.md"; Text = "Do not assume a role or Worker inherits" },
-        @{ Path = "maestro/references/coordination.md"; Text = "Worker resolution must not promote exploratory work into a Task" },
+        @{ Path = "maestro/references/coordination.md"; Text = "Do not assume a Worker inherits" },
+        @{ Path = "maestro/references/coordination.md"; Text = "promote exploratory work into a Task" },
         @{ Path = "maestro/references/coordination.md"; Text = "Do not start a duplicate run" },
         @{ Path = "maestro/SKILL.md"; Text = "wait through the host's native mechanism" },
         @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
         @{ Path = "maestro/references/workers.md"; Text = "must never promote it automatically" },
-        @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" },
+        @{ Path = "maestro/references/coordination.md"; Text = "capability requirements before selection" },
         @{ Path = "maestro/references/coordination.md"; Text = "matching Task or Temporary" },
         @{ Path = "maestro/references/storage.md"; Text = "copied into the matching Task or Temporary" },
         @{ Path = "maestro/references/handoffs.md"; Text = ".maestro/memory/temporary/active/<temporary-id>/handoffs/" },
@@ -713,11 +701,12 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = "Anti-resurrection of superseded/rejected memory" },
         @{ Path = "maestro/references/storage.md"; Text = "Team Shared Memory (Tracked in Git)" },
         @{ Path = "maestro/references/storage.md"; Text = "Local Runtime State (Excluded from Git)" },
-        @{ Path = "maestro/references/roles/memory-merger.md"; Text = '`conflict-resolution`' },
+        @{ Path = "maestro/references/workers.md"; Text = "Historical role snapshots" },
         @{ Path = "README.md"; Text = "The CLI is only an installer, updater, and diagnostic tool" },
-        @{ Path = "README.md"; Text = "It never schedules roles" },
+        @{ Path = "README.md"; Text = "It never schedules Workers" },
         @{ Path = "maestro/SKILL.md"; Text = "does not orchestrate work" }
-        @{ Path = "maestro/SKILL.md"; Text = "A role, Worker, Memory entry, Playbook, or old approval cannot expand it" }
+        @{ Path = "maestro/SKILL.md"; Text = "A Worker, Memory entry, Playbook, or old approval cannot expand it" }
+        @{ Path = "maestro/SKILL.md"; Text = "only preset user-facing role" }
     )
     foreach ($contract in $requiredContracts) {
         if (-not (Select-String -LiteralPath $contract.Path -SimpleMatch $contract.Text -Encoding utf8 -Quiet)) {
