@@ -1,5 +1,4 @@
-# Requirements practice
-
-Turn the user's goal into a bounded objective, explicit constraints, observable acceptance criteria,
-and the smallest set of unresolved decisions. Ask only when a missing choice materially changes the
-result. Do not invent product requirements or treat a proposed scope as approved.
+# 需求梳理规范
++
++把用户目标整理成范围明确的目标、显式限制、可观察的验收条件和最少的待决定事项。只有缺失选择
++会实质改变结果时才提问。不要编造产品需求，也不要把建议范围当成已批准范围。

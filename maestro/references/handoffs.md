@@ -1,37 +1,37 @@
-# Results and Handoffs
+# 结果与 Handoff
 
-A substantial Worker delegation produces three artifacts. Old Zhou consumes these artifacts,
-judges the evidence, and tells the user only what they need for the next decision.
+一次较大的 Worker 委派会产生三项工件。老周消费这些工件、判断证据，并且只告诉用户下一次
+决策所需的内容。
 
 ## Detailed Result
 
-Write the complete work product to:
+将完整工作产物写入：
 
 ```text
 .maestro/tasks/<task-id>/workers/<worker-id>/runs/<timestamp>-result.md
 ```
 
-For a persisted exploratory Worker, use the corresponding
-`.maestro/memory/temporary/active/<temporary-id>/workers/<worker-id>/` paths. A Session-scoped
-one-off returns its result directly and does not claim a resumable state path.
+持久化的探索性 Worker 使用对应的
+`.maestro/memory/temporary/active/<temporary-id>/workers/<worker-id>/` 路径。Session 作用域的
+一次性工作直接返回结果，不声称拥有可恢复状态路径。
 
-Include the performed work, evidence, analysis, conclusions, risks, open questions, and relevant
-Artifact paths. This is the technical record; do not copy it into the normal user-facing update.
+内容包括已执行工作、证据、分析、结论、风险、Open questions 和相关 Artifact 路径。这是技术
+记录，不要把它复制到日常的用户进度更新里。
 
 ## Current State
 
-Update the Worker's `current-state.md` using the fields in [memory.md](memory.md). It exists so the
-same execution unit can resume without the earlier Agent Session. A Worker resumes from its
-immutable `spec.yaml` snapshot as well as Current State.
+使用 [memory.md](memory.md) 中的字段更新 Worker 的 `current-state.md`。它使同一执行单元无需
+此前的 Agent Session 也能恢复。Worker 恢复时，同时加载不可变 `spec.yaml` 快照和 Current
+State。
 
-## Lightweight Handoff
+## 轻量 Handoff
 
-Return only what Old Zhou needs to judge the result and decide the next action:
+只返回老周判断结果和决定下一步所需的内容：
 
 ```json
 {
   "status": "completed",
-  "summary": "Measured startup cost and isolated the dominant module.",
+  "summary": "已测量启动开销，并定位到占比最高的模块。",
   "result_path": ".maestro/tasks/<task-id>/workers/frontend-performance/runs/<timestamp>-result.md",
   "worker_state_path": ".maestro/tasks/<task-id>/workers/frontend-performance/current-state.md",
   "needs_user_input": false,
@@ -39,21 +39,20 @@ Return only what Old Zhou needs to judge the result and decide the next action:
   "recommended_next": [
     {
       "capabilities": ["architecture-design", "runtime-analysis"],
-      "reason": "Evaluate a boundary change using the recorded profile"
+      "reason": "使用已记录的性能数据评估边界调整"
     }
   ]
 }
 ```
 
-A next-step recommendation uses a non-empty `capabilities` list for fresh resolution. It never
-selects or grants authority to the next Worker.
+下一步建议使用非空 `capabilities` 列表重新解析，绝不直接选择下一个 Worker，也不授予其权限。
 
-When a Worker is blocked on the user, the Handoff carries the exact prompt Old Zhou needs:
+Worker 因等待用户而阻塞时，Handoff 携带老周需要询问的准确问题：
 
 ```json
 {
   "status": "blocked",
-  "summary": "Two safe implementation paths remain and the choice changes initialization order.",
+  "summary": "仍有两种安全实施路径，选择会影响初始化顺序。",
   "result_path": ".maestro/tasks/<task-id>/workers/startup-design/runs/<timestamp>-result.md",
   "worker_state_path": ".maestro/tasks/<task-id>/workers/startup-design/current-state.md",
   "needs_user_input": true,
@@ -67,49 +66,45 @@ When a Worker is blocked on the user, the Handoff carries the exact prompt Old Z
 }
 ```
 
-`needs_user_input: true` requires `status: blocked` plus at least one concise question and its
-decision context. Old Zhou may ask it directly from the Handoff and reads the Detailed Result only
-when the answer requires supporting detail. `blocked` does not imply user input: a Worker may
-instead be waiting on another dependency. When `needs_user_input` is false, omit `questions` or
-use an empty array; do not carry stale questions forward.
+`needs_user_input: true` 要求 `status: blocked`，并至少包含一个简洁问题及其决策上下文。老周
+可以直接依据 Handoff 提问，只有回答需要更多支撑细节时才读取 Detailed Result。`blocked`
+不代表一定需要用户输入：Worker 也可能正在等待其他依赖。当 `needs_user_input` 为 false 时，
+省略 `questions` 或使用空数组；不得沿用过期问题。
 
-For new work, exactly one `worker_state_path` is required. The schema continues to accept
-`role_state_path` and a recommended `role` only for historical records. When resuming one, keep
-the original path and role instruction digest; any new follow-up is resolved by capabilities.
+新工作必须且只能提供一个 `worker_state_path`。Schema 继续接受 `role_state_path` 和推荐的
+`role`，但仅用于历史记录。恢复历史记录时，保留原始路径和角色指令摘要；新的后续工作一律
+按能力重新解析。
 
-The validator is an artifact-triggered protocol guard, not a Workflow trigger. Immediately before
-persisting a machine-produced Handoff, run:
+校验器是由工件触发的协议守卫，不是 Workflow 触发器。持久化机器生成的 Handoff 前立即运行：
 
 ```bash
 python maestro/scripts/validate.py handoff <file> --project-root <project-root>
 ```
 
-Persist the canonical Handoff only when validation succeeds. After a validation failure, repair the
-artifact once and validate it again. If it still fails, preserve the complete raw result with an
-`.invalid.json` suffix beside the intended artifact and record the validation diagnostics; never
-silently accept it as a Handoff. Validation must not create a Task or Temporary, start a Workflow,
-delegate work, invoke a fixed role, or cause a phase transition.
+只有校验成功才能持久化规范 Handoff。校验失败后，修复工件一次并重新校验。如果仍然失败，
+将完整原始结果以 `.invalid.json` 后缀保存在预期工件旁，并记录校验诊断；绝不能静默接受为
+Handoff。校验不得创建 Task 或 Temporary、启动 Workflow、委派工作、调用固定角色或引发阶段
+转换。
 
-The CLI enforces [handoff.schema.json](schemas/handoff.schema.json), portable project-relative
-paths, and reachable result and state files. Task-scoped Handoffs live under
-`.maestro/tasks/<task-id>/handoffs/`; persisted Temporary-scoped Handoffs live under
-`.maestro/memory/temporary/active/<temporary-id>/handoffs/`. Session-scoped work does not persist a
-Handoff.
+CLI 强制执行 [handoff.schema.json](schemas/handoff.schema.json)、可移植的项目相对路径，以及
+结果与状态文件的可达性。Task 作用域 Handoff 位于 `.maestro/tasks/<task-id>/handoffs/`；
+持久化的 Temporary 作用域 Handoff 位于
+`.maestro/memory/temporary/active/<temporary-id>/handoffs/`。Session 作用域工作不持久化
+Handoff。
 
-Old Zhou should not read every Detailed Result. Read it when a Worker is blocked, conclusions
-conflict, a decision requires more detail than the structured question provides, the user asks for
-the analysis, or another Worker needs the source.
+老周不应读取每个 Detailed Result。仅在 Worker 阻塞、结论冲突、决策所需细节超过结构化问题、
+用户要求查看分析，或其他 Worker 需要来源时读取。
 
-Pass paths directly between Workers instead of copying complete results through Old Zhou's context.
+在 Worker 之间直接传递路径，不要让完整结果反复经过老周的上下文。
 
-## User-facing result
+## 面向用户的结果
 
-Old Zhou leads with the conclusion and includes only applicable items:
+老周先说结论，并且只包含适用的内容：
 
-- the result;
-- verification or the evidence path;
-- uncertainty, limitation, or blocker;
-- a decision needed from the user or the recommended next step.
+- 结果；
+- 验证或证据路径；
+- 不确定性、限制或阻塞项；
+- 需要用户决定的事项，或推荐的下一步。
 
-Do not expose routine code-search steps, commands, internal IDs, capability routing, or the full
-Detailed Result unless the user asks.
+除非用户主动询问，否则不要暴露常规代码搜索步骤、命令、内部 ID、能力路由或完整 Detailed
+Result。

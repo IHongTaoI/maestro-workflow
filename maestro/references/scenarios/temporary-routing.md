@@ -1,159 +1,157 @@
-# Temporary Routing Scenarios
+# Temporary 路由场景
 
-Use these behavioral scenarios when reviewing changes to Temporary Memory routing. `EXPECT` lists
-required behavior; `MUST NOT` lists silent-routing failures.
+评审 Temporary Memory 路由变更时使用这些行为场景。`期望` 是必需行为；`禁止` 是静默路由错误。
 
-## No active Temporary
+## 没有活动 Temporary
 
 ```text
-GIVEN: no active Temporary
-USER: 帮我解释一下这个错误
+前提：没有活动 Temporary
+用户：帮我解释一下这个错误
 
-EXPECT:
-- Handle as a one-off request unless the discussion becomes worth preserving.
+期望：
+- 作为一次性请求处理，除非讨论后来变得值得保留。
 
-MUST NOT:
-- Create Temporary Memory solely because no candidate exists.
+禁止：
+- 仅因没有候选就创建 Temporary Memory。
 ```
 
-## One related candidate
+## 一个相关候选
 
 ```text
-GIVEN: one active topic "home startup performance"
-USER: 继续看首页启动时的初始化阻塞
+前提：存在一个活动主题“首页启动性能”
+用户：继续看首页启动时的初始化阻塞
 
-EXPECT:
-- Select the existing Temporary because the module and failure are specifically related.
+期望：
+- 模块和故障明确相关，因此选择现有 Temporary。
 ```
 
-## One unrelated candidate
+## 一个无关候选
 
 ```text
-GIVEN: one active topic "login performance"
-USER: 我们讨论一下数据库备份策略
+前提：存在一个活动主题“登录性能”
+用户：我们讨论一下数据库备份策略
 
-EXPECT:
-- Treat this as a new topic.
-- Create a Temporary only if the normal persistence rule requires it.
+期望：
+- 作为新主题处理。
+- 只有常规持久化规则要求时才创建 Temporary。
 
-MUST NOT:
-- Append to "login performance" merely because it is the only active Temporary.
+禁止：
+- 仅因“登录性能”是唯一活动 Temporary 就追加进去。
 ```
 
-## Explicit reference overrides binding
+## 显式引用覆盖绑定
 
 ```text
-GIVEN:
-- Current Session is bound to "home startup performance".
-- Another active Temporary has ID 20260831-登录性能 and topic "login performance".
-USER: 继续 20260831-登录性能
+前提：
+- 当前 Session 绑定到“首页启动性能”。
+- 另一个活动 Temporary 的 ID 是 20260831-登录性能，主题为“登录性能”。
+用户：继续 20260831-登录性能
 
-EXPECT:
-- Select "login performance" and replace the Session binding.
+期望：
+- 选择“登录性能”，并替换 Session 绑定。
 
-MUST NOT:
-- Prefer the previous binding or the most recently updated candidate.
+禁止：
+- 优先使用旧绑定或最近更新的候选。
 ```
 
-## Legacy ID remains usable
+## 旧格式 ID 仍可用
 
 ```text
-GIVEN:
-- A readable-ID Temporary "20260831-首页启动性能" exists from this naming rule.
-- A second active Temporary uses the legacy timestamp-plus-suffix ID 20260827T103000Z-a1b2c3.
-USER: 继续 20260827T103000Z-a1b2c3
+前提：
+- 按当前规则创建的可读 ID Temporary“20260831-首页启动性能”存在。
+- 第二个活动 Temporary 使用旧时间戳加后缀 ID 20260827T103000Z-a1b2c3。
+用户：继续 20260827T103000Z-a1b2c3
 
-EXPECT:
-- Resolve the legacy ID to its Temporary (matching the directory name) exactly as an ID from the
-  newer readable format.
+期望：
+- 按目录名准确解析旧 ID，与新可读格式 ID 同等处理。
 
-MUST NOT:
-- Reject or fuzzy-match a legacy ID because it predates the current naming rule.
+禁止：
+- 因旧 ID 早于当前命名规则而拒绝或模糊匹配。
 ```
 
-## Invalid explicit ID
+## 无效的显式 ID
 
 ```text
-GIVEN: the explicitly named Temporary ID is not active or does not exist
-USER: 继续 20260827T000000Z-missing
+前提：明确指定的 Temporary ID 不活动或不存在
+用户：继续 20260827T000000Z-missing
 
-EXPECT:
-- Report that the requested Temporary is unavailable.
+期望：
+- 报告请求的 Temporary 不可用。
 
-MUST NOT:
-- Fuzzy-match the ID to another Temporary.
+禁止：
+- 将 ID 模糊匹配到另一个 Temporary。
 ```
 
-## Bound Session with vague continuation
+## 已绑定 Session 下的含糊继续
 
 ```text
-GIVEN:
-- Current Session is bound to "home startup performance".
-- Other performance-related Temporaries are active.
-USER: 继续刚才那个性能问题
+前提：
+- 当前 Session 绑定到“首页启动性能”。
+- 还有其他与性能相关的活动 Temporaries。
+用户：继续刚才那个性能问题
 
-EXPECT:
-- Continue the bound Temporary without rescanning full References.
+期望：
+- 继续已绑定 Temporary，无需重新扫描完整 References。
 ```
 
-## Clear departure from a bound topic
+## 明确离开已绑定主题
 
 ```text
-GIVEN:
-- Current Session is bound to "home startup performance".
-- "database migration safety" and "database query performance" are also active.
-USER: 先不看首页了，继续数据库那个问题
+前提：
+- 当前 Session 绑定到“首页启动性能”。
+- “数据库迁移安全”和“数据库查询性能”也处于活动状态。
+用户：先不看首页了，继续数据库那个问题
 
-EXPECT:
-- Do not use the old Session binding to decide the route.
-- Ask which database topic the user means.
+期望：
+- 不用旧 Session 绑定决定路由。
+- 询问用户指的是哪个数据库主题。
 
-MUST NOT:
-- Append the request to "home startup performance".
+禁止：
+- 将请求追加到“首页启动性能”。
 ```
 
-## Unique relevant candidate
+## 唯一相关候选
 
 ```text
-GIVEN:
-- "home startup performance" has an Open question about synchronous SDK initialization.
-- "login performance" concerns token refresh latency.
-USER: 验证一下那个 SDK 是否必须同步初始化
+前提：
+- “首页启动性能”有一个关于 SDK 是否同步初始化的待确认问题。
+- “登录性能”关注 token 刷新延迟。
+用户：验证一下那个 SDK 是否必须同步初始化
 
-EXPECT:
-- Select "home startup performance" using the uniquely continued Open question.
-- Be able to state the routing evidence if needed.
+期望：
+- 根据被唯一延续的待确认问题选择“首页启动性能”。
+- 需要时能说明路由证据。
 ```
 
-## Ambiguous candidates
+## 候选有歧义
 
 ```text
-GIVEN:
-- "home startup performance"
-- "login performance"
-USER: 继续之前的性能问题
+前提：
+- “首页启动性能”
+- “登录性能”
+用户：继续之前的性能问题
 
-EXPECT:
-- Ask the user to choose from a short candidate list.
-- Recency may determine display order only.
+期望：
+- 用简短候选列表请用户选择。
+- 新近程度只能决定显示顺序。
 
-MUST NOT:
-- Select the newest Temporary.
-- Load either candidate's full references before selection.
+禁止：
+- 选择最新 Temporary。
+- 选择前加载任一候选的完整 references。
 ```
 
-## Similar topics remain separate
+## 相似主题仍保持独立
 
 ```text
-GIVEN:
-- "home startup performance"
-- "homepage refactor"
-USER: 回到首页那个事情
+前提：
+- “首页启动性能”
+- “首页重构”
+用户：回到首页那个事情
 
-EXPECT:
-- Ask which homepage topic the user means.
+期望：
+- 询问用户指哪个首页主题。
 
-MUST NOT:
-- Merge the Temporaries.
-- Modify or archive either candidate while asking.
+禁止：
+- 合并两个 Temporary。
+- 询问时修改或归档任一候选。
 ```

@@ -1,50 +1,47 @@
-# Maestro Skill Contract
+# Maestro Skill 契约
 
-Use this Reference when a Host Adapter or Worker must interpret or expose Maestro's common
-input and output semantics. This is an Agent behavior contract, not a Runtime API. It does not
-require JSON output, persistent state, or delegation for ordinary requests.
-Do not load it for ordinary user-facing introductions to Maestro or how Maestro works.
+当 Host Adapter 或 Worker 需要解释或暴露 Maestro 的通用输入输出语义时，使用本 Reference。
+这是 Agent 行为契约，不是 Runtime API；普通请求不强制输出 JSON、持久化状态或委派。
+普通的 Maestro 介绍和使用说明不需要加载本文件。
 
-## Input contract
+## 输入契约
 
-Only `user_request` is always required. Every other input is optional and loaded only when the
-current step needs it:
+以下字段是概念输入。只有当前步骤需要时才获取；不要为了凑齐字段加载无关内容：
 
-| Input | Meaning |
+| 字段 | 含义 |
 | --- | --- |
-| `user_request` | The current request, including explicit constraints and implementation intent. |
-| `project_context` | The smallest relevant project files, facts, and current work state. |
-| `memory_context` | A Manifest, current record, or bounded retrieval result; never all Memory by default. |
-| `available_capabilities` | Tools, sub-agents, models, and isolation the Host can actually provide. |
-| `authorization_context` | Actions, targets, and scope explicitly authorized by the current request. |
+| `user_request` | 当前用户请求，包括明确限制和实施意图。 |
+| `project_context` | 与当前工作有关的最少项目文件、事实和状态。 |
+| `memory_context` | Manifest、当前记录或有限检索结果；默认不加载全部 Memory。 |
+| `available_capabilities` | 宿主实际提供的工具、子代理、模型和隔离能力。 |
+| `authorization_context` | 当前请求明确授权的操作、目标和范围。 |
 
-An unavailable optional input stays unavailable. Do not invent it, load unrelated history to fill
-it, or treat the absence of a capability as permission to simulate a successful independent run.
+始终只有 `user_request` 是必需的。缺少的可选输入继续保持缺失；不要通过编造或加载无关历史
+来补齐它。
 
-## Output contract
+## 输出契约
 
-Return only the smallest result needed for the current step. Results may be combined when one step
-genuinely produces more than one of them:
+根据请求返回尽可能简单的结果：
 
-- `direct_response`: the answer or bounded work result returned directly to the user.
-- `delegation_request`: a bounded objective, completion condition, minimum context, tools,
-  permissions, lifecycle, output paths, and Handoff expectation.
-- `task_or_temporary_proposal`: a proposed persistence or lifecycle transition with its reason.
-- `memory_update_proposal`: a sourced candidate for independent review; it does not mutate Memory.
-- `blocked_result`: the blocker, already completed work, and the smallest question or requirement
-  needed to continue.
-- Standard Detailed Result, Current State, or Handoff when their dedicated contract applies.
+- 普通对话：自然语言回答；
+- 实质执行：结果摘要、验证情况、限制和相关 Artifact 路径；
+- 持久化委派：符合 [handoffs.md](handoffs.md) 的 Handoff；
+- 需要决定：一个简短问题，并说明该决定会影响什么；
+- 无法支持：明确的 `degraded` 或 `unsupported` 结果和原因。
 
-A proposal never approves itself or grants execution authority. Output cannot expand the user's
-authorization, the selected work scope, a Worker's specification, or filesystem boundaries.
+只有当对应 schema 要求时才输出结构化数据。结构化结果写入前必须验证；不要把模型生成的
+JSON、YAML、路径、权限或状态声明直接当成可信输入。
 
-## Host behavior
+## 提案与权限
 
-Map this semantic contract to the Host's native conversation, filesystem, tool, and sub-agent
-interfaces. Do not force a structured envelope when natural language is sufficient. When the Host
-cannot inject a required instruction, enforce a boundary, recover a delegated run, or provide a
-required capability, return an explicit `degraded` or `unsupported` result as defined by the
-relevant Reference. Never claim that unavailable isolation or delegation occurred.
+提案不能批准自身。解析结果、Worker 定义、Memory 候选、Playbook 候选、Handoff 或 Adapter
+提醒只能描述建议和需要的权限，不能授予权限。实际执行仍受当前用户授权、宿主能力以及
+[coordination.md](coordination.md) 中安全边界的约束。
 
-This Contract does not override Progressive Disclosure. Conversation and clarification still use
-Core only unless the current step separately needs this Contract.
+## 宿主降级
+
+Core 描述语义，不假设具体宿主功能。如果宿主无法注入必需指令、落实边界、恢复委派运行或提供
+所需能力，按照对应 Reference 返回明确的 `degraded` 或 `unsupported`；不得声称不存在的
+隔离或委派已经发生。
+
+本契约不改变渐进式加载。对话和澄清仍只使用 Core，除非当前步骤确实需要本文件。

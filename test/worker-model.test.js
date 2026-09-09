@@ -48,7 +48,7 @@ test('generated Worker examples use task-specific Chinese display names', async 
 test('Maestro entry point exposes only Old Zhou while legacy role files stay unlinked', async () => {
   const skill = await readFile('maestro/SKILL.md', 'utf8');
   assert.doesNotMatch(skill, /\]\(references\/roles\//);
-  assert.match(skill, /Old Zhou.*only preset user-facing role/);
+  assert.match(skill, /老周（Old Zhou）.*唯一预置、直接面向用户的角色/);
 
   for (const role of [
     'architect',
@@ -63,4 +63,22 @@ test('Maestro entry point exposes only Old Zhou while legacy role files stay unl
   ]) {
     await access(`maestro/references/roles/${role}.md`);
   }
+});
+
+test('active Core guidance is Chinese while legacy role bytes remain compatibility data', async () => {
+  for (const file of [
+    'maestro/SKILL.md',
+    'maestro/references/contract.md',
+    'maestro/references/coordination.md',
+    'maestro/references/handoffs.md',
+    'maestro/references/memory.md',
+    'maestro/references/playbooks.md',
+    'maestro/references/storage.md',
+    'maestro/references/workers.md',
+  ]) {
+    assert.match(await readFile(file, 'utf8'), /[\p{Script=Han}]/u, `${file} must contain Chinese guidance`);
+  }
+
+  const workers = await readFile('maestro/references/workers.md', 'utf8');
+  assert.match(workers, /不得移动或翻译旧角色文件/);
 });

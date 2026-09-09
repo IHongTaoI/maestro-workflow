@@ -38,7 +38,7 @@
     "storageId": {
       "type": "string",
       "minLength": 1,
-      "description": "Filesystem-safe ID matching a Temporary/Task directory name. May contain CJK and other non-ASCII Unicode; path separators, whitespace, control characters, shell metacharacters and filesystem-unsafe punctuation are rejected, as are leading and trailing dots (so '.' and '..' and silently-normalized names are unusable).",
+      "description": "与 Temporary/Task 目录名一致且文件系统安全的 ID。可以包含 CJK 和其他非 ASCII Unicode；拒绝路径分隔符、空白、控制字符、shell 元字符、文件系统不安全标点，以及开头或结尾的点（因此不能使用 '.'、'..' 和会被静默规范化的名称）。",
       "pattern": "^(?!\\.)(?!.*[.]$)[\\p{L}\\p{N}._-]+$"
     },
     "sourceRefs": {

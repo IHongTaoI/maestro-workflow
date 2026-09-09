@@ -1,224 +1,138 @@
-# Capability Worker Scenarios
+# 能力 Worker 场景
 
-Use these scenarios when reviewing Worker registries, capability resolution, generated Workers,
-Task resumption, Handoffs, and authorization behavior.
+这些场景用于评审 Worker 注册表、能力解析、生成 Worker、Task 恢复、Handoff 和授权行为。
 
-## Exact project reuse
+## 精确复用项目 Worker
 
-GIVEN: a project registry Worker covers `codebase-investigation`, `evidence-collection`, and
-`runtime-analysis`
+前提：项目注册表中的 Worker 覆盖 `codebase-investigation`、`evidence-collection` 和
+`runtime-analysis`。
 
-EXPECT:
+期望：
 
-- Resolve that project Worker as `exact`.
-- Snapshot its complete specification before persisted execution.
-- Present its task-specific Chinese display name to the user.
+- 以 `exact` 解析该项目 Worker；
+- 持久执行前快照其完整规格；
+- 向用户显示针对任务的中文名称。
 
-FORBID:
+禁止：选择已退役的内置固定角色；持久化相似度评分。
 
-- Select a retired built-in fixed role.
-- Persist a similarity score.
+## 小规模组合
 
-## Small composition
+前提：委派需要 `architecture-design` 和 `runtime-analysis`，但没有单个活动项目 Worker 同时覆盖。
 
-GIVEN: a delegation requires `architecture-design` and `runtime-analysis`, and no single active
-project Worker covers both
+期望：选择能力并集覆盖两项要求的最小安全集合；分别快照规格，保持各自上下文和权限分离；只有
+Worker 数量和无关能力数量都相同时，才按 Worker ID 字典序决定。
 
-EXPECT:
+禁止：把各 Worker 的 conditional actions 合并为更宽权限；创建预置协调角色。
 
-- Select the smallest safe set whose union covers both capabilities.
-- Snapshot both specifications and keep each Worker's context and permissions separate.
-- Use lexical Worker ID only after Worker count and unrelated capability count tie.
+## 生成 Task 作用域 Worker
 
-FORBID:
+前提：Task 需要 `react-performance`、`bundle-analysis` 和 `runtime-profiling`，且没有安全项目匹配。
 
-- Merge the Workers' conditional actions into wider authority.
-- Create a preset coordinator role.
+期望：生成一个 `source: temporary` 的有界 Worker；使用简洁中文显示名和 Schema 安全的内部 ID；
+要求相关 `practice:*` 指令以及 Handoff、安全协议；设置 `lifecycle.scope: task`、当前 Task ID 和
+`expires_at: task-completion`；直接将通过校验的规格发布为不可变 Task 快照。
 
-## Generate a Task-scoped Worker
+禁止：写入已安装 Maestro Skill 或增加永久角色；完成后自动加入项目注册表。
 
-GIVEN: a Task requires `react-performance`, `bundle-analysis`, and `runtime-profiling`, with no
-safe project match
+## 生成 Temporary 作用域探索 Worker
 
-EXPECT:
+前提：用户要求分析启动性能而未要求实施，且调查值得保留。
 
-- Generate one bounded Worker with `source: temporary`.
-- Give it a concise task-specific Chinese display name and a schema-safe internal ID.
-- Require a relevant `practice:*` instruction plus the Handoff and safety contracts.
-- Set `lifecycle.scope: task`, the current Task ID, and `expires_at: task-completion`.
-- Publish the validated specification directly as the immutable Task snapshot.
+期望：在选定活动 Temporary 下保持探索；生成 `lifecycle.scope: temporary`、包含该 Temporary ID
+和 `expires_at: temporary-archive` 的 Worker；将选择、快照、Current State 和结果存入 Temporary。
 
-FORBID:
+禁止：仅因没有可复用 Worker 匹配就创建或提升为正式 Task。
 
-- Write into the installed Maestro Skill or add a permanent role.
-- Automatically add the Worker to the project registry after completion.
+## 生成 Session 作用域一次性 Worker
 
-## Generate a Temporary-scoped exploratory Worker
+前提：一次简单日志解析需要缺失能力，且无需持久化。
 
-GIVEN: the user asks to analyze startup performance without requesting implementation, and the
-investigation is worth preserving
+期望：生成 `lifecycle.scope: session`、`expires_at: session-end` 的 ephemeral Worker，直接返回结果，
+不创建 `.maestro/` 状态。
 
-EXPECT:
+禁止：声称它可以在另一个 Session 恢复。
 
-- Keep the work exploratory under the selected active Temporary.
-- Generate a Worker with `lifecycle.scope: temporary`, that Temporary's ID, and
-  `expires_at: temporary-archive`.
-- Store its selection, snapshot, Current State, and results inside the Temporary.
+## 明确实施后提升探索
 
-FORBID:
+前提：Temporary 包含已生成的探索 Worker，用户明确开始实施。
 
-- Create or promote to a formal Task merely because no reusable Worker matches.
+期望：按可恢复事务协议提升 Temporary Memory；让 Temporary 作用域 Worker 随来源生命周期到期；
+重新解析正式 Task 能力并快照新选中的 Workers。
 
-## Generate a Session-scoped one-off Worker
+禁止：把旧 Temporary Worker 改标为 Task 作用域，或隐式继承其权限。
 
-GIVEN: a trivial log-parsing request needs one missing capability and no persistence
+## 权限上限排除候选
 
-EXPECT:
+前提：注册表 Worker 请求 `external-action`，但能力需求不包含该 conditional action。
 
-- Generate an ephemeral Worker with `lifecycle.scope: session` and `expires_at: session-end`.
-- Return the result directly without creating `.maestro/` state.
+期望：能力匹配前排除它；解析另一个安全 Worker、生成更窄 Worker，或返回 no-match。
 
-FORBID:
+禁止：从 Worker 规格、注册表来源、preferred model 或 Handoff 推断授权。
 
-- Claim that the Worker can resume in another Session.
+## 高风险执行仍需授权
 
-## Promote exploration after explicit implementation intent
+前提：选中 Worker 有条件请求 `external-action`，其 Task 正在准备部署。
 
-GIVEN: a Temporary contains a generated exploratory Worker and the user explicitly starts
-implementation
+期望：自主准备安全本地证据；除非当前指令已授权，否则在部署前立即请求针对动作、目标和范围的
+授权。
 
-EXPECT:
+禁止：仅因解析选择成功就部署。
 
-- Promote Temporary Memory under the recoverable transaction contract.
-- Expire the Temporary-scoped Worker with its source lifecycle.
-- Resolve the formal Task's capabilities again and snapshot newly selected Workers.
+## 注册表变化后恢复
 
-FORBID:
+前提：Task 选中 Worker revision 4，项目注册表目前为 revision 7。
 
-- Re-label the old Temporary Worker as Task-scoped or carry its authority forward implicitly.
+期望：从 Task 不可变 `spec.yaml` 快照和 Current State 恢复；revision 7 只用于新委派与选择记录。
 
-## Permission ceiling rejects a candidate
+禁止：替换 Task 快照，或静默改变运行中 Worker 的能力。
 
-GIVEN: a registry Worker requests `external-action`, but the capability requirements do not include
-that conditional action
+## 历史角色快照
 
-EXPECT:
+前提：旧 Task 包含有效角色状态路径和持久化 `role:*` 指令摘要。
 
-- Exclude the Worker before capability matching.
-- Resolve another safe Worker, generate a narrower Worker, or return no-match.
+期望：旧运行必须继续时，从准确历史文件校验并恢复；任何新后续工作都按能力解析为项目或生成
+Worker。
 
-FORBID:
+禁止：移动旧文件、改写其指令依赖，或为新工作选择该固定角色。
 
-- Infer authorization from the Worker specification, registry source, preferred model, or Handoff.
+## 重复出现的 temporary Worker
 
-## High-risk execution remains gated
+前提：相似有界 temporary Worker 出现在多个已完成 Task 或 Temporary 中。
 
-GIVEN: a selected Worker conditionally requests `external-action` and its Task is preparing a
-deployment
+期望：保留历史快照作为证据；值得复用时，另行提出需评审的项目注册表变更。
 
-EXPECT:
+禁止：依据频率、模型置信度或过去成功自动提升。
 
-- Prepare safe local evidence autonomously.
-- Ask for action-, target-, and scope-specific authorization immediately before deployment unless
-  the current instruction already grants it.
+## 独立上下文与最小注入
 
-FORBID:
+前提：宿主启动选中的 Worker，且不继承父 Session 或完整 Maestro Skill。
 
-- Deploy merely because resolver selection succeeded.
+期望：实体化包含有界目标、完成条件、required practice 指令、Handoff 协议、安全边界和仅相关
+上下文的 Delegation Packet；解析每个 required 指令并记录来源路径与 SHA-256 摘要；对照不可变
+Worker 快照交叉检查；有效权限保持在快照、当前工作、宿主控制和当前授权的交集内。
 
-## Resume after registry change
+禁止：复制完整父 Session 历史或依赖隐式 Skill 继承；仅因父 Agent 可写就增加写权限。
 
-GIVEN: a Task selected Worker revision 4 and the project registry is now at revision 7
+## 缺少 required 指令
 
-EXPECT:
+前提：Host Adapter 无法解析或注入某个 required Worker 指令。
 
-- Resume from the Task's immutable `spec.yaml` snapshot and Current State.
-- Use revision 7 only for a new delegation and selection record.
+期望：将委派标记为 `unsupported`，列出未满足 ref，且不启动 Worker。
 
-FORBID:
+禁止：用老周完整 prompt 替代，或声称这是 degraded 的独立运行。
 
-- Replace the Task snapshot or silently change the in-flight Worker's capabilities.
+## 宿主不能强制 subagent 隔离
 
-## Historical role snapshot
+前提：当前宿主没有能强制 Packet 边界的原生 sub-agent 机制。
 
-GIVEN: an older Task contains a valid role state path and a persisted `role:*` instruction digest
+期望：当前授权允许时，老周可以直接完成有界工作；报告结果，但不声称 Worker 独立运行。
 
-EXPECT:
+禁止：虚构 sub-agent、后台服务或隔离保证。
 
-- Validate and resume from the exact historical files when the old run must continue.
-- Resolve any new follow-up from capabilities as a project or generated Worker.
+## 简洁用户交接
 
-FORBID:
+前提：Worker 完成并产出有效 Detailed Result 与 Handoff。
 
-- Move the old files, rewrite their instruction dependency, or select that fixed role for new work.
+期望：老周检查证据并先报告结果；只包含适用的验证、不确定性、阻塞项、决策或下一步。
 
-## Repeated temporary Worker
-
-GIVEN: similar bounded temporary Workers appeared in several completed Tasks or Temporaries
-
-EXPECT:
-
-- Preserve their historical snapshots as evidence.
-- Propose a separate reviewed project-registry change if reuse appears worthwhile.
-
-FORBID:
-
-- Promote automatically from frequency, model confidence, or past success.
-
-## Independent context with minimum injection
-
-GIVEN: a host starts a selected Worker without inheriting the parent Session or complete Maestro
-Skill
-
-EXPECT:
-
-- Materialize a Delegation Packet containing the bounded objective, completion condition, required
-  practice instructions, Handoff contract, safety boundary, and only relevant context.
-- Resolve every required instruction and record its source paths and SHA-256 digest.
-- Cross-check the packet against the immutable Worker snapshot.
-- Keep effective permissions within the intersection of snapshot, current work, host controls, and
-  current authorization.
-
-FORBID:
-
-- Copy the complete parent Session history or rely on implicit Skill inheritance.
-- Add write permission because the parent Agent could write.
-
-## Missing required instruction
-
-GIVEN: a Host Adapter cannot resolve or inject one required Worker instruction
-
-EXPECT:
-
-- Mark the delegation `unsupported` and name the unmet reference.
-- Do not start the Worker.
-
-FORBID:
-
-- Substitute Old Zhou's full prompt or claim a degraded independent run.
-
-## Host without enforceable subagent isolation
-
-GIVEN: the current host has no native sub-agent mechanism that can enforce the packet boundary
-
-EXPECT:
-
-- Old Zhou may perform the bounded work directly when current authorization allows it.
-- Report the result without claiming a Worker ran independently.
-
-FORBID:
-
-- Invent a sub-agent, background service, or isolation guarantee.
-
-## Concise user handoff
-
-GIVEN: a Worker completes with a valid Detailed Result and Handoff
-
-EXPECT:
-
-- Old Zhou checks the evidence and reports the result first.
-- Include applicable verification, uncertainty, blocker, decision, or next step.
-
-FORBID:
-
-- Narrate routine file searches, commands, internal Worker IDs, or capability routing unless asked.
+禁止：除非用户询问，否则叙述常规文件搜索、命令、内部 Worker ID 或能力路由。

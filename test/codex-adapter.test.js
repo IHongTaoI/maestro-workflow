@@ -62,13 +62,13 @@ test('Codex maps bounded Workers to native subagents without conflating separate
   const result = await recoveryContext(event(root));
   const context = result.hookSpecificOutput.additionalContext;
 
-  assert.match(context, /bounded Maestro Worker.*Codex-native subagent capability/i);
-  assert.match(context, /spawn_agent.*visible/i);
-  assert.match(context, /separate user-owned Codex task or conversation.*explicitly requests/i);
-  assert.match(context, /tool-facing identifiers.*visible tool schema/i);
-  assert.match(context, /task-specific Chinese Worker names.*user-facing text/i);
-  assert.match(context, /Old Zhou is the only preset user-facing role/i);
-  assert.match(context, /keep routine code search.*inside bounded Workers/i);
+  assert.match(context, /有界 Maestro Worker.*Codex 原生 subagent 能力/);
+  assert.match(context, /工具可见时使用 spawn_agent/);
+  assert.match(context, /只有用户明确要求时.*独立 Codex task 或 conversation/);
+  assert.match(context, /工具侧标识.*当前可见工具 schema/);
+  assert.match(context, /针对任务的中文 Worker 名称/);
+  assert.match(context, /老周是唯一预置、直接面向用户的角色/);
+  assert.match(context, /常规代码搜索.*留在有界 Worker 内/);
 });
 
 test('Codex hook stays silent without valid Maestro metadata and for other events', async t => {
@@ -98,7 +98,7 @@ test('Codex restores cross-host state without a project-local Core or codex tool
     await put(root, '.maestro/installation.json', JSON.stringify(config));
     const result = await recoveryContext(event(root));
     const context = result.hookSpecificOutput.additionalContext;
-    assert.match(context, /host-independent shared project state/);
+    assert.match(context, /宿主无关的共享项目状态/);
     assert.match(context, /memory_root/);
     assert.match(context, /task_root/);
     assert.match(context, /manifest\.md/);
@@ -120,7 +120,7 @@ test('Codex does not invent a catalog when no Memory has been persisted', async 
   const result = await recoveryContext(event(root));
   const context = result.hookSpecificOutput.additionalContext;
   assert.doesNotMatch(context, /manifest\.md|index\.json/);
-  assert.match(context, /not an active-task selection or a checkpoint/);
+  assert.match(context, /不代表已选择活动任务，也不是 checkpoint/);
   assert.deepEqual(await readdir(path.join(root, '.maestro')), ['installation.json']);
 });
 

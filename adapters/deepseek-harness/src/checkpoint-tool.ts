@@ -7,7 +7,7 @@ export function checkpointTool(fs: CheckpointFs, validator: MaestroSchemaValidat
   config: CheckpointConfig): ToolDefinition {
   return {
     name: 'maestro_checkpoint',
-    description: 'For an explicitly requested Maestro save/handoff: inspect one existing active Temporary/Task, then save a bounded factual snapshot using its revision/hash. Preserve source refs. Use status/retry with the same request ID after errors. Snapshot coverage is only supplied facts, not a transcript backup. No automatic Task creation or historical authorization.',
+    description: '用户明确要求 Maestro 保存或交接时：先 inspect 一个现有的活动 Temporary/Task，再使用其 revision/hash 保存有界事实快照。保留 source refs。出错后使用相同 request ID 执行 status/retry。快照只覆盖已提供事实，不是 transcript 备份。不得自动创建 Task，也不得继承历史授权。',
     parameters: {
       type: 'object', additionalProperties: false, required: ['operation', 'kind', 'target_id'],
       properties: {

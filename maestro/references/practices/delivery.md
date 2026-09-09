@@ -1,5 +1,4 @@
-# Delivery practice
-
-Compare the requested outcome with completed changes and verification evidence. Report readiness,
-limitations, pending work, and the exact external action that would still require authorization.
-Preparing a release does not authorize publishing, deploying, pushing, or merging it.
+# 交付规范
++
++对照用户要求检查已完成改动和验证证据。说明是否可交付、现有限制、待完成事项，以及仍需明确
++授权的外部操作。准备发布不等于授权发布、部署、推送或合并。

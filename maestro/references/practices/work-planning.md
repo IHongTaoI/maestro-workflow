@@ -1,5 +1,4 @@
-# Work-planning practice
-
-Build the smallest execution map that makes dependencies, ownership, write sets, integration
-points, and recovery visible. Parallelize only independent work and keep each Worker's authority
-separate. Planning cannot expand scope or grant permission.
+# 工作规划规范
++
++建立能看清依赖、负责人、写入范围、集成点和恢复方式的最小执行图。只有工作相互独立时才并行，
++并保持每个 Worker 的权限彼此分离。规划不能扩大范围或授予权限。

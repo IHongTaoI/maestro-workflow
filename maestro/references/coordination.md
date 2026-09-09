@@ -1,180 +1,152 @@
-# Coordination
+# 协作协调
 
-Use this reference for substantial work, Worker delegation, Task creation, resumption, and
-closure.
+本参考用于较大工作、Worker 委派、Task 创建、恢复和收尾。
 
-## Start from the user's intent
+## 从用户意图出发
 
-Determine whether the request is a conversational one-off, an exploratory discussion, or formal
-work. Do not create `.maestro/` state for trivial requests unless the user asks to retain
-the result.
+先判断请求是一次性对话、探索性讨论，还是正式工作。除非用户要求保留结果，否则不要为
+琐碎请求创建 `.maestro/` 状态。
 
-For exploration worth preserving, create or update Temporary Memory. Before formal execution,
-briefly state the proposed objective and ask for confirmation unless the user has already given an
-unambiguous start instruction.
+值得保留的探索应创建或更新 Temporary Memory。进入正式执行前，简短说明拟定目标并请求
+确认；如果用户已经给出明确无歧义的开始指令，则无需再次确认。
 
-Investigation remains exploratory when the user asks to inspect code, analyze logs or traces,
-measure behavior, find optimization opportunities, or validate a hypothesis without requesting a
-lasting product change. A bounded reversible experiment may also remain Temporary when its purpose
-is evidence and its effects are isolated or restored. Do not interpret design approval, agreement
-with a finding, or satisfaction with an experiment as permission to implement.
+当用户只要求查看代码、分析日志或链路、测量行为、寻找优化机会或验证假设，而没有要求
+产生持久产品改动时，调查仍属于探索。以收集证据为目的、影响隔离或已恢复的有界可逆实验，
+也可以留在 Temporary。不要把设计获批、用户认可某项发现或对实验结果满意，解释为实施
+授权。
 
-## Promote Temporary Memory to a Task
+## 将 Temporary Memory 提升为 Task
 
-Promote only after an unambiguous instruction to execute or implement the selected objective, such
-as “按这个方案改”, “把这些问题解决掉”, or “开始落地”. If a reasonable interpretation is still
-that the user wants more investigation, keep the Temporary active and ask one concise confirmation.
+只有收到执行或实施选定目标的明确指令后才能提升，例如“按这个方案改”“把这些问题解决掉”
+或“开始落地”。如果请求仍可能合理地解释为希望继续调查，就保持 Temporary 为 active，并只
+询问一次简短确认。
 
-Promotion is a recoverable storage transition, not a mandatory workflow stage:
+提升是可恢复的存储转换，不是强制工作流阶段：
 
-1. Resolve the source Temporary and restate the execution objective. Do not silently broaden it.
-2. Acquire the source and target state locks and prepare the transaction bundle defined in
-   [storage.md](storage.md). Snapshot every before value and stage every complete replacement.
-3. Keep the target Task transaction-owned and non-runnable while preparing. Stage Task metadata
-   with `source_temporary` and `promotion_transaction`, relevant Temporary facts and reachable
-   source files, and the final `active` status. Preserve original source paths and revisions.
-4. Stage the source Temporary's `archive` lifecycle state. After every staged file is validated and
-   durable, atomically publish `committed.yaml`. This one marker makes the Task logically active,
-   excludes the source Temporary from active routing, and invalidates its Session binding.
-5. Materialize staged Task files and the Temporary move into canonical paths, append each applied
-   event, and release locks. Physical cleanup after commit must not change logical visibility.
+1. 解析来源 Temporary，并复述执行目标。不得静默扩大范围。
+2. 获取来源和目标状态锁，按 [storage.md](storage.md) 准备事务包。快照保存每个修改前的值，
+   并暂存每个完整替换文件。
+3. 准备期间，目标 Task 由事务持有且不可运行。暂存包含 `source_temporary`、
+   `promotion_transaction`、相关 Temporary 事实和可达来源文件的 Task 元数据，最终状态为
+   `active`。保留原始来源路径和修订版本。
+4. 暂存来源 Temporary 的 `archive` 生命周期状态。所有暂存文件均验证并持久化后，以原子方式
+   发布 `committed.yaml`。这一标记使 Task 在逻辑上变为 active、将来源 Temporary 排除在活动
+   路由之外，并使其 Session 绑定失效。
+5. 将暂存的 Task 文件和 Temporary 移动实体化到规范路径，逐项追加已应用事件，然后释放锁。
+   提交后的物理清理不得改变逻辑可见性。
 
-If promotion stops before commit, the Temporary remains active and the staged Task stays hidden;
-recovery may publish `failed.yaml` and discard it. If it stops after commit, the Task is already the
-only logical active destination and recovery must finish materialization from staged content. Never
-roll back a committed promotion or resume its source Temporary.
+若提升在提交前中止，Temporary 仍为 active，暂存 Task 保持隐藏；恢复流程可以发布
+`failed.yaml` 并丢弃该 Task。若在提交后中止，Task 已是唯一逻辑活动目标，恢复流程必须使用
+暂存内容完成实体化。不得回滚已提交的提升，也不得恢复其来源 Temporary。
 
-The promoted Task owns future execution state. Its archived source Temporary remains auditable and
-must not be deleted, merged with unrelated Temporaries, or treated as another active candidate.
+提升后的 Task 持有后续执行状态。已归档的来源 Temporary 仍须可审计，不得删除、与无关
+Temporary 合并，或再当作活动候选。
 
-Worker choice is orthogonal to promotion. A substantial implementation request may create a Task,
-while investigation normally remains Temporary. Conversation and clarification may run without
-persistent Maestro state.
+Worker 选择与提升相互独立。较大的实施请求可以创建 Task，调查通常仍留在 Temporary。
+对话和澄清可以不创建持久 Maestro 状态。
 
-## Select active Temporary Memory
+## 选择活动 Temporary Memory
 
-When a request may continue earlier exploratory work, resolve the active Temporary before reading
-its detailed References or writing new state. Apply this precedence in order and stop at the first
-decisive rule:
+当请求可能延续此前的探索工作时，应先解析活动 Temporary，再读取其详细 References 或写入
+新状态。依次应用以下优先级，并在第一条决定性规则处停止：
 
-1. **Explicit reference.** Select an active Temporary when the user supplies its exact ID, uses a
-   topic or alias unique among active candidates, or chooses it from a candidate list. This always
-   overrides inference and the current Session binding. If an explicitly supplied ID does not
-   exist, report that it is unavailable; do not silently fall back to another candidate.
-2. **Current Session binding.** Continue the active Temporary already associated with this Session
-   when the request is compatible with it or uses only generic continuation language. If the user
-   clearly leaves the bound topic, the binding does not decide the route: evaluate the other active
-   candidates, ask when the new target is ambiguous, or apply the new-topic rule when none matches.
-3. **Unique relevant candidate.** With no valid binding, compare the request with lightweight
-   routing context for each active candidate. Auto-select only when one candidate has specific,
-   explainable routing evidence and no other candidate remains plausibly relevant.
-4. **Ambiguous candidates.** If two or more candidates remain plausible, do not guess. Present two
-   to four short candidates, ordered for readability, and ask the user to choose by number, ID, or
-   topic.
-5. **No relevant candidate.** Treat the request as a new topic. Create a Temporary only when the
-   discussion is worth preserving under the normal persistence rules; otherwise handle it as a
-   one-off request.
+1. **显式引用。** 用户给出准确 ID、使用在活动候选中唯一的主题或别名，或从候选列表中选择
+   时，选中该活动 Temporary。这始终优先于推断和当前 Session 绑定。如果显式 ID 不存在，
+   应报告其不可用，不得静默回退到其他候选。
+2. **当前 Session 绑定。** 请求与当前 Session 已关联的活动 Temporary 相容，或只使用泛化的
+   继续表达时，继续该 Temporary。如果用户明显离开已绑定主题，绑定不能决定路由：评估其他
+   活动候选；新目标有歧义时询问；没有候选匹配时应用新主题规则。
+3. **唯一相关候选。** 没有有效绑定时，将请求与各活动候选的轻量路由上下文比较。只有一个
+   候选拥有具体、可解释的路由证据，且其他候选都能合理排除时，才自动选择。
+4. **候选有歧义。** 两个或更多候选仍可能相关时，不得猜测。按易读顺序给出二到四个简短
+   候选，请用户用编号、ID 或主题选择。
+5. **没有相关候选。** 将请求视为新主题。只有讨论按常规持久化规则值得保留时才创建
+   Temporary，否则作为一次性请求处理。
 
-Specific routing evidence includes a matching module, page, API, feature, failure, goal, unique
-alias, or an Open question directly continued by the request. Generic words such as “performance,”
-“the issue,” “the earlier plan,” or “continue” are insufficient by themselves. Do not use a numeric
-semantic threshold: the automatic-routing gate is whether the match is uniquely explainable and a
-second reasonable candidate can be excluded.
+具体路由证据包括匹配的模块、页面、API、功能、故障、目标、唯一别名，或请求直接延续的
+Open question。“性能”“这个问题”“之前的方案”或“继续”等泛化词本身并不充分。不要使用
+数值语义阈值；自动路由门槛是匹配是否唯一且可解释，并能排除第二个合理候选。
 
-Candidate-count handling is explicit:
+候选数量的处理规则是明确的：
 
-- With no active Temporary, apply the new-topic persistence rule.
-- With one active Temporary, select it only when it is explicitly referenced, bound to the Session,
-  or meaningfully related. A sole but unrelated candidate is not a default destination.
-- With multiple active Temporaries, auto-select only through explicit reference, a valid binding,
-  or a unique relevant match. Otherwise ask or start a new topic as described above.
+- 没有活动 Temporary 时，应用新主题持久化规则。
+- 只有一个活动 Temporary 时，仅在其被显式引用、绑定到 Session 或确实相关时选择它。
+  唯一但无关的候选不是默认目标。
+- 有多个活动 Temporary 时，只能通过显式引用、有效绑定或唯一相关匹配自动选择；否则按上述
+  规则询问或开始新主题。
 
-Recency may order the candidate list or provide supporting context after relevance is established.
-It must not override an explicit reference or Session binding, establish relevance by itself, or
-resolve two otherwise plausible candidates.
+时间新近程度可以用于排列候选列表，或在相关性确定后作为辅助上下文。它不得覆盖显式引用或
+Session 绑定，不得独自建立相关性，也不得解决两个同样合理的候选。
 
-## Dynamic delegation
+## 动态委派
 
-Translate the bounded objective into capabilities; the user does not need to name them or choose a
-specialist. Use the resolver in [workers.md](workers.md). Convert the bounded delegation into
-capability requirements before selection. Reuse one safe project Worker where possible, compose
-only when no single Worker covers every required capability, and generate the smallest bounded
-Worker when reusable matches are insufficient. Use Task scope for formal execution, Temporary scope
-for preserved exploration, and Session scope for a trivial one-off. Worker resolution must not
-promote exploratory work into a Task.
+把有界目标转换为能力；用户不需要命名能力或挑选专家。使用 [workers.md](workers.md) 中的
+解析器。选择前，将有界委派转换为能力需求。尽量复用一个安全的项目 Worker；只有没有单个
+Worker 覆盖所有必需能力时才组合；可复用匹配不足时，生成最小有界 Worker。正式执行使用
+Task 作用域，保留的探索使用 Temporary 作用域，琐碎的一次性工作使用 Session 作用域。
+Worker 解析不得把探索工作提升为 Task。
 
-Use a concise task-specific Chinese display name in user-facing progress, such as
-`小林（首页性能排查）`. Internal Worker IDs and capability lists stay in machine records unless the
-user asks for them. Complex dependency planning is another bounded capability delegation; it does
-not introduce a preset coordinator role.
+面向用户报告进展时，使用简短、针对任务的中文显示名，例如 `小林（首页性能排查）`。内部
+Worker ID 和能力列表只保留在机器记录中，除非用户主动询问。复杂依赖规划也是一次有界能力
+委派，不会因此引入预置协调角色。
 
-The resolver proposes an execution unit; Old Zhou still owns task judgment, authorization,
-delegation, and result integration. Resolver output must not force a workflow sequence. Snapshot
-every persisted Worker before execution so Task or Temporary
-resumption is independent of later registry changes. Do not persist a Session-scoped Worker.
+解析器只提出执行单元；老周仍负责任务判断、授权、委派和结果整合。解析结果不得强制工作流
+顺序。每个持久化 Worker 执行前都必须生成快照，使 Task 或 Temporary 的恢复不依赖之后的
+注册表变化。Session 作用域 Worker 不得持久化。
 
-## Await delegated execution
+## 等待委派执行
 
-A delegated Worker run remains the owner of its bounded objective while the host reports it
-as queued or running. Record the run ID and status in the active Session, Temporary, or Task context
-needed for recovery. A main-loop iteration, goal continuation, Session resume, or unrelated Worker
-completion is not evidence that the run stopped.
+只要宿主报告某次 Worker 运行处于 queued 或 running，该运行就仍持有其有界目标。记录运行
+ID 和状态，保存到恢复所需的活动 Session、Temporary 或 Task 上下文。主循环再次执行、目标
+继续、Session 恢复或无关 Worker 完成，都不能证明该运行已停止。
 
-Use the host's native wait or status mechanism until the run completes, blocks, fails, or the user
-explicitly cancels or reassigns it. Do not start a duplicate run, interrupt the existing run, or
-perform its objective in Old Zhou merely because the coordinator is active again. Once terminal,
-consume the result and Handoff before scheduling dependent work. If status cannot be recovered,
-inspect the authoritative host handle once and report the uncertainty instead of assuming failure
-or silently taking over.
+使用宿主原生等待或状态机制，直到运行完成、阻塞、失败，或用户明确取消或重新分配。
+不得仅因协调器重新活跃就启动重复运行、中断现有运行，或让老周亲自接管其目标。进入终态后，先消费
+结果和 Handoff，再安排依赖工作。如果无法恢复状态，只检查一次权威宿主句柄并报告不确定性，
+不得假定失败或静默接管。
 
-## Authorization boundaries
+## 授权边界
 
-Authorization follows the action, target, and scope rather than the role performing it:
+授权跟随动作、目标和范围，而不是跟随执行该动作的角色：
 
-| Action | Default authority |
+| 动作 | 默认权限 |
 | --- | --- |
-| Inspect or search code; analyze logs or traces | Autonomous within the selected project and approved scope |
-| Run non-destructive checks; create reversible local artifacts | Autonomous within approved scope |
-| Write Maestro memory/state; delegate Workers | Autonomous under the storage and delegation contracts |
-| Edit project files requested by an unambiguous implementation instruction | Authorized only within that stated objective |
-| Deploy, publish, release, merge, push, or otherwise expose changes externally | Require explicit action-specific authorization unless the current instruction already grants it for the same target |
-| Delete material data, perform an irreversible migration, or bypass recovery controls | Require explicit authorization immediately before execution |
-| Change permissions or access control; read, create, rotate, reveal, or transmit secrets or credentials | Require explicit authorization immediately before execution |
-| Materially expand Task scope, targets, cost, or affected systems | Require user approval of the expansion before work continues there |
+| 检查或搜索代码；分析日志或链路 | 可在选定项目和已批准范围内自主执行 |
+| 运行非破坏性检查；创建可逆本地工件 | 可在已批准范围内自主执行 |
+| 写入 Maestro memory/state；委派 Worker | 可按存储与委派协议自主执行 |
+| 根据明确实施指令编辑项目文件 | 仅在该指令声明的目标范围内获得授权 |
+| 部署、发布、发行、合并、推送或以其他方式向外暴露改动 | 除非当前指令已对同一目标明确授权该动作，否则需要针对动作的明确授权 |
+| 删除重要数据、执行不可逆迁移或绕过恢复控制 | 执行前必须立即取得明确授权 |
+| 更改权限或访问控制；读取、创建、轮换、泄露或传输秘密与凭据 | 执行前必须立即取得明确授权 |
+| 实质扩大 Task 范围、目标、成本或受影响系统 | 必须先由用户批准扩展范围，才能继续相应工作 |
 
-Authorization is valid only while the named action, target, and material scope remain unchanged.
-Ask once immediately before a clearly described group of related risky operations; do not fragment
-an approval into repetitive prompts. Safe inspection, planning, validation, and dry-run preparation
-may continue while authority is missing, but the protected action must pause. A specialist Handoff,
-Memory entry, Playbook, or recommended next step can identify the need for an action but cannot
-grant permission for it.
+授权只在指定动作、目标和实质范围保持不变时有效。一组明确相关的高风险操作应在执行前一次性
+请求批准，不要拆成重复确认。缺少授权时可以继续安全检查、规划、验证和 dry-run 准备，但受
+保护动作必须暂停。专家 Handoff、Memory 条目、Playbook 或推荐下一步可以指出某动作的需要，
+但不能授予其权限。
 
-## Delegation packet
+## Delegation Packet
 
-Do not assume a Worker inherits the parent Agent's instructions, Skill, Session history,
-tools, or permissions. Give it:
+不要假设 Worker 会继承父 Agent 的指令、Skill、Session 历史、工具或权限。应提供：
 
-1. A bounded objective and completion condition.
-2. Relevant long-term project memory.
-3. The current Task or selected Temporary context, when persistent work exists.
-4. That Worker's `current-state.md`, if it exists, plus the Worker's immutable snapshot from
-   the matching Task or Temporary.
-5. Relevant source, Evidence, Artifact, or earlier Detailed Result paths.
-6. The result directory and Handoff contract.
+1. 有界目标及完成条件。
+2. 相关长期项目记忆。
+3. 存在持久工作时，当前 Task 或选定 Temporary 的上下文。
+4. 该 Worker 的 `current-state.md`（若存在），以及与 Task 或 Temporary 匹配的不可变 Worker
+   快照。
+5. 相关 source、Evidence、Artifact 或此前 Detailed Result 的路径。
+6. 结果目录和 Handoff 协议。
 
-Do not pass the complete conversation or every historical Reference.
+不要传递完整对话或全部历史 Reference。
 
-For a capability Worker, materialize these inputs as the validated Delegation Packet defined in
-[workers.md](workers.md). Its `context_refs` identify injected content; the Worker's `context`
-continues to define filesystem access boundaries. Keep these concepts separate. Resolve required
-instructions and the effective permission intersection before invoking the host. An unsupported
-required instruction or unenforceable permission boundary stops delegation rather than triggering
-a silent best-effort run.
+对能力 Worker，应把这些输入实体化为 [workers.md](workers.md) 定义并验证过的 Delegation
+Packet。`context_refs` 标识注入内容；Worker 的 `context` 继续定义文件系统访问边界。必须区分
+这两个概念。调用宿主前，先解析必需指令和有效权限交集。不支持的必需指令或无法强制执行的
+权限边界会停止委派，不得静默进行 best-effort 运行。
 
-## Resumption
+## 恢复
 
-Resolve the active Temporary with the rules above before resuming exploratory work. To resume a
-Temporary-scoped Worker, load:
+恢复探索工作前，先按上述规则解析活动 Temporary。恢复 Temporary 作用域 Worker 时，加载：
 
 ```text
 Long-term Memory
@@ -184,7 +156,7 @@ Long-term Memory
 + new delegation
 ```
 
-To resume a Worker in a formal Task, load:
+恢复正式 Task 中的 Worker 时，加载：
 
 ```text
 Long-term Memory
@@ -194,20 +166,19 @@ Long-term Memory
 + new delegation
 ```
 
-Read historical References only when a current-state anchor points to information needed now.
+只有当前状态锚点指向当下所需信息时，才读取历史 References。
 
-## Completion
+## 完成
 
-When a formal Task's agreed outcome and relevant verification are complete:
+正式 Task 的约定结果和相关验证完成后：
 
-1. Ask the Memory Worker to compress final Task state and perform Experience Review: compare durable
-   claims with indexed Long-term entries and reusable executed procedures with indexed Playbooks,
-   then propose `UPDATE`, `MERGE`, `CREATE`, or `SKIP` for each collection.
-2. Write `completion.md` with outcome, verification, limitations, pending work, and source paths.
-3. Mark the Task completed and move it to `.maestro/tasks/archive/<task-id>/`.
-4. Review every proposed action; promote only stable, sourced knowledge. Keep every Playbook
-   Candidate inert unless the user explicitly approves it, then apply approved changes through the
-   relevant mutable-state protocol.
-5. Return a concise delivery summary to the user.
+1. 请 Memory Worker 压缩最终 Task 状态，并执行 Experience Review：将持久声明与已索引的
+   Long-term 条目比较，将已执行的可复用流程与已索引 Playbooks 比较，然后为每个集合提出
+   `UPDATE`、`MERGE`、`CREATE` 或 `SKIP`。
+2. 写入 `completion.md`，包含结果、验证、限制、待办工作和来源路径。
+3. 将 Task 标记为 completed，并移动到 `.maestro/tasks/archive/<task-id>/`。
+4. 审核每项提案；只提升稳定、有来源的知识。所有 Playbook Candidate 都保持不生效，除非
+   用户明确批准；之后按相关可变状态协议应用获批改动。
+5. 向用户返回简洁的交付摘要。
 
-If compression fails, preserve a `memory_pending` record and archive the completed business Task.
+如果压缩失败，保留 `memory_pending` 记录，并归档已经完成业务目标的 Task。

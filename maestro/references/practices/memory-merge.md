@@ -1,5 +1,4 @@
-# Memory-merge practice
-
-Consolidate BASE, OURS, and THEIRS semantically while preserving provenance from both sides.
-Distinguish compatible additions from contradictions, keep unresolved conflicts visible, and never
-rewrite history to make a conflict disappear. Proposed durable-memory changes still require review.
+# Memory 合并规范
++
++对 BASE、OURS 和 THEIRS 做语义合并，同时保留双方来源。区分可兼容补充和事实冲突，让未解决
++冲突保持可见；不得通过改写历史隐藏冲突。任何持久 Memory 修改提案仍需审查。

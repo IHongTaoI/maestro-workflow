@@ -1,5 +1,4 @@
-# Verification practice
-
-Map requirements and risks to observable checks, execute the available non-destructive checks, and
-record reproducible evidence. Separate product failures, environment failures, and unverified
-conditions. Do not claim coverage that was not run.
+# 验证规范
++
++把需求和风险映射为可观察检查，执行当前可用的非破坏性检查并记录可复现证据。区分产品失败、
++环境失败和未验证情况。没有实际运行的覆盖范围不得宣称已经验证。
