@@ -671,7 +671,7 @@ try {
         @{ Path = "maestro/SKILL.md"; Text = "wait through the host's native mechanism" },
         @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
         @{ Path = "maestro/references/workers.md"; Text = "must never promote it automatically" },
-        @{ Path = "maestro/references/coordination.md"; Text = "Convert the bounded delegation into capability requirements" },
+        @{ Path = "maestro/references/coordination.md"; Text = "capability requirements before selection" },
         @{ Path = "maestro/references/coordination.md"; Text = "matching Task or Temporary" },
         @{ Path = "maestro/references/storage.md"; Text = "copied into the matching Task or Temporary" },
         @{ Path = "maestro/references/handoffs.md"; Text = ".maestro/memory/temporary/active/<temporary-id>/handoffs/" },
