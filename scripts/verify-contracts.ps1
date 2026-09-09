@@ -666,7 +666,7 @@ try {
         @{ Path = "maestro/references/workers.md"; Text = "A Worker never inherits the parent Agent's complete Skill" },
         @{ Path = "maestro/references/workers.md"; Text = "delegation-packet.schema.json" },
         @{ Path = "maestro/references/coordination.md"; Text = "Do not assume a Worker inherits" },
-        @{ Path = "maestro/references/coordination.md"; Text = "Worker resolution must not promote exploratory work into a Task" },
+        @{ Path = "maestro/references/coordination.md"; Text = "promote exploratory work into a Task" },
         @{ Path = "maestro/references/coordination.md"; Text = "Do not start a duplicate run" },
         @{ Path = "maestro/SKILL.md"; Text = "wait through the host's native mechanism" },
         @{ Path = "maestro/references/workers.md"; Text = "scope: session" },
