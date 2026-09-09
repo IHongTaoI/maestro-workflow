@@ -1,30 +1,27 @@
-# Three-layer Memory
+# 三层 Memory
 
-Use memory to preserve continuity, not to reproduce the conversation or execution log.
+Memory 用于延续工作，不用于复刻对话或执行日志。
 
-## Optional snapshot checkpoints
+## 可选快照 Checkpoint
 
-When an available host checkpoint tool is used for an explicit save/handoff request, first select
-one active Temporary or Task and inspect its current revision/hash. Supply bounded facts:
-objective, confirmed findings, rejected directions, work in progress, next steps, open questions
-and reachable project-relative source refs. This is coverage of supplied facts, not a claim that
-the complete Session transcript was backed up. Do not include credentials or unrelated work.
+用户明确要求保存或交接，且宿主提供 checkpoint 工具时，先选择一个活动 Temporary 或 Task，
+检查其当前 revision/hash，再提交有界事实：目标、已确认发现、已否定方向、进行中的工作、下一步、
+Open questions 和可达的项目相对 source refs。这只是覆盖已提交的事实，不代表完整 Session 对话
+已经备份。不得包含凭据或无关工作。
 
-The writer may preserve a managed `Saved checkpoint` JSON section and `checkpoint_receipt` in
-Temporary `current.md` or Task `progress.md`. On resuming that selected work, read this snapshot
-alongside user-authored context; stale older headings must not override newer verified progress.
-The receipt is a recovery hint, not authorization. Follow the checkpoint rules in [storage.md](storage.md)
-before replacing/removing it. Rebuild the catalog after a successful formal state write using
-the existing freshness protocol; catalog failure does not undo the checkpoint.
+写入器可以在 Temporary `current.md` 或 Task `progress.md` 中维护 `Saved checkpoint` JSON 区块和
+`checkpoint_receipt`。恢复所选工作时，将快照与用户编写的上下文一同读取；陈旧的旧标题不得
+覆盖较新且已验证的进展。Receipt 只是恢复提示，不是授权。替换或删除前遵循
+[storage.md](storage.md) 的 checkpoint 规则。正式状态写入成功后，按现有 freshness 协议重建
+目录；目录构建失败不会撤销 checkpoint。
 
-After an uncertain result, query status or retry the same request ID. Do not manufacture a new
-ID to bypass a conflict or claim unsaved work was recovered. Pending requests remain pending
-even if a newer request succeeds; report stale conflicts explicitly. Hosts without a checkpoint
-tool still follow the ordinary Memory and storage protocols.
+结果不确定时，查询状态或使用相同 request ID 重试。不得为了绕过冲突而制造新 ID，也不得声称
+未保存工作已经恢复。即使较新请求成功，旧的 pending 请求仍是 pending；应明确报告陈旧冲突。
+没有 checkpoint 工具的宿主继续遵循普通 Memory 和存储协议。
 
 ## Temporary Memory
 
-Temporary Memory represents valuable discussion before a formal Task. Keep `current.md` short:
+Temporary Memory 表示正式 Task 之前值得保留的讨论。保持 `current.md` 简短：
 
 ```markdown
 ---
@@ -33,57 +30,50 @@ updated_at: 2026-08-27T11:05:00Z
 updated_by: old-zhou/session-or-run-id
 ---
 
-# Topic
+# 主题
 
-## Current goal
+## 当前目标
 ...
 
-## Confirmed
+## 已确认
 - ...
 
-## Rejected
-- ... — reason and source
+## 已否定
+- ... — 原因与来源
 
-## Open questions
+## 待确认问题
 - ...
 
-## History references
+## 历史引用
 - references/<name>.md
 ```
 
-On an explicit Session Handoff, compress the current discussion into this format. Archive it when
-the discussion has lasting value but is paused; move it to Trash only when the user has rejected it
-and it has no continuing value.
+用户明确要求 Session Handoff 时，将当前讨论压缩为上述格式。讨论有长期价值但已暂停时归档；
+只有用户明确否定且不再有延续价值时才移入 Trash。
 
-### Temporary routing context
+### Temporary 路由上下文
 
-During candidate selection, load only each active Temporary's `meta.yaml` and these sections from
-`current.md`: Topic, Current goal, Confirmed, and Open questions. Do not load candidate
-`references/` trees, rejected-history detail, or full conversation material until after selection.
+选择候选时，只加载每个活动 Temporary 的 `meta.yaml` 和 `current.md` 中的主题、当前目标、已确认、
+待确认问题。选择完成前，不加载候选 `references/` 树、否定历史细节或完整对话材料。
 
-Maintain a current-Session binding after a Temporary is explicitly selected, uniquely resolved, or
-created. The binding is conversational state, not a requirement for a host-specific API. When the
-host exposes a stable Session identifier, `last_session_id` may persist the association; otherwise
-keep it only in the current Session context. Treat persisted `last_session_id` as a recovery hint,
-not an override: it establishes a binding only when exactly one active candidate claims that ID.
+Temporary 被显式选择、唯一解析或新建后，维护当前 Session 绑定。绑定是对话状态，不要求特定
+宿主 API。宿主提供稳定 Session 标识时，可以通过 `last_session_id` 持久化关联；否则只保留在
+当前 Session 上下文。持久化 `last_session_id` 只是恢复提示，不是覆盖规则：只有恰好一个活动
+候选声明该 ID 时，才能建立绑定。
 
-Replace or clear the binding when the user explicitly switches topics, the bound Temporary leaves
-`active`, or a formal Task is created from it. A clear request that uniquely identifies another
-active Temporary may replace the binding. Vague continuation language must not switch it.
+用户明确切换主题、绑定的 Temporary 不再是 `active`，或从它创建正式 Task 时，应替换或清除
+绑定。明确请求唯一标识另一个活动 Temporary 时可以替换绑定；含糊的“继续”不能切换。
 
-Switching bindings changes only which context is loaded. It must not merge, archive, rename, or
-otherwise modify the previous Temporary. Never combine two Temporaries automatically because their
-topics appear similar.
+切换绑定只改变加载的上下文，不得合并、归档、重命名或修改上一个 Temporary。两个主题看起来
+相似也绝不能自动合并。
 
-A persisted exploratory Worker keeps its immutable specification and short Current State inside
-the selected Temporary. `current.md` should link the active Worker state needed for resumption
-rather than copying its full result. When the Temporary is archived, trashed, or promoted, its
-scoped Workers expire with it.
+持久化探索 Worker 在选定 Temporary 中保存不可变规格和简短 Current State。`current.md` 应链接
+恢复所需的活动 Worker 状态，而不是复制其完整结果。Temporary 被归档、丢弃或提升时，其作用域
+Worker 随之到期。
 
 ## Task Memory
 
-Task Memory contains public Task context plus each invoked Worker's Current State. An
-execution-unit state answers:
+Task Memory 包含公开 Task 上下文，以及每个已调用 Worker 的 Current State。执行单元状态回答：
 
 - `objective`
 - `work_done`
@@ -93,44 +83,38 @@ execution-unit state answers:
 - `recommended_next`
 - `history_refs`
 
-Keep current state immediately useful for the next invocation. Move older but still valuable detail
-into `references/`; do not create a Reference for routine searches, repeated output, or discarded
-noise. Mutable Task and Worker Markdown uses the revision front matter and write protocol in
-[storage.md](storage.md).
+保持当前状态能直接服务下一次调用。较旧但仍有价值的细节移入 `references/`；不要为常规搜索、
+重复输出或已丢弃噪声创建 Reference。可变 Task 与 Worker Markdown 使用 [storage.md](storage.md)
+中的 revision front matter 和写入协议。
 
 ## Long-term Memory
 
-Long-term Memory contains project knowledge likely to matter across future Tasks: architecture,
-stable module responsibilities, verified facts, API boundaries, conventions, and durable decisions.
+Long-term Memory 保存未来 Task 可能仍有价值的项目知识：架构、稳定模块职责、已验证事实、API
+边界、约定和持久决策。
 
-Long-term experience is declarative project knowledge: it states what has been verified or learned
-about this project. A reusable procedure with an explicit trigger, ordered steps, and checks belongs
-in a Playbook Candidate instead. Do not duplicate the same procedural guidance as both a Long-term
-entry and a Playbook Candidate.
+长期经验是声明式项目知识，说明此项目中已经验证或学到什么。带明确触发条件、有序步骤和检查的
+可复用流程应放入 Playbook Candidate。不要把同一套流程同时写成 Long-term 条目和 Playbook
+Candidate。
 
-Long-term Memory is a maintained experience base, not a Task record archive. Never copy Temporary
-or Task contents directly into it. Trace data, routine command output, discarded hypotheses,
-process logs, and one-off implementation detail remain in their source layer unless a reusable,
-verified claim is extracted from them.
+Long-term Memory 是维护中的经验库，不是 Task 记录归档。绝不要把 Temporary 或 Task 内容直接
+复制进去。链路数据、常规命令输出、已否定假设、过程日志和一次性实施细节留在来源层；只有从中
+提炼出的可复用、已验证声明才能进入 Long-term。
 
-Every current Long-term entry has a stable `entry_id`, a `memory_kind` (`fact`, `experience`,
-`principle`, `decision`, `constraint`, or `other`), concise content, and reachable `source_refs`.
-Expose those fields as `current_memory.long_term_entries` in every Memory Worker request. An empty
-Long-term store is represented by an empty array, not by omitting the index. Stable IDs let a
-candidate name the entries it compared without coupling the protocol to Markdown headings or a
-host API.
+每个当前 Long-term 条目拥有稳定 `entry_id`、`memory_kind`（`fact`、`experience`、`principle`、
+`decision`、`constraint` 或 `other`）、简洁内容和可达 `source_refs`。每次 Memory Worker 请求都
+将它们暴露为 `current_memory.long_term_entries`。空存储以空数组表示，不得省略索引。稳定 ID
+使候选能声明比较过哪些条目，而不依赖 Markdown 标题或宿主 API。
 
-Persist each entry in `long-term/current.md` as one machine-readable fenced JSON block. The
-surrounding Markdown remains available for a short human introduction, but current claims must not
-exist only as unstructured prose:
+在 `long-term/current.md` 中，每个条目保存为一个机器可读 JSON fenced block。外围 Markdown
+可以有简短的人类说明，但当前声明不得只存在于非结构化正文：
 
 ````markdown
 ```maestro-memory-entry
 {
   "entry_id": "lt-home-startup-trace",
-  "title": "Collect startup evidence before optimization",
+  "title": "优化前先收集启动证据",
   "memory_kind": "experience",
-  "content": "Capture a trace before changing homepage initialization.",
+  "content": "修改首页初始化前先捕获 trace。",
   "source_refs": [".maestro/tasks/archive/task-startup/evidence/trace.md"],
   "tags": ["performance", "trace"],
   "aliases": ["首屏性能"],
@@ -139,301 +123,263 @@ exist only as unstructured prose:
 ```
 ````
 
-A `decision` entry may also carry structured context without forcing old entries to migrate:
+`decision` 条目还可携带结构化上下文，不强制迁移旧条目：
 
 ```json
 "decision_context": {
-  "reason": "Avoid context growth and keep Worker isolation.",
+  "reason": "避免上下文持续增长，并保持 Worker 隔离。",
   "rejected_alternatives": [
     {
-      "alternative": "Persistent Worker Session",
-      "reason": "It increases hidden state and recovery complexity."
+      "alternative": "持久 Worker Session",
+      "reason": "它会增加隐藏状态和恢复复杂度。"
     }
   ]
 }
 ```
 
-For a newly approved decision, record a non-empty `reason`. Include only alternatives that were
-actually considered and sourced; omit `rejected_alternatives` or use an empty array when none were
-recorded. `decision_context` is invalid on other memory kinds. Existing decision entries without
-this field remain valid and require no bulk migration. Decision context explains project knowledge;
-it never grants authorization for a future action.
+新批准的 decision 必须记录非空 `reason`。只包含真正讨论过且有来源的替代方案；没有记录时省略
+`rejected_alternatives` 或使用空数组。`decision_context` 用在其他 memory kind 上无效。没有该
+字段的既有 decision 仍有效，不需要批量迁移。Decision context 解释项目知识，绝不为未来动作
+授予权限。
 
-`tags`, `aliases`, and `status` are optional; status defaults to `active`. The catalog builder
-rejects duplicate IDs, invalid blocks, and unstructured current claims rather than silently
-creating an incomplete index. Existing projects must migrate current Long-term entries to these
-blocks before enabling Memory Awareness.
+`tags`、`aliases`、`status` 可选，status 默认为 `active`。目录构建器拒绝重复 ID、无效 block 和
+非结构化当前声明，不得静默创建不完整索引。旧项目启用 Memory Awareness 前，应先把当前
+Long-term 条目迁移成这些 block。
 
-This is a compatibility change for Memory Worker request producers. A producer that previously
-sent `"current_memory": {}` must migrate to `"current_memory": {"long_term_entries": []}` when no
-Long-term entries exist; otherwise request validation fails.
+这是 Memory Worker 请求生产者的兼容变更。没有 Long-term 条目时，过去发送
+`"current_memory": {}` 的生产者必须迁移为
+`"current_memory": {"long_term_entries": []}`，否则请求校验失败。
 
-Memory Worker output is only a candidate. Before promotion, Old Zhou or a strong-model reviewer must
-verify that it is stable, useful beyond the current Task, and supported by reachable `source_refs`.
-Record approval or rejection under `memory/long-term/decisions/`; retain rejected candidates so the
-same weak claim is not repeatedly reconsidered.
+Memory Worker 输出只是候选。提升前，老周或强模型评审者必须验证其稳定、在当前 Task 之外仍有
+价值，并有可达 `source_refs` 支撑。在 `memory/long-term/decisions/` 记录批准或拒绝；保留被拒绝
+候选，避免反复评审同一薄弱声明。
 
-### Evolution proposals
+### 演进提案
 
-For each extracted Long-term candidate, compare its durable claim with the indexed entries and emit
-one proposal under `long_term_candidates`. The proposal records a stable `candidate_id`, its
-`memory_kind`, a match classification, an action, conflict status, rationale, structured source
-metadata, and reachable `source_refs`.
+对每个提取出的 Long-term 候选，将其持久声明与索引条目比较，并在 `long_term_candidates` 中
+输出一项提案。提案记录稳定 `candidate_id`、`memory_kind`、匹配分类、动作、冲突状态、理由、
+结构化来源元数据和可达 `source_refs`。
 
-Classify the comparison before choosing an action:
+先分类，再选择动作：
 
-- `novel`: no entry covers the claim;
-- `duplicate`: an entry already covers the same claim;
-- `overlap`: existing entries should absorb or consolidate the new evidence;
-- `conflict`: current evidence contradicts an entry;
-- `low-value`: the material is temporary, one-off, or not reusable.
+- `novel`：没有条目覆盖该声明；
+- `duplicate`：已有条目覆盖同一声明；
+- `overlap`：现有条目应吸收或合并新证据；
+- `conflict`：当前证据与某条目矛盾；
+- `low-value`：材料临时、一次性或不可复用。
 
-Prefer maintenance over proliferation. For a candidate that is eligible for Long-term Memory, use
-this order:
+优先维护而不是增加条目。符合 Long-term Memory 条件的候选按以下顺序处理：
 
 ```text
 UPDATE → MERGE → CREATE
 ```
 
-`UPDATE` targets exactly one overlapping or conflicting entry. `MERGE` targets at least two.
-`CREATE` is allowed only when the claim is novel and targets none. Emit `SKIP` for a duplicate or
-low-value candidate; a duplicate names the entries that already cover it, while a low-value
-candidate targets none. Do not use `CREATE` to avoid comparing with an existing topic.
+`UPDATE` 准确指向一个重叠或冲突条目；`MERGE` 指向至少两个；只有声明为 novel 且不指向任何
+条目时才允许 `CREATE`。duplicate 或 low-value 输出 `SKIP`：duplicate 指向已经覆盖它的条目，
+low-value 不指向目标。不得用 `CREATE` 逃避与现有主题比较。
 
-The `source` metadata contains `type: temporary | task`, the source ID, creation time, and an
-optional host-provided `workspace_id`. It helps route and audit the proposal, but does not replace
-`source_refs`; reachable source files are the authoritative evidence.
+`source` 元数据包含 `type: temporary | task`、来源 ID、创建时间和可选的宿主 `workspace_id`。
+它有助于路由和审计，但不能替代 `source_refs`；可达来源文件才是权威证据。
 
-These actions are proposals, not writes. The Memory Worker cannot apply or approve them. Old Zhou
-or a strong-model reviewer verifies usefulness, stability, matching targets, and provenance, may
-change the proposed action, and publishes an immutable decision before any approved update uses the
-mutable-state write protocol.
+这些动作是提案，不是写入。Memory Worker 不能应用或批准。老周或强模型评审者要验证价值、
+稳定性、匹配目标和来源，可以改变提议动作，并在任何已批准更新使用可变状态协议前，发布不可变
+决策。
 
-### Evidence precedence and conflicts
+### 证据优先级与冲突
 
-Resolve factual conflicts in this order:
+按以下顺序解决事实冲突：
 
 ```text
-current code or runtime evidence
-> current Task verified findings
+当前代码或运行时证据
+> 当前 Task 已验证发现
 > Long-term Memory
-> historical References
+> 历史 References
 ```
 
-Higher-priority evidence does not make lower-priority history disappear. When current evidence
-contradicts a Long-term entry, stop using the old entry as current truth and create a review record
-with:
+高优先级证据不会让低优先级历史消失。当前证据与 Long-term 条目矛盾时，停止把旧条目当作当前
+事实，并创建评审记录，包括：
 
-- a stable entry or candidate ID and the exact claim under review;
-- outcome: `approved`, `rejected`, or `superseded`;
-- reachable `source_refs` for both the earlier claim and the contradicting evidence;
-- reviewer, timestamp, rationale, and replacement entry ID when superseded.
+- 稳定条目或候选 ID，以及正在评审的准确声明；
+- 结果：`approved`、`rejected` 或 `superseded`；
+- 旧声明与冲突证据双方可达的 `source_refs`；
+- 评审者、时间戳、理由，以及 superseded 时的替代条目 ID。
 
-After review, update Long-term `current.md` through the mutable-state write protocol. Replace the
-current summary with the newly approved claim or remove the rejected claim. Publish an immutable
-decision that marks the preserved candidate/entry `superseded` or `rejected` and links its
-replacement when one exists. Never silently edit the old claim into new wording, delete its
-sources, or continue presenting it as current while a known contradiction is unresolved.
+评审后，通过可变状态写入协议更新 Long-term `current.md`。用新批准声明替换当前摘要，或删除
+被拒绝声明。发布不可变决策，把保留的候选/条目标记为 `superseded` 或 `rejected`，存在替代项
+时链接它。不得静默把旧声明改写成新说法、删除其来源，或在已知矛盾未解决时仍作为当前事实。
 
-If the contradiction has not yet been verified, label the old entry disputed in current context and
-prefer the higher-priority evidence for the present decision. A Memory Worker may propose the
-supersession, but Old Zhou or a strong-model reviewer must approve it.
+矛盾尚未验证时，在当前上下文把旧条目标为 disputed，并在本次决策中采用较高优先级证据。
+Memory Worker 可以提议 supersession，但必须由老周或强模型评审者批准。
 
-A conflict proposal uses `conflict_status: pending-confirmation` until its evidence has been
-verified, or `confirmed` once the contradiction itself is verified. Both states still require
-review before mutation. Non-conflict proposals use `none`. Never relabel a conflict as overlap or
-novel merely to pass validation.
+冲突提案在证据验证前使用 `conflict_status: pending-confirmation`，矛盾本身验证后使用
+`confirmed`。两者在修改前都仍需评审。非冲突提案使用 `none`。不得为了通过校验而把 conflict
+重新标成 overlap 或 novel。
 
 ## Current + References
 
-Load `current.md` or `current-state.md` by default. References are historical anchors and are loaded
-only when required for a current decision, conflict, explanation, or user request. Never inject the
-entire Reference tree automatically.
+默认加载 `current.md` 或 `current-state.md`。References 是历史锚点，只在当前决策、冲突、解释
+或用户请求需要时加载。绝不要自动注入整个 Reference 树。
 
-## Memory Awareness and progressive retrieval
+## Memory Awareness 与渐进检索
 
-`manifest.md` and `index.json` under `.maestro/memory/` are local, derived catalog files. Formal
-Temporary, Task, and Long-term files remain authoritative. The catalog can be deleted and rebuilt;
-it must never be edited to change a Memory claim.
+`.maestro/memory/` 下的 `manifest.md` 和 `index.json` 是本地派生目录文件。正式 Temporary、Task
+和 Long-term 文件仍是权威来源。目录可删除并重建；绝不能通过编辑目录来修改 Memory 声明。
 
-At the start of a substantial Session, check the catalog and rebuild it when missing or stale:
+较大 Session 开始时检查目录，缺失或陈旧时重建：
 
 ```bash
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> check
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> build
 ```
 
-Read only `manifest.md` for the initial overview. When the user request may benefit from prior
-context, query the index with the current request plus the active Skill or Worker context and
-the bound Temporary or Task when known:
+初始概览只读取 `manifest.md`。用户请求可能受益于既往上下文时，使用当前请求、活动 Skill 或
+Worker 上下文，以及已知绑定的 Temporary 或 Task 查询索引：
 
 ```bash
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> search \
   "<current request>" --context "<skill or worker context>" --binding <memory-id>
 ```
 
-The retriever returns at most five active candidates and a `relevance_reason`. It may return no
-candidates. Do not force an unrelated Memory into context and do not open every returned source.
-After judging a candidate relevant, load only that record through its stable ID:
+检索器最多返回五个活动候选及 `relevance_reason`，也可以不返回候选。不得强行注入无关 Memory，
+也不要打开每个返回来源。判断候选相关后，只通过稳定 ID 加载该记录：
 
 ```bash
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> show <memory-id>
 ```
 
-`show` extracts one Long-term JSON block or the bounded current sections for a Temporary, Task,
-legacy role, or Worker. This is the supported way to avoid injecting all of `long-term/current.md` merely
-to use one entry.
+`show` 提取一个 Long-term JSON block，或 Temporary、Task、旧角色或 Worker 的有界当前章节。
+这是只使用一个条目而不注入全部 `long-term/current.md` 的受支持方式。
 
-The deterministic catalog covers:
+确定性目录包含：
 
-- every structured Long-term entry, including inactive status for audit but excluding inactive
-  entries from normal retrieval;
-- active Temporary routing context from `meta.yaml` and the short current sections;
-- active Task objectives and each Worker `current-state.md`, plus legacy role state when present.
+- 所有结构化 Long-term 条目；inactive 状态为审计保留，但从常规检索排除；
+- 来自 `meta.yaml` 和简短当前章节的活动 Temporary 路由上下文；
+- 活动 Task 目标和各 Worker `current-state.md`，以及存在时的旧角色状态。
 
-It does not index historical Reference trees. `search` refreshes a missing or stale catalog by
-default; `--no-refresh` turns staleness into a visible error. Rebuild after an approved Long-term
-write, Temporary lifecycle change, Task lifecycle change, or current-state update. A failed rebuild
-must not block the business task: report the diagnostic and fall back to the existing bounded,
-source-first reads.
+它不索引历史 Reference 树。`search` 默认刷新缺失或陈旧目录；`--no-refresh` 会把陈旧状态变成
+可见错误。批准 Long-term 写入、Temporary 生命周期变化、Task 生命周期变化或 current-state
+更新后重建。重建失败不得阻塞业务 Task：报告诊断，并回退到现有有界、source-first 读取。
 
 ## Memory Worker
 
-Trigger only at these boundaries:
+只在以下边界触发：
 
-1. A Worker completes a substantial delegation.
-2. The user confirms a Session Handoff.
-3. A formal Task is created from Temporary Memory.
-4. A Task completes or is archived.
+1. Worker 完成一次较大的委派。
+2. 用户确认 Session Handoff。
+3. 从 Temporary Memory 创建正式 Task。
+4. Task 完成或归档。
 
-Use the configured memory model when the host supports model selection. Retry it once after a
-transient or invalid-output failure, then fall back to the primary model. If no suitable runner is
-available, the current agent may perform the same bounded compression. If all attempts fail, write
-the complete request and sources under `memory/pending/` and continue the business task.
+宿主支持模型选择时使用配置的 memory model。瞬时故障或无效输出后重试一次，再回退到主模型。
+没有合适 runner 时，当前 Agent 可以执行相同的有界压缩。如果全部尝试失败，将完整请求和来源
+写入 `memory/pending/`，并继续业务 Task。
 
-The Memory Worker organizes memory and performs a bounded Experience Review. It is selected or
-generated from memory capabilities, not installed as a preset role. It must not select other
-Workers, make architecture decisions, change Task scope, or approve its own Long-term or Playbook
-candidates. This review does not introduce a new preset role or Runtime.
+Memory Worker 负责整理 memory 和有界 Experience Review。它按 memory 能力选择或生成，不是
+预置角色。它不得选择其他 Worker、作出架构决定、改变 Task 范围，或批准自己的 Long-term 或
+Playbook 候选。该评审不会引入新的预置角色或 Runtime。
 
-Every request also exposes `current_playbooks`, including an empty array when the project has no
-Playbooks. Each indexed Playbook has a stable `playbook_id`, canonical `file_path`, title, trigger,
-ordered steps, checks, active status, revision metadata, and reachable `source_refs`. This lets the
-worker compare procedures before proposing new guidance. A producer that omits
-`current_playbooks` must migrate because request validation fails.
+每个请求还暴露 `current_playbooks`；项目没有 Playbook 时也要提供空数组。每个索引 Playbook
+包含稳定 `playbook_id`、规范 `file_path`、标题、触发条件、有序步骤、检查、active 状态、
+revision 元数据和可达 `source_refs`，使 Worker 在提出新指导前比较已有流程。省略
+`current_playbooks` 的生产者必须迁移，否则请求校验失败。
 
-Its consolidation flow is bounded and ordered:
+合并流程有界且有序：
 
-1. Extract reusable facts, experiences, principles, decisions, or constraints from the supplied
-   source files.
-2. Compare every extracted claim with `current_memory.long_term_entries` by content, applicability,
-   evidence, and stable ID.
-3. Classify it as novel, duplicate, overlap, conflict, or low-value.
-4. Propose `UPDATE`, `MERGE`, `CREATE`, or `SKIP` using the evolution rules above.
-5. Separately identify procedures with an explicit trigger, ordered reusable steps, checks, and
-   evidence from real execution. Compare them with `current_playbooks` and emit
-   `playbook_candidates` under the rules in [playbooks.md](playbooks.md). Discussion, routine
-   commands, Task chronology, and unverified suggestions are `SKIP` material.
-6. Return both proposal collections for validation and independent review; do not mutate Long-term
-   Memory or Playbooks.
+1. 从提供的来源文件提取可复用事实、经验、原则、决策或约束。
+2. 按内容、适用性、证据和稳定 ID，将每项声明与 `current_memory.long_term_entries` 比较。
+3. 分类为 novel、duplicate、overlap、conflict 或 low-value。
+4. 按上述演进规则提出 `UPDATE`、`MERGE`、`CREATE` 或 `SKIP`。
+5. 单独识别拥有明确触发条件、有序可复用步骤、检查和真实执行证据的流程。与
+   `current_playbooks` 比较，并按 [playbooks.md](playbooks.md) 输出 `playbook_candidates`。
+   讨论、常规命令、Task 时间线和未经验证的建议都是 `SKIP` 材料。
+6. 返回两个提案集合供校验和独立评审；不得修改 Long-term Memory 或 Playbooks。
 
-Every Memory Worker response records the project-relative `request_file` for the validated request
-that produced it. The caller passes that request independently through `--request`; the response
-cannot choose its own validation context. The response guard loads and validates the externally
-supplied request, confirms that `request_file` resolves to the same file for audit, then enforces:
+每个 Memory Worker 响应记录生成它的已校验请求的项目相对 `request_file`。调用方通过
+`--request` 独立传入该请求；响应不能选择自己的校验上下文。响应守卫加载并校验外部请求，确认
+`request_file` 为审计解析到同一文件，然后强制执行：
 
 ```text
 match.playbook_ids ⊆ current_playbooks.playbook_id
 ```
 
-An invalid or unreachable externally supplied request, an audit path mismatch, or a target ID
-absent from the supplied request's current Playbook snapshot invalidates the response. `CREATE`,
-`UPDATE`, and `MERGE` require at least one reachable
-`evidence_ref`; `SKIP` may use `evidence_refs: []`, but still requires reachable `source_refs` for
-auditability.
+外部请求无效或不可达、审计路径不匹配，或目标 ID 不在该请求的当前 Playbook 快照中，都会使
+响应无效。`CREATE`、`UPDATE`、`MERGE` 至少需要一个可达 `evidence_ref`；`SKIP` 可以使用
+`evidence_refs: []`，但仍需要可达 `source_refs` 以供审计。
 
-Validate structured input/output against:
+使用以下 Schema 校验结构化输入和输出：
 
 - [memory-worker-request.schema.json](schemas/memory-worker-request.schema.json)
 - [memory-worker-response.schema.json](schemas/memory-worker-response.schema.json)
 
-Immediately before persisting either formal artifact, run the corresponding artifact-triggered
-protocol guard:
+持久化任一正式工件前，立即运行对应的工件触发协议守卫：
 
 ```bash
 python maestro/scripts/validate.py memory-request <file> --project-root <project-root>
 python maestro/scripts/validate.py memory-response <file> --request <request-file> --project-root <project-root>
 ```
 
-Persist the canonical artifact only after validation succeeds. On failure, repair and validate once
-more. If the second attempt fails, retain the complete raw result with an `.invalid.json` suffix
-beside the intended artifact, record the diagnostics, and continue through the existing fallback
-rules; do not treat the invalid file as a Memory Worker request or response.
-This validation must not create or transition a Task, Temporary, Workflow, delegation, phase, or
-fixed-role invocation. It checks the artifact and its reachable project-relative file references only.
+只有校验成功才能持久化规范工件。失败后修复并再校验一次；第二次仍失败时，将完整原始结果以
+`.invalid.json` 后缀保存在预期工件旁，记录诊断，并按现有回退规则继续；不得把无效文件当成
+Memory Worker 请求或响应。
+此校验不得创建或转换 Task、Temporary、Workflow、delegation、phase 或固定角色调用；它只检查
+工件及其可达的项目相对文件引用。
 
-## Team Shared Memory & Git Semantic Merge
+## 团队共享 Memory 与 Git 语义合并
 
-When multiple developers or agents work across concurrent Git branches, shared team memory
-(`.maestro/memory/long-term/current.md`, playbooks, and reviewed decisions) committed to Git can
-diverge. Standard Git text merges cannot resolve semantic evolution or detect contradictions.
+多个开发者或 Agent 在并行 Git 分支工作时，提交进 Git 的团队共享 memory
+（`.maestro/memory/long-term/current.md`、Playbooks 和已评审决策）可能分叉。标准 Git 文本
+合并无法解决语义演进或发现矛盾。
 
-### 3-Way Semantic Merge Protocol
+### 三方语义合并协议
 
-A semantic merge operation requires 3-way input: `BASE` (common ancestor version), `OURS`
-(current branch version), `THEIRS` (incoming branch version), and the project-relative `file_path`.
+语义合并需要三方输入：`BASE`（共同祖先版本）、`OURS`（当前分支版本）、`THEIRS`（传入分支
+版本），以及项目相对 `file_path`。
 
-The Memory Merger compares `OURS` and `THEIRS` against `BASE` following these deterministic rules:
+Memory Merger 按以下确定性规则，将 `OURS`、`THEIRS` 与 `BASE` 比较：
 
-1. **Additive non-conflicting additions**: Retain both entries when both branches introduce novel,
-   independent claims.
-2. **Equivalent or duplicate experience**: Consolidate entries that express the same verified
-   experience into one unified entry, deduplicating wording while preserving all reachable
-   `source_refs` from both sides.
-3. **Contradictory findings**: When branches arrive at mutually exclusive claims (e.g. async vs.
-   sync initialization), the AI must not silently choose a winner. Retain both claims as
-   `unresolved_conflicts` with `status: pending-confirmation` and set `requires_human_review: true`.
-4. **Anti-resurrection of superseded/rejected memory**: If an entry was marked `superseded` or
-   `rejected` in a branch's decision history, merging an older branch that still contains the active
-   entry must not resurrect it as active. The tombstone status takes precedence over the stale entry.
+1. **相加且不冲突：** 两个分支分别引入新颖、独立声明时，两者都保留。
+2. **等价或重复经验：** 表达同一已验证经验的条目合并为一个，去重表述并保留双方所有可达
+   `source_refs`。
+3. **矛盾发现：** 分支得出互斥声明时（例如异步与同步初始化），AI 不得静默决定胜者。将两项
+   声明保留在 `unresolved_conflicts`，设置 `status: pending-confirmation` 和
+   `requires_human_review: true`。
+4. **防止已取代/拒绝 Memory 复活：** 某条目在一个分支的决策历史中标记为 `superseded` 或
+   `rejected` 后，合并仍含 active 旧条目的陈旧分支时，不得使其复活。Tombstone 状态优先。
 
-### Conflict Provenance Contract
+### 冲突来源协议
 
-Every unresolved conflict allocates a stable `conflict_id` adhering to the recommended format
-`cnf-<timestamp>-<suffix>` (e.g. `cnf-20260828t120000z-a1b2`) and records complete dual-sided
-provenance for both `ours` and `theirs`:
+每个未解决冲突分配稳定 `conflict_id`，推荐格式为 `cnf-<timestamp>-<suffix>`（例如
+`cnf-20260828t120000z-a1b2`），并为 `ours`、`theirs` 双方记录完整来源：
 
-- `author`: submitting developer or agent;
-- `branch`: source Git branch name;
-- `commit`: source commit hash or reference;
-- `task_id`: originating Task or Temporary ID;
-- `memory_path`: canonical memory file path;
-- `claim`: exact statement under dispute;
-- `source_refs`: reachable evidence and trace files;
-- `created_at`: RFC 3339 timestamp.
+- `author`：提交开发者或 Agent；
+- `branch`：来源 Git 分支；
+- `commit`：来源 commit hash 或引用；
+- `task_id`：来源 Task 或 Temporary ID；
+- `memory_path`：规范 memory 文件路径；
+- `claim`：有争议的准确声明；
+- `source_refs`：可达证据和链路文件；
+- `created_at`：RFC 3339 时间戳。
 
-### Conflict Lifecycle
+### 冲突生命周期
 
-Track unresolved conflicts through four states:
+通过四个状态跟踪未解决冲突：
 
 ```text
-conflict detected → pending-confirmation → resolved → active / superseded / rejected
+发现冲突 → pending-confirmation → resolved → active / superseded / rejected
 ```
 
-A conflict is persisted under `.maestro/memory/long-term/conflicts/` with `status: pending-confirmation`.
-After human or evidence review, publish an immutable decision that transitions the status to
-`resolved`, integrates the confirmed claim into `current.md`, and marks the superseded claim with
-`superseded_by` references to ensure complete auditability.
+冲突以 `status: pending-confirmation` 持久化到 `.maestro/memory/long-term/conflicts/`。经过人工或
+证据评审后，发布不可变决策，把状态转换为 `resolved`，将已确认声明整合进 `current.md`，并用
+`superseded_by` 引用标记被取代声明，保证完整可审计性。
 
 ### Memory Merger Worker
 
-The built-in `memory-merger` worker handles 3-way memory merge requests without altering Task scope
-or making unilateral architectural decisions. Validate its structured inputs and outputs against:
+Memory Merger Worker 处理三方 memory 合并请求，不改变 Task 范围，也不单方面作出架构决定。
+使用以下 Schema 校验其结构化输入输出：
 
 - [memory-merge-request.schema.json](schemas/memory-merge-request.schema.json)
 - [memory-merge-response.schema.json](schemas/memory-merge-response.schema.json)
 
-Run the artifact-triggered protocol guards:
+运行工件触发协议守卫：
 
 ```bash
 python maestro/scripts/validate.py memory-merge-request <file> --project-root <project-root>

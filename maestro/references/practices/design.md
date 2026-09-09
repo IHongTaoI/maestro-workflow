@@ -1,5 +1,4 @@
-# Design practice
-
-Define boundaries, interfaces, trade-offs, migration impact, and material risks for the bounded
-objective. Tie recommendations to current evidence and state rejected alternatives when the choice
-matters. Do not treat design approval as implementation authority.
+# 设计规范
++
++围绕明确目标说明边界、接口、取舍、迁移影响和主要风险。建议必须以当前证据为依据；选择会影响
++结果时，说明被放弃的方案。设计获批不等于获得实施权限。

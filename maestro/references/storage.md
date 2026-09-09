@@ -1,14 +1,13 @@
-# Project Storage
+# 项目存储
 
-Maestro state belongs to the target project, never the installed Skill.
+Maestro 状态属于目标项目，绝不能写入已安装 Skill。
 
-The `roles/` branch in the layout is read-only compatibility storage for Tasks created by earlier
-Maestro versions. New execution state is written under `workers/<worker-id>/`; never move or
-rewrite an old role state merely to adopt the new model.
+布局中的 `roles/` 分支是只读兼容存储，用于早期 Maestro 版本创建的 Task。新的执行状态写入
+`workers/<worker-id>/`；不得仅为采用新模型而移动或改写旧角色状态。
 
-## Minimal layout
+## 最小布局
 
-Create directories lazily as the current work needs them:
+按当前工作需要延迟创建目录：
 
 ```text
 .maestro/
@@ -72,32 +71,30 @@ Create directories lazily as the current work needs them:
     decisions/
 ```
 
-The `playbooks/` directory may be supplied by the project before Maestro is first used.
+项目可以在首次使用 Maestro 前自行提供 `playbooks/` 目录。
 
-## Git tracking boundary
+## Git 跟踪边界
 
-To avoid noisy Git conflicts and keep shared knowledge synchronized across branches, Maestro
-separates local execution state from team shared memory:
+为减少 Git 冲突噪声并在分支之间同步共享知识，Maestro 将本地执行状态与团队共享 memory 分开：
 
-- **Local Runtime State (Excluded from Git)**:
-  - `memory/manifest.md` and `memory/index.json`: derived awareness catalog rebuilt from formal
-    Memory sources.
-  - `memory/temporary/`: pre-Task exploration, scratchpads, active Worker state.
-  - `memory/pending/`: raw uncompressed or unparsed memory worker inputs.
-  - `locks/` and `transactions/`: concurrency and filesystem lock markers.
-  - `tasks/`: local active task execution state, Worker current-state, and transient selections.
+- **本地 Runtime 状态（不纳入 Git）：**
+  - `memory/manifest.md` 和 `memory/index.json`：由正式 Memory 来源重建的派生 awareness 目录；
+  - `memory/temporary/`：Task 前探索、scratchpad 和活动 Worker 状态；
+  - `memory/pending/`：尚未压缩或解析的 Memory Worker 原始输入；
+  - `locks/` 和 `transactions/`：并发和文件系统锁标记；
+  - `tasks/`：本地活动 Task 执行状态、Worker current-state 和临时选择。
 
-- **Team Shared Memory (Tracked in Git)**:
-  - `memory/long-term/`: `current.md`, `candidates/`, `decisions/`, and `conflicts/`.
-  - `playbooks/`: approved team guidance plus reviewed `candidates/` and `decisions/`.
-  - `workers/registry.yaml`: reviewed, project-shared reusable Worker specifications.
-  - `instructions/registry.yaml`: reviewed project instruction references; built-in refs cannot be overridden.
-  - `config.yaml`: shared project configuration.
+- **团队共享 Memory（纳入 Git）：**
+  - `memory/long-term/`：`current.md`、`candidates/`、`decisions/` 和 `conflicts/`；
+  - `playbooks/`：已批准的团队指导，以及已评审 `candidates/` 和 `decisions/`；
+  - `workers/registry.yaml`：已评审、项目共享的可复用 Worker 规格；
+  - `instructions/registry.yaml`：已评审的项目指令引用；不得覆盖内置 refs；
+  - `config.yaml`：共享项目配置。
 
-A target project can enforce this boundary using standard `.gitignore` rules:
+目标项目可以使用标准 `.gitignore` 规则强制此边界：
 
 ```gitignore
-# Exclude local Maestro runtime state
+# 排除本地 Maestro runtime 状态
 .maestro/memory/manifest.md
 .maestro/memory/index.json
 .maestro/memory/temporary/
@@ -106,7 +103,7 @@ A target project can enforce this boundary using standard `.gitignore` rules:
 .maestro/transactions/
 .maestro/tasks/
 
-# Track team shared memory and configurations
+# 跟踪团队共享 memory 与配置
 !.maestro/
 !.maestro/config.yaml
 !.maestro/playbooks/
@@ -115,18 +112,16 @@ A target project can enforce this boundary using standard `.gitignore` rules:
 !.maestro/memory/long-term/
 ```
 
-The built-in Worker registry is immutable installed reference data. A project registry is created
-only when reusable project-specific Workers or capability aliases are needed. Selected Worker
-specifications are copied into the matching Task or Temporary and never resolved by reference
-during execution.
+内置 Worker 注册表是不可变的已安装参考数据。只有需要可复用的项目特定 Worker 或能力别名时，
+才创建项目注册表。选中的 Worker 规格复制到匹配的 Task 或 Temporary 中，执行时绝不通过引用
+再次解析。
 
-The built-in instruction registry is also immutable installed reference data. A reviewed project
-instruction registry may extend it but cannot replace built-in references. Persist each Task- or
-Temporary-scoped run's validated `delegation.json` before execution; it records the exact injected
-instruction digests, context references, tools, effective permissions, and Host Adapter support
-status. Session-scoped packets remain ephemeral.
+内置指令注册表同样是不可变已安装参考数据。经评审的项目指令注册表可以扩展它，但不能替换内置
+引用。执行前，持久化每个 Task 或 Temporary 作用域运行经过校验的 `delegation.json`；其中记录
+准确的注入指令摘要、上下文引用、工具、有效权限和 Host Adapter 支持状态。Session 作用域 Packet
+保持 ephemeral。
 
-A minimal parsed project registry has this shape:
+解析后的最小项目注册表形态如下：
 
 ```yaml
 schema_version: 1
@@ -139,42 +134,34 @@ aliases: {}
 workers: []
 ```
 
-Each reusable Worker is a complete specification from [workers.md](workers.md). A reviewed Worker
-promoted from historical Task evidence uses `source: learned`; it remains an ordinary registry
-entry and receives no extra authority. Validate parsed registries against
-[worker-registry.schema.json](schemas/worker-registry.schema.json).
+每个可复用 Worker 都是 [workers.md](workers.md) 定义的完整规格。根据历史 Task 证据提升并经
+评审的 Worker 使用 `source: learned`；它仍是普通注册表条目，不获得额外权限。使用
+[worker-registry.schema.json](schemas/worker-registry.schema.json) 校验解析后的注册表。
 
-Long-term `current.md` is the current view of approved entries. Each entry exposes a stable
-`entry_id`, `memory_kind`, concise content, and reachable `source_refs`; IDs survive wording updates
-and are retired only through an immutable decision. Persist every validated Memory Worker proposal,
-including `SKIP`, under `memory/long-term/candidates/pending/` until review records it as approved or
-rejected. Store unresolved merge conflicts under `memory/long-term/conflicts/` with status
-`pending-confirmation`. A `SKIP` decision does not mutate `current.md`, but retaining it prevents
-the same duplicate or low-value claim from being reconsidered without new evidence.
+Long-term `current.md` 是已批准条目的当前视图。每个条目暴露稳定 `entry_id`、`memory_kind`、
+简洁内容和可达 `source_refs`；措辞更新不改变 ID，只有不可变决策能将其退役。每个通过校验的
+Memory Worker 提案（包括 `SKIP`）都持久化到 `memory/long-term/candidates/pending/`，直到评审
+记录批准或拒绝。未解决合并冲突存入 `memory/long-term/conflicts/`，状态为
+`pending-confirmation`。`SKIP` 决策不修改 `current.md`，但应保留，避免没有新证据时重复评审
+同一 duplicate 或 low-value 声明。
 
-A newly approved `decision` may include the backward-compatible `decision_context` defined in
-[memory.md](memory.md). Preserve it through updates and semantic merges. It explains rationale and
-recorded rejected alternatives but never grants permission or replaces the immutable review record.
+新批准的 `decision` 可以包含 [memory.md](memory.md) 定义的向后兼容 `decision_context`。更新和
+语义合并必须保留它。它解释理由和已记录的否定方案，但绝不授予权限或替代不可变评审记录。
 
-Long-term entries use the fenced `maestro-memory-entry` JSON representation defined in
-[memory.md](memory.md). This gives the deterministic catalog builder an addressable record boundary
-while keeping `current.md` as the authoritative, reviewable source. The generated
-`memory/manifest.md` and `memory/index.json` are local cache files, are not shared through Git, and
-do not participate in the mutable-state revision protocol. Publish the formal Memory change first,
-then rebuild the catalog atomically. A catalog failure never rolls back an already committed formal
-Memory write.
+Long-term 条目使用 [memory.md](memory.md) 定义的 fenced `maestro-memory-entry` JSON 表示，使
+确定性目录构建器拥有可寻址记录边界，同时保持 `current.md` 为权威、可评审来源。生成的
+`memory/manifest.md` 和 `memory/index.json` 是本地缓存，不通过 Git 共享，也不参与可变状态
+revision 协议。先发布正式 Memory 改动，再原子重建目录。目录失败绝不回滚已提交的正式写入。
 
-Each current Playbook exposes a stable `playbook_id`, canonical `file_path`, title, trigger, ordered
-steps, checks, active status, revision metadata, and reachable `source_refs` to Experience Review.
-Persist every validated Playbook Candidate,
-including `SKIP`, under `playbooks/candidates/` until an immutable record under
-`playbooks/decisions/` approves or rejects it. Candidate records include reachable `source_refs`
-and `evidence_refs`; they are not active guidance and cannot modify a Playbook before explicit user
-approval.
+每个当前 Playbook 向 Experience Review 暴露稳定 `playbook_id`、规范 `file_path`、标题、触发
+条件、有序步骤、检查、active 状态、revision 元数据和可达 `source_refs`。每个通过校验的
+Playbook Candidate（包括 `SKIP`）都持久化在 `playbooks/candidates/`，直到
+`playbooks/decisions/` 下的不可变记录批准或拒绝。候选记录包含可达 `source_refs` 和
+`evidence_refs`；它们不是生效指导，且在用户明确批准前不能修改 Playbook。
 
-## Configuration
+## 配置
 
-Use a small `config.yaml`:
+使用简短 `config.yaml`：
 
 ```yaml
 schema_version: 1
@@ -183,12 +170,12 @@ models:
   memory: null
 ```
 
-Do not invent fine-grained per-Worker model settings in v1. A null memory model means use the host's
-available model or perform the compression in the current agent.
+v1 不要虚构细粒度的逐 Worker 模型设置。memory model 为 null 表示使用宿主可用模型，或由当前
+Agent 执行压缩。
 
-## Temporary routing metadata
+## Temporary 路由元数据
 
-Each active Temporary's `meta.yaml` contains the smallest host-independent routing contract:
+每个活动 Temporary 的 `meta.yaml` 包含最小、宿主无关的路由协议：
 
 ```yaml
 id: 20260831-首页启动性能
@@ -204,24 +191,20 @@ aliases:
 last_session_id: optional-stable-host-session-id
 ```
 
-Required fields are `id`, `topic`, `status`, `created_at`, `updated_at`, `updated_by`, and
-`revision`. The `id` must match the Temporary directory name, and `status` must agree with its
-lifecycle location. `revision` is a non-negative integer incremented by the mutable-state write
-protocol below. `aliases` is an optional list of user-facing names that identify the same topic.
-`last_session_id` is optional and must be omitted when the host does not expose a stable,
-non-sensitive Session identifier. It is a recovery hint rather than authoritative routing state;
-if several candidates contain the same ID, the normal ambiguity rules still apply.
+必需字段为 `id`、`topic`、`status`、`created_at`、`updated_at`、`updated_by` 和 `revision`。
+`id` 必须与 Temporary 目录名一致，`status` 必须与生命周期位置一致。`revision` 是非负整数，
+并按下方可变状态协议递增。`aliases` 是标识同一主题的可选用户名称列表。宿主不暴露稳定、非
+敏感 Session 标识时必须省略 `last_session_id`。它只是恢复提示，不是权威路由状态；多个候选
+包含同一 ID 时，仍应用普通歧义规则。
 
-Do not add embeddings, model scores, or host-specific routing objects to this metadata. Routing may
-interpret `topic`, `aliases`, and `current.md`, but confidence is a decision made for the current
-request rather than persistent truth.
+不要向元数据加入 embeddings、模型评分或宿主特定路由对象。路由可以解释 `topic`、`aliases`
+和 `current.md`，但置信度是针对当前请求作出的决定，不是持久事实。
 
-Validate parsed Temporary metadata against
-[temporary-meta.schema.json](schemas/temporary-meta.schema.json).
+使用 [temporary-meta.schema.json](schemas/temporary-meta.schema.json) 校验解析后的元数据。
 
-## Task metadata
+## Task 元数据
 
-Each `task.yaml` contains only execution, recovery, lifecycle, and conflict-control fields:
+每个 `task.yaml` 只包含执行、恢复、生命周期和冲突控制字段：
 
 ```yaml
 id: 20260831-优化登录流程
@@ -235,49 +218,45 @@ source_temporary: 20260831-登录流程梳理
 promotion_transaction: 20260831T120000Z-p7q8r9
 ```
 
-`source_temporary` is present only when the Task was promoted from Temporary Memory. A Task created
-directly from an explicit execution request omits it. A promoted Task also records
-`promotion_transaction`, which identifies the transaction whose commit marker controls its initial
-visibility. Validate parsed Task metadata against [task.schema.json](schemas/task.schema.json).
+`source_temporary` 仅在 Task 由 Temporary Memory 提升时存在。根据明确执行请求直接创建的 Task
+省略它。提升后的 Task 还记录 `promotion_transaction`，其事务提交标记控制 Task 初始可见性。
+使用 [task.schema.json](schemas/task.schema.json) 校验解析后的 Task 元数据。
 
-## Temporary and Task ID naming
+## Temporary 与 Task ID 命名
 
-Temporary and Task directories use a readable, filesystem-safe ID derived from their `topic`
-(`meta.yaml.topic`) or `objective` (`task.yaml.objective`) rather than an opaque
-timestamp-plus-random suffix. The ID must equal the directory name and the value stored in
-`meta.yaml.id` / `task.yaml.id`.
+Temporary 和 Task 目录使用从 `topic`（`meta.yaml.topic`）或 `objective`（`task.yaml.objective`）
+派生的可读、文件系统安全 ID，不使用不透明的时间戳加随机后缀。ID 必须与目录名和
+`meta.yaml.id` / `task.yaml.id` 值一致。
 
-### Format
+### 格式
 
 ```text
 <yyyymmdd>-<slug>
 ```
 
-- `<yyyymmdd>` is the UTC date on which the directory is created.
-- `<slug>` is a short, readable topic name:
-  - Keep letters (including CJK), digits, `-`, `_`, and `.`.
-  - Remove whitespace, path separators (`/`, `\`), and filesystem-unsafe characters
-    (`: * ? " < > |`), plus control characters and leading/trailing dots.
-  - Collapse repeated separators. A slug must not begin **or end** with `.` (to avoid `.`, `..`,
-    and names whose trailing dot a host filesystem silently strips).
-  - Keep it brief; truncate over-long topics rather than carrying the full sentence.
-  - Generate and compare the slug in Unicode **NFC**-normalized form: normalize both sides before
-    the equality check (`directory name == meta.yaml.id` / `task.yaml.id`). Note that a filesystem
-    such as macOS HFS+ stores file names under **NFD**, so a decomposed slug (for example a kana
-    followed by the combining-voiced-sound-mark U+3099) surfaces in NFD; that combining mark is
-    `Mn` and falls outside the ID validator's allow-list, so it is rejected rather than silently
-    mismatched. Keeping the slug NFC at generation makes this a non-issue.
+- `<yyyymmdd>` 是目录创建时的 UTC 日期。
+- `<slug>` 是简短、可读的主题名：
+  - 保留字母（包括 CJK）、数字、`-`、`_` 和 `.`；
+  - 删除空白、路径分隔符（`/`、`\`）、文件系统不安全字符（`: * ? " < > |`）、控制字符，
+    以及开头或结尾的点；
+  - 合并重复分隔符。slug 不得以 `.` 开头或结尾，以避免 `.`、`..` 及宿主文件系统静默删除
+    尾点的名称；
+  - 保持简短；主题过长时截断，不要带入整个句子；
+  - 生成和比较 slug 时使用 Unicode **NFC** 规范化：相等检查前规范化双方（目录名等于
+    `meta.yaml.id` / `task.yaml.id`）。macOS HFS+ 等文件系统以 **NFD** 存储文件名，所以分解
+    slug（例如假名后跟组合浊音符 U+3099）会以 NFD 显示；该组合符是 `Mn`，不在 ID 校验器
+    allow-list 中，因此应拒绝而不是静默错配。生成时保持 NFC 即可避免该问题。
 
-Examples:
+示例：
 
 ```text
 20260831-首页启动性能
 20260831-优化登录流程
 ```
 
-### Duplicate handling
+### 重名处理
 
-When the target path already exists, append an incrementing numeric suffix starting at `-2`:
+目标路径已存在时，从 `-2` 开始追加递增数字后缀：
 
 ```text
 20260831-首页启动性能
@@ -285,76 +264,61 @@ When the target path already exists, append an incrementing numeric suffix start
 20260831-首页启动性能-3
 ```
 
-Never overwrite an existing directory; a stale read must not reuse a claimed name.
+绝不能覆盖现有目录；陈旧读取不得重复使用已经占用的名称。
 
-### Stability and compatibility
+### 稳定性与兼容性
 
-- Once created, the ID is stable. If the topic or objective is later reworded, update
-  `meta.yaml` / `task.yaml` only; do not rename the directory.
-- Keep the original `<yyyymmdd>-<slug>` when moving a Temporary between `active`, `archive`, and
-  `trash`.
-- The previous `<utc-timestamp>-<random-suffix>` format (for example `20260827T103000Z-a1b2c3`)
-  remains readable and recoverable. Do not batch-migrate existing directories, and do not reject a
-  stored ID just because it predates this rule.
-- The schemas and validators accept both formats; they require only a filesystem-safe, non-empty
-  ID that matches the directory name.
-- The storage schema encodes the allow-list as `^(?!\.)(?!.*[.]$)[\p{L}\p{N}._-]+$`. The `\p{...}`
-  property escapes rely on ajv's default `unicodeRegExp: true` (the `u` flag); without it the class
-  silently degrades and every CJK ID is rejected, so keep `unicodeRegExp` enabled. `validate.py`
-  mirrors the same set via `str.isalnum()`.
-- JS and Python bundle different Unicode versions, so their acceptance is only as strong as the
-  intersection of the two tables: a character assigned in a newer Unicode version (for example
-  U+105C0 Todhri) is accepted by the schema but rejected by `validate.py`. CJK and Latin slugs are
-  unaffected.
+- ID 创建后保持稳定。之后改写 topic 或 objective 时只更新 `meta.yaml` / `task.yaml`，不重命名
+  目录。
+- Temporary 在 `active`、`archive`、`trash` 间移动时保留原始 `<yyyymmdd>-<slug>`。
+- 旧的 `<utc-timestamp>-<random-suffix>` 格式（例如 `20260827T103000Z-a1b2c3`）继续可读、
+  可恢复。不要批量迁移现有目录，也不要仅因 ID 早于本规则就拒绝。
+- Schema 和校验器接受两种格式；只要求 ID 非空、文件系统安全，并与目录名一致。
+- 存储 Schema 以 `^(?!\.)(?!.*[.]$)[\p{L}\p{N}._-]+$` 编码 allow-list。`\p{...}` property
+  escapes 依赖 ajv 默认的 `unicodeRegExp: true`（`u` flag）；否则字符类会静默退化并拒绝全部
+  CJK ID，因此必须启用 `unicodeRegExp`。`validate.py` 使用 `str.isalnum()` 镜像同一集合。
+- JS 与 Python 搭载的 Unicode 版本不同，接受范围只等于两张表的交集：较新 Unicode 才分配的
+  字符（例如 U+105C0 Todhri）会被 Schema 接受、被 `validate.py` 拒绝。CJK 与拉丁 slug 不受
+  影响。
 
-## Mutable-state write protocol
+## 可变状态写入协议
 
-Mutable state includes Temporary `meta.yaml` and `current.md`, Task `task.yaml`, `context.md`,
-`decisions.md`, and `progress.md`, Worker `current-state.md`, project Worker
-`registry.yaml`, Long-term `current.md`, and every canonical formal Playbook Markdown or YAML file.
-Each listed
-mutable YAML file carries `revision`, `updated_at`, and `updated_by`. Each listed mutable Markdown
-file carries the same fields in YAML front matter. New state starts at revision `0`; each successful
-replacement increments exactly once. Handoffs, Detailed Results, source
-References, Evidence, decision records, Worker selections under a Task or Temporary's
-`worker-selections/`, and transaction events are immutable once published; add a new linked record
-instead of replacing them.
+可变状态包括 Temporary `meta.yaml` 和 `current.md`，Task `task.yaml`、`context.md`、
+`decisions.md`、`progress.md`，Worker `current-state.md`，项目 Worker `registry.yaml`，Long-term
+`current.md`，以及每个规范正式 Playbook Markdown 或 YAML 文件。列出的可变 YAML 文件都携带
+`revision`、`updated_at`、`updated_by`；Markdown 在 YAML front matter 携带相同字段。新状态从
+revision `0` 开始，每次成功替换只递增一次。Handoff、Detailed Result、source References、
+Evidence、决策记录、Task 或 Temporary `worker-selections/` 中的 Worker 选择，以及事务事件一经
+发布即不可变；需要变更时新增链接记录，而不是覆盖。
 
-Worker `spec.yaml` files under a Task or Temporary are immutable snapshots. Publish each complete
-validated snapshot atomically before its first run. A project registry update cannot replace a
-snapshot, and resumption must not substitute a current registry entry for a missing snapshot.
-Session-scoped Workers are not project state and leave no snapshot.
+Task 或 Temporary 下的 Worker `spec.yaml` 是不可变快照。首次运行前，以原子方式发布完整、
+通过校验的快照。项目注册表更新不能替换快照，恢复时也不能用当前注册表条目代替缺失快照。
+Session 作用域 Worker 不是项目状态，不留下快照。
 
-Atomic replacement protects readers from partial file contents but does not prevent stale writers.
-For every replacement, use this complete protocol:
+原子替换能防止读取半截文件，但不能防止陈旧写入。每次替换都使用完整协议：
 
-1. Read the state and retain its revision as `base_revision`.
-2. Derive a stable lock key from the normalized project-relative state path. Atomically create the
-   corresponding `.maestro/locks/<state-key>.lock/` directory and write owner, acquisition time,
-   and lease expiry inside it. Create-if-absent must be exclusive.
-3. After acquiring the lock, re-read the state. If its revision differs from `base_revision`, do
-   not write. Release the lock, reload the newer state, and either reconcile non-conflicting facts
-   with both source paths recorded or return a visible conflict to one designated owner.
-4. If the revision still matches, validate the complete replacement, set revision to
-   `base_revision + 1`, update `updated_at` and `updated_by`, and atomically replace the file.
-5. Re-read enough metadata to confirm the committed revision, then release the lock.
+1. 读取状态，将其 revision 保存为 `base_revision`。
+2. 从规范化项目相对状态路径派生稳定 lock key。以原子方式创建对应的
+   `.maestro/locks/<state-key>.lock/` 目录，在其中写入持有者、获取时间和 lease 到期时间。
+   create-if-absent 必须互斥。
+3. 取得锁后重新读取状态。revision 与 `base_revision` 不同就不要写入；释放锁并加载较新状态，
+   将非冲突事实连同双方 source paths 一并协调，或向指定 owner 返回可见冲突。
+4. revision 仍匹配时，校验完整替换内容，设置 revision 为 `base_revision + 1`，更新
+   `updated_at`、`updated_by`，并原子替换文件。
+5. 重新读取足够的元数据，确认已提交 revision，再释放锁。
 
-Never force a write after lock contention or a revision mismatch. Retry contention only within a
-bounded host-appropriate period. An expired lock may be reclaimed only after the recorded owner is
-known inactive; record the prior owner, expiry, reclaiming actor, and timestamp in a transaction or
-Evidence record. Clock age alone is insufficient proof that an owner is inactive.
+遇到锁竞争或 revision 不匹配时绝不强制写入。只在宿主合适的有界时间内重试竞争。只有已知所
+记录 owner 不再活动时才可回收过期锁；在事务或 Evidence 记录先前 owner、到期时间、回收者和
+时间戳。仅凭时间已经过去不能证明 owner 不活动。
 
-A reconciliation produces a candidate replacement from the newly loaded revision and then starts
-the complete protocol again. It is not permission to write outside the lock or skip another
-revision check.
+协调会从新加载的 revision 生成候选替换，然后重新执行完整协议。它不是在锁外写入或跳过另一次
+revision 检查的许可。
 
-If the host cannot guarantee atomic exclusive lock creation, route all writes for that project
-through one writer. If neither exclusive locking nor single-writer serialization is available,
-report that concurrent mutation is unsupported and do not perform the write.
+宿主不能保证原子互斥锁创建时，把该项目的所有写入交给一个 writer。互斥锁和单 writer 串行化
+都不可用时，报告不支持并发修改，不要执行写入。
 
-For an operation that changes several mutable files, acquire every lock in lexical order of the
-normalized state paths, recheck every base revision under those locks, and prepare this immutable
-transaction bundle before changing canonical state:
+一项操作修改多个可变文件时，按规范化状态路径的字典序取得所有锁，在锁下重新检查全部 base
+revision，并在改变规范状态前准备以下不可变事务包：
 
 ```text
 .maestro/transactions/<transaction-id>/
@@ -365,112 +329,96 @@ transaction bundle before changing canonical state:
   committed.yaml | failed.yaml
 ```
 
-`intent.yaml` records the operation and actor plus, for every create, replacement, or lifecycle
-move: normalized source and target paths, base and intended revisions, before and staged snapshot
-paths, and SHA-256 hashes. Store the complete bytes under `before/` and `staged/`; a reference may
-replace copied bytes only when it addresses immutable, reachable content with the same recorded
-hash. A path that did not exist uses an explicit `before: absent` value. Validate every staged file
-and make the whole bundle durable before publishing a terminal event.
+`intent.yaml` 记录操作和 actor，并为每个创建、替换或生命周期移动记录：规范 source/target
+路径、base/intended revisions、before/staged 快照路径和 SHA-256 hashes。完整字节存入
+`before/` 与 `staged/`；只有引用指向不可变、可达且记录 hash 相同的内容时，才可替代复制字节。
+不存在的路径使用明确 `before: absent`。发布终态事件前，校验每个 staged 文件并使整个事务包
+持久化。
 
-The terminal event is the logical visibility boundary:
+终态事件是逻辑可见性边界：
 
-- With only `intent.yaml`, the before view remains authoritative. Staged creates and preparing
-  Tasks are non-runnable and invisible to normal routing or resumption.
-- Atomically creating `committed.yaml` switches the complete logical view to all staged content at
-  once. A lifecycle move is effective at that point even if canonical directories have not yet
-  been rearranged.
-- `failed.yaml` may be published only before commit and leaves the before view authoritative. Once
-  committed, the operation must be finished rather than rolled back.
+- 只有 `intent.yaml` 时，before 视图仍为权威。staged creates 和准备中的 Task 不可运行，且对
+  常规路由或恢复不可见。
+- 原子创建 `committed.yaml` 会一次性把完整逻辑视图切换到全部 staged 内容。此时生命周期移动
+  即已生效，即便规范目录尚未重新排列。
+- `failed.yaml` 只能在 commit 前发布，并保持 before 视图权威。一旦 committed，必须完成操作，
+  不能回滚。
 
-Create a terminal marker exclusively. If both markers are ever present, treat the transaction as
-corrupt and stop for explicit recovery rather than choosing one by timestamp.
+终态标记必须互斥创建。若两个标记同时存在，视事务已损坏并停止，等待明确恢复；不得按时间戳
+任选其一。
 
-After commit, materialize staged content into canonical paths using the normal atomic replacement
-rules. After each file replacement or move, append an immutable event under `applied/` with its
-path, staged hash, actor, and timestamp. Keep locks until normal materialization completes and
-release them in reverse order. If interrupted, a recovery writer reacquires the same locks and
-compares each canonical path with the intent:
+提交后，使用常规原子替换规则把 staged 内容实体化到规范路径。每次文件替换或移动后，在
+`applied/` 追加不可变事件，包含路径、staged hash、actor 和 timestamp。保持锁直到常规实体化
+完成，再按反向顺序释放。中断后，恢复 writer 重新获取相同锁，并将每个规范路径与 intent 比较：
 
-- A before hash or expected absence means the operation is still pending and the staged content can
-  be applied.
-- A staged hash means it was already applied and an absent applied event may be reconstructed.
-- A hash matching neither snapshot is a concurrent conflict; stop and report it without guessing.
+- before hash 或预期 absence 表示操作仍 pending，可以应用 staged 内容；
+- staged hash 表示已经应用；缺失的 applied 事件可以重建；
+- 两种快照 hash 都不匹配表示并发冲突；停止并报告，不得猜测。
 
-Readers and writers must resolve an incomplete transaction affecting requested state before normal
-routing, resumption, or mutation. They may read the transaction overlay directly or finish its
-materialization. A committed promotion therefore exposes its Task and excludes its source
-Temporary even during cleanup; an uncommitted promotion does the reverse. Prefer a single-file
-update when no invariant requires a group.
+正常路由、恢复或修改前，reader 和 writer 必须先解析影响目标状态的未完成事务。它们可以直接
+读取事务 overlay，或完成实体化。因此，已提交的提升即使仍在清理，也会暴露 Task 并排除来源
+Temporary；未提交的提升相反。不需要维护组不变量时，优先使用单文件更新。
 
-## File rules
+## 文件规则
 
-### Snapshot checkpoint records
+### 快照 checkpoint 记录
 
-An opted-in Adapter may persist a single immutable request under the selected target's
-`references/checkpoints/<request-id>.json`. It embeds bounded source facts, the source Session
-identity, project/target binding, base revision/hash and exact replacement bytes/hash. Validate
-against [checkpoint.schema.json](schemas/checkpoint.schema.json) and the Adapter's semantic
-checks before any replacement. Request IDs are lowercase ASCII letters/digits/underscore/hyphen,
-1–64 characters, starting with a letter/digit. Different payloads cannot reuse an ID.
+用户选择启用的 Adapter 可以把单个不可变请求保存到所选目标的
+`references/checkpoints/<request-id>.json`。其中嵌入有界来源事实、来源 Session 标识、项目/目标
+绑定、base revision/hash，以及准确替换 bytes/hash。任何替换前，先使用
+[checkpoint.schema.json](schemas/checkpoint.schema.json) 和 Adapter 语义检查校验。Request ID
+由小写 ASCII 字母、数字、下划线、连字符组成，长度 1–64，并以字母或数字开头。不同 payload
+不能复用同一个 ID。
 
-The entire request is published exclusively before current state changes. The single atomic
-replacement of `current.md` (Temporary) or `progress.md` (Task) commits summary and
-`checkpoint_receipt` together; the receipt has `request_id`, `source_hash` and `revision`.
-This does not replace the multi-file transaction protocol. A verified immutable
-`<request-id>.committed.json` records request hash, proposal hash and committed revision.
-The marker is evidence of that request's completion, not coverage of later edits.
+在当前状态变化前，以互斥方式完整发布请求。对 `current.md`（Temporary）或 `progress.md`
+（Task）的单次原子替换同时提交摘要和 `checkpoint_receipt`；receipt 包含 `request_id`、
+`source_hash`、`revision`。这不能替代多文件事务协议。通过验证的不可变
+`<request-id>.committed.json` 记录 request hash、proposal hash 和 committed revision。该标记
+只是该请求完成的证据，不覆盖之后的编辑。
 
-Before removing/replacing a receipt, verify the corresponding request and committed observation.
-If confirmation was interrupted, exact proposal bytes plus the matching receipt permit repair of
-the observation without repeating the state write. If neither the original base nor proposed
-state matches, report a conflict; do not infer success or overwrite new work. Requests with no
-verified commit remain pending. Recovery does not silently supersede or delete them.
+删除或替换 receipt 前，校验对应 request 和 committed observation。若确认过程中断，准确
+proposal bytes 加匹配 receipt 可以修复 observation，而无需重复状态写入。当前状态与原始 base、
+proposal 都不匹配时，报告冲突；不得推断成功或覆盖新工作。没有已验证 commit 的请求保持
+pending。恢复不得静默取代或删除它们。
 
-Host configuration may explicitly select an external write-ahead recovery directory. It holds
-the same bounded request for failure recovery, not Long-term Memory. A model cannot choose it.
-Without an independently reachable copy, failure of the project storage may prevent recovery;
-if all channels fail, report that limit. Recovery always rechecks the selected target's current
-lifecycle, permissions and source reachability. Held locks are not reclaimed based on age alone.
+宿主配置可以明确选择外部 write-ahead 恢复目录。它保存同一份有界请求以供故障恢复，不是
+Long-term Memory，也不能由模型选择。没有独立可达副本时，项目存储故障可能导致无法恢复；
+所有渠道失败时报告该限制。恢复总要重新检查选中目标的当前生命周期、权限和来源可达性。仅凭
+时间已经过去不得回收锁。
 
-### General file rules
+### 通用文件规则
 
-- Resolve every write beneath the selected project's `.maestro/` directory.
-- Reject traversal such as `../` and do not follow a supplied absolute path as a state destination.
-- Use stable, filesystem-safe IDs derived from the topic or objective as described in
-  "Temporary and Task ID naming"; a stored ID is always accepted even when it uses the older
-  timestamp-plus-random-suffix format.
-- Prefer Markdown for human-maintained state and YAML for small metadata/configuration.
-- Write mutable state only through the revision and lock protocol above, using the host's safest
-  available atomic replacement mechanism after conflict checks pass.
-- Preserve existing unrelated content and user-authored Playbooks.
-- Never delete an active Task, Temporary Memory, Evidence, or Artifact merely because it was
-  compressed. Move it to Archive or Trash according to the user's intent.
+- 所有写入都必须解析到选定项目的 `.maestro/` 目录内。
+- 拒绝 `../` 等路径穿越，不把传入的绝对路径用作状态目标。
+- 按“Temporary 与 Task ID 命名”使用从 topic 或 objective 派生的稳定、文件系统安全 ID；即使
+  存储 ID 使用旧时间戳加随机后缀格式，也必须接受。
+- 人工维护状态优先用 Markdown，小型元数据/配置使用 YAML。
+- 可变状态只能按上述 revision 与 lock 协议写入，并在冲突检查通过后使用宿主最安全的原子替换
+  机制。
+- 保留现有无关内容和用户编写的 Playbooks。
+- 绝不能因为已经压缩就删除活动 Task、Temporary Memory、Evidence 或 Artifact。按用户意图移入
+  Archive 或 Trash。
 
-## State transitions
+## 状态转换
 
-Storage transitions do not define business workflow. Allowed lifecycle moves are:
+存储转换不定义业务工作流。允许的生命周期移动为：
 
-- Temporary `active` → `archive` or `trash`.
-- Temporary `active` → formal Task after explicit confirmation, then Temporary → `archive`.
-- Task active → `archive` after completion.
-- Long-term candidate `pending` → `approved` or `rejected` after review.
-- Playbook Candidate `candidate` → `approved`, `rejected`, or `superseded` after explicit user
-  review.
+- Temporary `active` → `archive` 或 `trash`。
+- 用户明确确认后，Temporary `active` → 正式 Task，然后 Temporary → `archive`。
+- Task active → 完成后的 `archive`。
+- Long-term candidate `pending` → 评审后的 `approved` 或 `rejected`。
+- Playbook Candidate `candidate` → 用户明确评审后的 `approved`、`rejected` 或 `superseded`。
 
-An approved `UPDATE`, `MERGE`, or `CREATE` changes Long-term `current.md` through the mutable-state
-write protocol. `UPDATE` preserves its target entry ID. `MERGE` preserves one target ID as the
-replacement and marks the other targets superseded in the immutable decision. `CREATE` allocates a
-new stable entry ID. `SKIP` records only a decision and never creates a current entry.
+批准的 Long-term `UPDATE`、`MERGE` 或 `CREATE` 通过可变状态写入协议修改 `current.md`。
+`UPDATE` 保留目标 entry ID；`MERGE` 保留一个目标 ID 作为替代项，并在不可变决策中把其他目标
+标记为 superseded；`CREATE` 分配新的稳定 entry ID。`SKIP` 只记录决策，绝不创建当前条目。
 
-An approved Playbook `UPDATE`, `MERGE`, or `CREATE` uses the same lock, revision, and transaction
-rules for affected Playbook files. `CREATE` allocates one stable `playbook_id` and starts at revision
-`0`. `UPDATE` preserves its target ID and path and increments that file's revision exactly once.
-`MERGE` names one approved survivor, preserves its ID, increments its revision, and marks every
-other target file `superseded` with its own incremented revision and the survivor recorded as
-`superseded_by` in the immutable decision. Acquire and recheck all target locks in lexical path
-order and publish the multi-file change through one transaction. `SKIP` and rejected candidates
-record decisions only. Repeated successful Tasks may append evidence through a reviewed update but
-cannot approve a candidate.
+批准的 Playbook `UPDATE`、`MERGE` 或 `CREATE` 对受影响 Playbook 文件使用同一套 lock、revision
+和 transaction 规则。`CREATE` 分配一个稳定 `playbook_id`，从 revision `0` 开始。`UPDATE`
+保留目标 ID 和路径，并准确递增该文件 revision 一次。`MERGE` 指定一个获批 survivor，保留其
+ID 并递增 revision；其他目标文件以各自递增的 revision 标为 `superseded`，并在不可变决策中
+以 `superseded_by` 记录 survivor。按路径字典序获取并重新检查所有目标锁，通过同一事务发布
+多文件变化。`SKIP` 和 rejected 候选只记录决策。重复成功的 Task 可以通过经评审更新追加证据，
+但不能批准候选。
 
-Record the transition, timestamp, actor/reviewer, rationale when relevant, and source paths before
-moving the directory or file.
+移动目录或文件前，记录转换、时间戳、actor/reviewer、适用时的理由和来源路径。

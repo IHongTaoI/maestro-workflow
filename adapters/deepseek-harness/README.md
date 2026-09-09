@@ -145,7 +145,7 @@ dsh `ctx.fs` 目前没有 delete/remove 原语，锁不能像 `storage.md` 那�
 - **独占获取**：`createIfAbsent` 写 `{ owner, acquiredAt, expiresAt, state: 'held' }`。
 - **正常释放**：release 把锁写成 `state: 'released'` tombstone（guarded replace，只覆盖自己
   拿到的那一版）。下一个 writer 看到 `released` 立即回收，**不必等租约过期**。
-- **过期回收**：`storage.md` 明确「clock age alone is insufficient」——已过期但仍 `held` 的锁
+- **过期回收**：`storage.md` 明确「仅凭时间已经过去不能证明 owner 不活动」——已过期但仍 `held` 的锁
   只有在调用方通过 `canReclaim(lease)` 确认原 owner 确已不活跃后才被回收；**不提供
   `canReclaim` 时绝不自动强抢**，超时后 surface conflict。回收走 `replaceIfVersion` CAS，
   并发回收者只有一个能赢。

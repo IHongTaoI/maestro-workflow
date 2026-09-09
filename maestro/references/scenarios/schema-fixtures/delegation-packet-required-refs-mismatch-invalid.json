@@ -12,7 +12,7 @@
         "ref": "contract:handoff",
         "source_scope": "core",
         "source_paths": ["references/handoffs.md"],
-        "sha256": "f251e7e5b081b23a6e876921e097304cbb10abf1b232fa2e7dc3e1c5fd137010"
+        "sha256": "573bd8845a34414a266a30defe03cd89a9ef81f2a58ea1655b7d0fd7c49ab814"
       }
     ]
   },

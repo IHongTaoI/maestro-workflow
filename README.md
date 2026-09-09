@@ -1,90 +1,82 @@
 # Maestro
 
-Maestro is a portable Agent Skill for outcome-focused software collaboration. A small npm CLI
-installs the same Skill Core into the project-local directory expected by each supported AI coding
-host.
+Maestro 是面向结果的软件协作 Agent Skill。一个小型 npm CLI 会把同一份 Skill Core 安装到各个
+受支持 AI 编码宿主所需的项目本地目录。
 
-The user talks with **Old Zhou**, Maestro's only preset role. Old Zhou understands the goal,
-delegates technical work to capability-selected project or generated Workers, judges their evidence,
-and reports the result in plain language. Maestro preserves continuity through Temporary, Task, and
-Long-term project memory without forcing every request through a fixed workflow.
+用户只和 **老周（Old Zhou）** 对话，他是 Maestro 唯一预置角色。老周理解目标，把技术工作
+委派给按能力选择的项目 Worker 或动态生成的 Worker，判断其证据，再用大白话报告结果。Maestro
+通过项目内的 Temporary、Task 和 Long-term 三层 Memory 延续工作，不强迫所有请求经过固定流程。
 
-## Install from source (no npm publication required)
+## 从源码安装（无需发布 npm）
 
-Requires Node.js 20.19 or newer. From the root of your local Maestro checkout, run the
-CLI directly; these installer commands need no global install, build, or `npm install`:
+需要 Node.js 20.19 或更高版本。在本地 Maestro 仓库根目录直接运行 CLI；以下安装命令无需全局
+安装、构建或 `npm install`：
 
 ```bash
 node ./bin/maestro.js init "/path/to/your-project" --tools codex
 node ./bin/maestro.js doctor "/path/to/your-project"
 ```
 
-On Windows, for example, run from `D:\code\maestro-workflow` and replace the target path
-with the project where you want to use Maestro:
+Windows 示例：在 `D:\code\maestro-workflow` 中运行，并把目标路径换成要使用 Maestro 的项目：
 
 ```powershell
 node .\bin\maestro.js init "D:\code\your-project" --tools codex
 node .\bin\maestro.js doctor "D:\code\your-project"
 ```
 
-This copies the current checkout's `maestro/` Core to the target project's
-`.agents/skills/maestro/`. Use `.` as the target to install into the Maestro checkout itself:
+这会把当前仓库的 `maestro/` Core 复制到目标项目的 `.agents/skills/maestro/`。若要安装到 Maestro
+仓库本身，目标使用 `.`：
 
 ```bash
 node ./bin/maestro.js init . --tools codex
 ```
 
-After updating your Maestro checkout, refresh the installed copy from the same checkout:
+更新 Maestro 源码仓库后，从同一仓库刷新已安装副本：
 
 ```powershell
 node .\bin\maestro.js update "D:\code\your-project"
 node .\bin\maestro.js doctor "D:\code\your-project"
 ```
 
-Updates use local source files; they do not download a release from npm. Other supported
-hosts use the same commands with their tool IDs from the table below.
+更新使用本地源文件，不从 npm 下载 release。其他受支持宿主使用相同命令，`--tools` 值见下表。
 
-For Codex working on a local project, open the target project and start a new conversation,
-then ask it to use Maestro. The target must be the project directory visible to that Codex
-session; installing into a local Windows folder does not also install into a remote environment.
-This installs the portable Skill, not a Codex plugin or automatic checkpoint hooks.
+在 Codex 中使用本地项目时，打开目标项目并新建对话，然后要求它使用 Maestro。目标必须是该
+Codex Session 可见的项目目录；安装到本地 Windows 文件夹不会同时安装到远程环境。这一步安装
+的是可移植 Skill，不是 Codex 插件，也不包含自动 checkpoint Hook。
 
-## Install with the multi-host CLI
+## 使用多宿主 CLI 安装
 
-Once the package is published to npm, you can instead install the CLI globally.
-Requires Node.js 20.19 or newer. Install the CLI once:
+包发布到 npm 后，也可以全局安装 CLI。需要 Node.js 20.19 或更高版本：
 
 ```bash
 npm install -g maestro-ai-workflow
 ```
 
-Then initialize Maestro inside a project:
+然后在项目中初始化 Maestro：
 
 ```bash
 cd your-project
 maestro init
 ```
 
-Interactive initialization detects likely hosts and lets you select one or more. For scripts or
-CI, pass the selection explicitly:
+交互式初始化会检测可能的宿主，并让你选择一个或多个。脚本或 CI 中应明确传入：
 
 ```text
 maestro init --tools codex,claude,opencode
 ```
 
-The MVP supports:
+MVP 支持：
 
-| Tool ID | Host | Generated Skill directory |
+| Tool ID | 宿主 | 生成的 Skill 目录 |
 | --- | --- | --- |
-| `codex` | Codex and shared Agent Skills hosts | `.agents/skills/maestro/` |
+| `codex` | Codex 及共享 Agent Skills 的宿主 | `.agents/skills/maestro/` |
 | `claude` | Claude Code | `.claude/skills/maestro/` |
 | `opencode` | OpenCode | `.opencode/skills/maestro/` |
 
-Run `maestro init --tools all` to install all three or `maestro init --tools none` to initialize
-only Maestro's project metadata. Existing non-empty Skill directories are never adopted silently;
-use `--force` only after reviewing the destination.
+`maestro init --tools all` 安装全部三种，`maestro init --tools none` 只初始化 Maestro 项目元数据。
+现有非空 Skill 目录绝不会被静默接管；只有检查目标后才能使用 `--force`。
 
-Refresh CLI-managed Skill files and inspect an installation with:
+刷新由 CLI 管理的 Skill 文件并检查安装：
 
 ```text
 maestro update
@@ -92,80 +84,69 @@ maestro doctor
 maestro doctor --json
 ```
 
-The CLI stores its local installation selection in `.maestro/installation.json` and places a
-`.maestro-managed.json` ownership marker in each generated Skill. Updates overwrite canonical
-Maestro files but preserve unrelated user-authored files.
+CLI 在 `.maestro/installation.json` 保存本地安装选择，并在每个生成 Skill 中写入
+`.maestro-managed.json` 所有权标记。更新会覆盖规范 Maestro 文件，同时保留无关的用户文件。
 
-## Optional Codex desktop recovery plugin
+## 可选 Codex 桌面恢复插件
 
-For Codex working on local projects in the ChatGPT desktop app, the optional Codex plugin restores
-minimal Maestro rules and memory entry points when a session starts, resumes, clears, or compacts.
-It lets Codex discover the Core Skill at user or project scope and does not bundle a second copy.
-The project-local `.maestro/` Memory and Task state remains shared across supported hosts; a local
-`.agents/skills/maestro/SKILL.md` is only an optional path hint for the Hook.
+在 ChatGPT 桌面端 Codex 中处理本地项目时，可选 Codex 插件会在 Session 启动、恢复、清空或
+压缩后重新提供最小 Maestro 规则与 Memory 入口。它在用户或项目作用域发现 Core Skill，不捆绑
+第二份 Core。项目本地 `.maestro/` Memory 与 Task 状态仍可在不同宿主间共享；项目本地
+`.agents/skills/maestro/SKILL.md` 只是 Hook 的可选路径提示。
 
-For a new project, install Core and create Maestro metadata, then prepare the personal plugin source:
+新项目先安装 Core、创建 Maestro 元数据，再准备 personal plugin 源码：
 
 ```bash
 node ./bin/maestro.js init "/path/to/your-project" --tools codex
 npm run codex:install:local
 ```
 
-The source installer uses Codex's standard personal plugin directory at
-`~/.codex/plugins/maestro-codex/` and points the personal marketplace entry at
-`./.codex/plugins/maestro-codex`.
+源码安装器使用 Codex 标准 personal plugin 目录 `~/.codex/plugins/maestro-codex/`，并让 personal
+marketplace 条目指向 `./.codex/plugins/maestro-codex`。
 
-Then install/enable the plugin from the desktop app's personal marketplace, review and trust its
-Hook, and start a new conversation in the target project. Source preparation alone does not activate
-the plugin. This first version is read-only recovery guidance, not automatic pre-compaction saving.
-See the [Codex adapter guide](adapters/codex/README.md) for Windows commands, updates, and acceptance.
+随后在桌面端 personal marketplace 安装/启用插件，检查并信任其 Hook，再在目标项目新建对话。
+仅准备源码不会激活插件。第一版只提供只读恢复指导，不会在压缩前自动保存。Windows 命令、更新
+和验收见 [Codex Adapter 指南](adapters/codex/README.md)。
 
-## Install into DSH from a local checkout
+## 从本地仓库安装到 DSH
 
-The DSH adapter can be installed without publishing either package to npm. From this repository,
-run:
+无需向 npm 发布任何包即可安装 DSH Adapter。在本仓库运行：
 
 ```bash
 npm run dsh:install:local -- --profile web
 ```
 
-The installer builds a self-contained adapter archive with the current `maestro/` Core, installs
-that `.tgz` into the selected DSH profile, lets DSH activate its `inject: [skills]` bundle, and
-verifies the installed module plus `dsh --dump-config`. It uses a tarball rather than a local
-directory link, avoiding the broken Windows junction path seen with `dsh plugin add <absolute-dir>`.
+安装器会使用当前 `maestro/` Core 构建自包含 Adapter 压缩包，将 `.tgz` 安装到指定 DSH profile，
+让 DSH 激活其 `inject: [skills]` bundle，并校验已安装模块与 `dsh --dump-config`。这里使用 tarball，
+不使用本地目录链接，从而避免 Windows 上 `dsh plugin add <absolute-dir>` 的 junction 路径问题。
 
-Use another profile with `--profile <name>`. Run the same command again after changing the Core or
-adapter to install a fresh local archive.
+其他 profile 使用 `--profile <name>`。Core 或 Adapter 变更后重新运行同一命令，即可安装新的本地
+压缩包。如果 PowerShell 阻止 `npm.ps1` shim，改用 `npm.cmd` 执行相同命令。
 
-If PowerShell blocks the `npm.ps1` shim, run the same command with `npm.cmd` instead of `npm`.
+## 手动安装
 
-## Manual installation
+完整可移植 Skill Core 是 [`maestro/`](maestro/) 目录。支持 Agent Skills 的宿主可以直接复制其
+内容到宿主识别的 Skill 目录，并确保 `SKILL.md` 位于 Skill 根目录。不支持 Agent Skills 的宿主
+需要单独的薄 Adapter。也可以把 `maestro/` 内容打成 ZIP，作为一个 Skill 上传或安装。
 
-The complete portable Skill Core is the [`maestro/`](maestro/) directory. A host that implements
-Agent Skills can use it directly by copying its contents into a host-recognized Skill directory so
-that `SKILL.md` is at the Skill root. Hosts without Agent Skills require a separate thin adapter.
+CLI 只负责安装、更新和诊断。它绝不调度 Worker、解释 Memory、授予权限或运行工作流状态机。
+安装后，Maestro 通过选定 AI 宿主的原生文件系统和 Agent 能力运行，不需要后台 Runtime。
 
-Alternatively, package the contents of `maestro/` as a ZIP and upload/install it as one Skill.
+## 使用
 
-The CLI is only an installer, updater, and diagnostic tool. It never schedules Workers, interprets
-Memory, grants permissions, or runs a workflow state machine. Once installed, Maestro runs through
-the selected AI host's native filesystem and agent capabilities; no background Runtime is needed.
-
-## Use
-
-Start naturally in a project:
+在项目中自然地说：
 
 ```text
 使用 Maestro 帮我分析这个项目的启动性能问题。
 ```
 
-Or address Old Zhou:
+或者直接叫老周：
 
 ```text
 老周，我想先讨论一下新架构，暂时不要正式开工。
 ```
 
-Talk to Old Zhou in ordinary language; users do not need to choose a specialist:
+用户不需要选择专家：
 
 ```text
 老周，评审一下这个设计，只告诉我主要风险和建议。
@@ -173,47 +154,40 @@ Talk to Old Zhou in ordinary language; users do not need to choose a specialist:
 老周，按刚才确定的方案开始修改。
 ```
 
-Capability routing can reuse or compose Workers from `.maestro/workers/registry.yaml` and creates
-a bounded Worker when no safe reusable match exists. Generated Workers receive task-specific
-Chinese display names, follow the existing Task, Temporary, or one-off Session lifecycle, cannot
-grant themselves permissions, and never become reusable automatically.
+能力路由可以复用或组合 `.maestro/workers/registry.yaml` 中的 Workers；没有安全的可复用匹配时，
+创建有界 Worker。生成 Worker 使用针对任务的中文显示名，遵循现有 Task、Temporary 或一次性
+Session 生命周期，不能给自己授权，也绝不会自动变为可复用 Worker。
 
-The fixed role files and `role:*` instruction references shipped by earlier versions remain
-unchanged for historical Task and Handoff recovery. Maestro does not select them for new work.
+早期版本附带的固定角色文件和 `role:*` 指令引用保持原样，只用于历史 Task 与 Handoff 恢复。
+Maestro 不会为新工作选择它们。
 
-Workers do not rely on implicit inheritance from the parent Agent. Each Worker declares required
-and optional instruction references, and each run materializes a minimal Delegation Packet with
-resolved instruction digests, context references, effective tools and permissions, and the host's
-support status. A missing required instruction or unenforceable boundary stops the delegation.
-Semantic validation cross-checks each packet against an independently supplied Worker snapshot and
-recomputes instruction digests from trusted Core or project roots.
+Worker 不依赖父 Agent 的隐式继承。每个 Worker 声明 required 与 optional 指令引用；每次运行
+实体化最小 Delegation Packet，包含已解析指令摘要、上下文引用、有效工具与权限，以及宿主支持
+状态。缺少 required 指令或不能强制执行边界时停止委派。语义校验会对照单独提供的 Worker 快照，
+并从可信 Core 或项目根目录重新计算指令摘要。
 
-Maestro creates project-owned state under `.maestro/` only when the request needs persistence. It
-asks for confirmation before turning exploratory discussion into a formal Task.
+只有请求需要持久化时，Maestro 才在项目的 `.maestro/` 下创建状态。把探索讨论变成正式 Task
+之前，会请求确认。
 
-At durable boundaries, the Memory Worker compares sourced Temporary or Task findings with current
-Long-term entries and proposes reviewed `UPDATE`, `MERGE`, `CREATE`, or `SKIP` actions. It never
-copies execution logs directly into Long-term Memory or approves its own proposal. Across concurrent
-Git branches, `memory-merger` performs 3-way semantic consolidation and preserves full dual-sided
-provenance on unresolved conflicts.
+在持久边界，Memory Worker 将有来源的 Temporary 或 Task 发现与当前 Long-term 条目比较，提出
+需评审的 `UPDATE`、`MERGE`、`CREATE` 或 `SKIP`。它绝不把执行日志直接复制到 Long-term Memory，
+也不能批准自己的提案。Git 并行分支间由 Memory Merger Worker 执行三方语义合并，并保留未解决
+冲突双方的完整来源。
 
-Memory Awareness adds a small generated Manifest and machine-readable Index across active
-Temporary, Task, and Long-term Memory. The Agent loads the Manifest first, retrieves at most five
-relevant candidates, and extracts one selected record by stable ID instead of injecting the whole
-Long-term file. `maestro/scripts/memory_catalog.py` builds, checks, searches, and selectively reads
-this local derived catalog; it does not replace formal Memory or add a background Runtime.
+Memory Awareness 会为活动 Temporary、Task 和 Long-term Memory 生成小型 Manifest 与机器可读
+Index。Agent 先加载 Manifest，最多检索五个相关候选，再按稳定 ID 提取一个选定记录，不注入完整
+Long-term 文件。`maestro/scripts/memory_catalog.py` 构建、检查、搜索并选择性读取本地派生目录；
+它不替代正式 Memory，也不增加后台 Runtime。
 
-## Manual behavior checks
+## 手动行为检查
 
-Model-based behavior evals are intentionally not part of the automated test suite. Maestro is used
-through different hosts, and a Codex-only live runner was slow, costly, and did not validate the
-actual DSH or bare-Skill experience.
+自动测试套件有意不包含基于模型的行为 eval。Maestro 运行在不同宿主中，而 Codex 专用 live
+runner 耗时、成本高，也无法验证真实 DSH 或裸 Skill 体验。
 
-After meaningful instruction changes, spot-check the affected behavior in the real target host.
-Use [`docs/manual-acceptance.md`](docs/manual-acceptance.md) for the small release checklist.
-Deterministic unit and contract tests remain automated.
+有重要指令变更后，在真实目标宿主抽查受影响行为。小型发布清单见
+[`docs/manual-acceptance.md`](docs/manual-acceptance.md)。确定性单元测试与契约测试仍自动运行。
 
-## npm package contents
+## npm 包内容
 
 ```text
 bin/
@@ -236,10 +210,9 @@ maestro/
     workers.md
     workers/
     practices/
-    roles/      # historical snapshot compatibility
+    roles/      # 历史快照兼容
     schemas/
 ```
 
-All orchestration behavior is expressed through the Skill and its references. The Node.js files
-perform only deterministic installation and validation work; the selected host's native filesystem
-and sub-agent capabilities execute Maestro itself.
+所有协作行为都由 Skill 及其 references 表达。Node.js 文件只执行确定性的安装和校验；Maestro
+本身由选定宿主的原生文件系统与 sub-agent 能力运行。

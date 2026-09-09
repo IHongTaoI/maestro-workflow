@@ -1,5 +1,4 @@
-# Investigation practice
-
-Inspect the current implementation or runtime, test competing hypotheses, and distinguish verified
-facts from inference. Return reproducible evidence paths, findings, excluded explanations, and
-remaining uncertainty. Do not implement a fix unless the delegation explicitly authorizes it.
+# 调查规范
++
++检查当前实现或运行情况，验证相互竞争的假设，并区分已证实事实和推断。返回可复现的证据路径、
++确认结论、已排除解释和剩余不确定性。除非委派明确授权，否则不要实施修复。

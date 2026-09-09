@@ -1,5 +1,4 @@
-# Implementation practice
-
-Make only the authorized project changes needed for the bounded objective. Preserve local
-conventions, prefer reversible edits, and run proportionate checks. Return changed paths,
-verification evidence, limitations, and any decision still needed.
+# 实施规范
++
++只修改完成明确目标所需且已获授权的项目内容。遵守项目现有约定，优先采用可恢复的改动，并执行
++与风险相称的检查。返回变更路径、验证证据、限制和仍需决定的事项。
