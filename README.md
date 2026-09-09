@@ -158,9 +158,6 @@ CLI 只负责安装、更新和诊断。它绝不调度 Worker、解释 Memory�
 创建有界 Worker。生成 Worker 使用针对任务的中文显示名，遵循现有 Task、Temporary 或一次性
 Session 生命周期，不能给自己授权，也绝不会自动变为可复用 Worker。
 
-早期版本附带的固定角色文件和 `role:*` 指令引用保持原样，只用于历史 Task 与 Handoff 恢复。
-Maestro 不会为新工作选择它们。
-
 Worker 不依赖父 Agent 的隐式继承。每个 Worker 声明 required 与 optional 指令引用；每次运行
 实体化最小 Delegation Packet，包含已解析指令摘要、上下文引用、有效工具与权限，以及宿主支持
 状态。缺少 required 指令或不能强制执行边界时停止委派。语义校验会对照单独提供的 Worker 快照，
@@ -210,7 +207,6 @@ maestro/
     workers.md
     workers/
     practices/
-    roles/      # 历史快照兼容
     schemas/
 ```
 

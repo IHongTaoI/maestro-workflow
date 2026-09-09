@@ -102,7 +102,7 @@ Cache key analysis is complete.
 
 - Verify invalidation fan-out.
 `);
-  await writeProjectFile(projectRoot, '.maestro/tasks/task-cache/roles/laborer/current-state.md', `# Objective
+  await writeProjectFile(projectRoot, '.maestro/tasks/task-cache/workers/cache-observer/current-state.md', `# Objective
 
 Measure cache invalidation fan-out.
 
@@ -128,8 +128,8 @@ test('builds a three-layer catalog and selectively returns one Memory detail', a
   assert.deepEqual(index.entries.map((entry) => entry.memory_id), [
     'lt-old-workflow',
     'lt-startup-performance',
-    'task-cache.role-state.laborer',
     'task-cache',
+    'task-cache.worker-state.cache-observer',
     'temp-home',
   ]);
 

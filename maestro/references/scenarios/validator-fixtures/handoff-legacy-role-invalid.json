@@ -1,8 +1,8 @@
 {
   "status": "completed",
-  "summary": "Validated a completed result.",
+  "summary": "Legacy Role handoffs are no longer supported.",
   "result_path": "maestro/references/scenarios/validator-fixtures/files/result.md",
-  "worker_state_path": "maestro/references/scenarios/validator-fixtures/files/current-state.md",
+  "role_state_path": "maestro/references/scenarios/validator-fixtures/files/current-state.md",
   "needs_user_input": false,
   "questions": [],
   "recommended_next": []

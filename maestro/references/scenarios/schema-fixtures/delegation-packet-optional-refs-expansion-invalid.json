@@ -6,7 +6,7 @@
   "completion_condition": "Return evidence-backed findings and a standard Handoff.",
   "instructions": {
     "required_refs": ["contract:handoff", "policy:safety-boundary"],
-    "optional_refs": ["role:laborer"],
+    "optional_refs": ["practice:delivery"],
     "resolved": [
       {
         "ref": "contract:handoff",

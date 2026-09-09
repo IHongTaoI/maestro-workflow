@@ -365,10 +365,9 @@ def current_state_entries(
     source_files: set[Path],
 ) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
-    for collection, record_type in (("roles", "role-state"), ("workers", "worker-state")):
-        root = task_directory / collection
-        if not root.is_dir():
-            continue
+    record_type = "worker-state"
+    root = task_directory / "workers"
+    if root.is_dir():
         for unit in sorted(path for path in root.iterdir() if path.is_dir()):
             state_path = unit / "current-state.md"
             if not state_path.is_file():
@@ -540,13 +539,13 @@ def manifest_text(index: dict[str, Any]) -> str:
             continue
         for entry in entries:
             lines.append(f"- **{entry['title']}** (`{entry['memory_id']}`) — {entry['summary']}")
-    state_count = sum(entry["record_type"] in {"role-state", "worker-state"} for entry in visible)
+    state_count = sum(entry["record_type"] == "worker-state" for entry in visible)
     lines.extend(
         (
             "",
             "## Indexed execution states",
             "",
-            f"- {state_count} current role/worker state(s)",
+            f"- {state_count} current Worker state(s)",
             "",
         )
     )

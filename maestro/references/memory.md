@@ -247,14 +247,14 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> show <memory-id>
 ```
 
-`show` 提取一个 Long-term JSON block，或 Temporary、Task、旧角色或 Worker 的有界当前章节。
+`show` 提取一个 Long-term JSON block，或 Temporary、Task、Worker 的有界当前章节。
 这是只使用一个条目而不注入全部 `long-term/current.md` 的受支持方式。
 
 确定性目录包含：
 
 - 所有结构化 Long-term 条目；inactive 状态为审计保留，但从常规检索排除；
 - 来自 `meta.yaml` 和简短当前章节的活动 Temporary 路由上下文；
-- 活动 Task 目标和各 Worker `current-state.md`，以及存在时的旧角色状态。
+- 活动 Task 目标和各 Worker `current-state.md`。
 
 它不索引历史 Reference 树。`search` 默认刷新缺失或陈旧目录；`--no-refresh` 会把陈旧状态变成
 可见错误。批准 Long-term 写入、Temporary 生命周期变化、Task 生命周期变化或 current-state

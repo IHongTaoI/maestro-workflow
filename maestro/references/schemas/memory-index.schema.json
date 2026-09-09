@@ -48,7 +48,7 @@
         "memory_id": { "$ref": "#/$defs/storageId" },
         "layer": { "enum": ["temporary", "task", "long-term"] },
         "record_type": {
-          "enum": ["long-term-entry", "temporary", "task", "role-state", "worker-state"]
+          "enum": ["long-term-entry", "temporary", "task", "worker-state"]
         },
         "title": { "type": "string", "minLength": 1 },
         "summary": { "type": "string", "minLength": 1 },
@@ -105,7 +105,7 @@
           },
           "then": {
             "properties": {
-              "record_type": { "enum": ["task", "role-state", "worker-state"] },
+              "record_type": { "enum": ["task", "worker-state"] },
               "memory_kind": { "const": null }
             }
           }

@@ -104,6 +104,54 @@ Prompt：`老周，请评审这个设计：应用启动时同步读取本地配�
 通过条件：提出需评审的持久 Memory 动作，保留 source references，不直接复制原始日志，也不自动
 删除来源 Temporary。
 
+## Issue #26：M1 checkpoint 真实宿主验收
+
+本节只在配置了真实 DSH 模型提供方、持久文件系统和显式 `checkpoint` 选项的宿主中执行。Codex
+当前只提供只读 `SessionStart` 恢复提醒，不能代替本验收。先运行：
+
+```text
+npm run dsh:audit:checkpoint
+```
+
+审计只能记录已安装声明，不算通过。使用一个可丢弃的测试项目，准备一个活动 Temporary 或 Task，
+并为快照中的每个 `source_ref` 创建真实的项目内文件。记录以下信息：
+
+```markdown
+- 宿主与版本：
+- 模型提供方：
+- Maestro commit：
+- projectRoot：
+- recoveryRoot：已配置/未配置（不要记录敏感绝对路径）
+- 目标：Temporary/Task + ID
+- Session ID：
+- request_id：
+- 保存前 revision/base_hash：
+- 保存后 revision：
+- request record：
+- committed observation：
+- recovery：none/project/secondary
+- 结果：通过/失败/无法验证
+- 备注：
+```
+
+依次验收：
+
+1. 在当前 Session 明确要求老周保存当前目标；确认模型实际调用 `maestro_checkpoint inspect` 后以同一
+   base revision/hash 调用 `save`，并核对 Current State 只更新一个 managed checkpoint 区块。
+2. 使用相同 `request_id` 重试；应返回已提交且 revision 不再增加。随后产生新进展并使用新
+   `request_id` 保存；旧请求不得吞掉新进展。
+3. 在 `inspect` 后先由另一写入者推进目标 revision，再执行旧 `save`；必须返回可见冲突，不能覆盖。
+4. 保存后、确认结果前中断宿主进程；新进程和全新 Session 中，由用户明确选中同一目标后调用
+   `status`/`retry`，应恢复提交观察或安全补存，不能重复推进 revision。
+5. 仅在可丢弃测试项目中人为使项目主写路径失败，同时保持已配置的独立 `recoveryRoot` 可写；确认
+   失败结果报告可恢复请求及来源。恢复主路径后用原 `request_id` 补存。若两条持久渠道都失败，
+   必须明确报告无法保证恢复。
+6. 新 Session 不明确选择目标时，不得自动恢复旧任务；旧 Role 目录或 `role_state_path` 工件不得成为
+   候选，也不得被迁移。
+
+每一步同时保存宿主工具调用证据、生成的 request/observation 路径和 revision。只有上述真实链路
+通过，才在 #26 勾选“真实宿主执行链”；mock 测试、模型口头说明或文件存在本身都不算通过。
+
 ## 发布决定
 
 目标宿主中的受影响场景通过，且以下确定性检查全部通过后发布：

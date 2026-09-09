@@ -12,7 +12,7 @@
   ],
   "properties": {
     "operation": {
-      "enum": ["role-compress", "session-handoff", "task-bootstrap", "task-complete"]
+      "enum": ["worker-compress", "session-handoff", "task-bootstrap", "task-complete"]
     },
     "source_files": {
       "type": "array",
