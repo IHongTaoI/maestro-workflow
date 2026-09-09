@@ -3,12 +3,16 @@
 Use this reference when describing work capabilities, resolving an execution unit, composing
 workers, generating a bounded worker, or resuming work delegated to a worker.
 
-## Roles and workers
+## Old Zhou and workers
 
-A stable role describes organizational responsibility. A Worker describes the bounded execution
-capabilities needed by one delegation. Existing roles remain directly invocable and appear in the
-immutable [built-in Worker registry](workers/builtin-registry.json); capability routing supplements
-them rather than replacing them.
+Old Zhou is the only preset user-facing role. A Worker describes the bounded execution capabilities
+needed by one delegation. New work reuses a reviewed project Worker or generates a lifecycle-bound
+Worker; it does not select a fixed organizational role.
+
+[The built-in Worker registry](workers/builtin-registry.json) remains as an empty, versioned
+contract marker. Reusable Workers live in the selected project's
+`.maestro/workers/registry.yaml`. A fresh project therefore starts with no execution Workers and
+grows only through explicit project registry changes.
 
 A generated Worker is a data record used by the host's native sub-agent mechanism. It must not
 create an installed Skill, add a permanent role, require a background service, or become reusable
@@ -33,8 +37,9 @@ second `can_do` / `cannot_do` contract:
 - **Expected output** is `outputs` plus the applicable Detailed Result and Handoff. Output reports
   work; it cannot grant permission or mutate the immutable packet.
 
-These semantics apply equally to built-in, project, learned, and generated Workers. The Worker
-schema remains the single machine-readable boundary contract.
+These semantics apply to project, learned, and generated Workers. The schema still accepts
+`source: builtin` so historical snapshots remain readable, but new selections must not create or
+select a built-in Worker. The Worker schema remains the single machine-readable boundary contract.
 
 `preferred_model` is an optional compatibility hint, not a requirement or permission. A null or
 unavailable preference uses the host's appropriate available model and must not make the registry
@@ -70,18 +75,19 @@ Validate parsed requirements against
 
 ## Resolve a Worker
 
-Load the immutable built-in registry plus `.maestro/workers/registry.yaml` when present. Validate
-both before use. A reusable Worker's context paths are its maximum supported boundary; the
+Validate the empty built-in registry contract and load `.maestro/workers/registry.yaml` when
+present. Only the project registry supplies reusable candidates. A reusable Worker's context paths
+are its maximum supported boundary; the
 delegation may narrow them but cannot expand beyond them. Exclude a candidate when it is disabled,
 its tools are unavailable, the delegation context exceeds that boundary, its requested actions
 exceed the permission ceiling, or its lifecycle is incompatible with the current work context.
 
 Choose in this order:
 
-1. **exact** — one Worker covers every required and optional capability;
+1. **exact** — one project Worker covers every required and optional capability;
 2. **compatible** — one Worker covers every required capability;
 3. **composed** — the smallest set of Workers whose union covers every required capability;
-4. **generated** — one bounded Task-, Temporary-, or Session-scoped Worker when no safe reusable
+4. **generated** — one bounded Task-, Temporary-, or Session-scoped Worker when no safe project
    match exists;
 5. **no-match** — generation cannot produce a valid, safe specification.
 
@@ -116,8 +122,11 @@ ephemeral and has no snapshot or cross-Session recovery contract.
 ## Resolve instruction dependencies
 
 `instructions.required` and `instructions.optional` in a Worker specification contain controlled
-instruction references, not inline prompts. Resolve built-in references through
-[the built-in instruction registry](instructions/builtin-registry.json). A project may extend the
+instruction references, not inline prompts. Resolve Core references through
+[the built-in instruction registry](instructions/builtin-registry.json). New Workers use
+`practice:*` references for execution guidance plus `contract:handoff` and
+`policy:safety-boundary`. The retained `role:*` entries exist only to verify and resume
+historical packets; do not attach them to a new or updated Worker. A project may extend the
 registry under `.maestro/instructions/registry.yaml`; apply the same reviewed mutable-state protocol
 as the project Worker registry, and never let a project entry override a built-in reference.
 Built-in entries use `source_scope: core` and paths relative to the installed Maestro Skill root;
@@ -173,6 +182,7 @@ output cannot modify it or grant additional authority.
 
 When no reusable Worker safely covers the requirements, generate one specification with:
 
+- a concise, task-specific Chinese display `name` and a schema-safe lowercase kebab-case `id`;
 - one bounded responsibility and completion condition;
 - canonical capabilities;
 - explicit inputs and outputs;
@@ -234,3 +244,11 @@ model confidence, and prior success are evidence only and cannot perform that tr
 and report an invalid registry entry rather than repairing or selecting it silently. If a registry
 changes during selection, restart from the new revision. A completed persisted selection remains
 stable because execution uses immutable Task or Temporary snapshots.
+
+## Historical role snapshots
+
+Older Tasks and Temporaries may reference `roles/<role-id>/`, a `role_state_path`, or a
+`role:*` instruction. Preserve and validate the recorded path and exact instruction digest when
+resuming that history. Do not move the legacy role files, silently substitute a current practice,
+or publish those fixed roles into a new project registry. Any new follow-up work is resolved from
+capabilities as a project or generated Worker.

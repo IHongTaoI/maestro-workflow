@@ -14,10 +14,10 @@
     },
     "constraints": ["Do not edit project files"]
   },
-  "registry_versions": [{ "registry_id": "maestro-builtins", "version": "sha256:example" }],
+  "registry_versions": [{ "registry_id": "project-workers", "version": "revision:3" }],
   "resolution": "exact",
   "selected_workers": [
-    { "id": "laborer", "snapshot_path": ".maestro/tasks/example/workers/laborer/spec.yaml" }
+    { "id": "runtime-investigator", "snapshot_path": ".maestro/tasks/example/workers/runtime-investigator/spec.yaml" }
   ],
-  "rationale": "Laborer covers every required and optional capability within the permission ceiling."
+  "rationale": "The project runtime investigator covers every required and optional capability within the permission ceiling."
 }

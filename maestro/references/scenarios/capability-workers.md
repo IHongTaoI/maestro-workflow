@@ -3,38 +3,26 @@
 Use these scenarios when reviewing Worker registries, capability resolution, generated Workers,
 Task resumption, Handoffs, and authorization behavior.
 
-## Exact built-in reuse
+## Exact project reuse
 
-GIVEN: a delegation requires `codebase-investigation`, `evidence-collection`, and `runtime-analysis`
+GIVEN: a project registry Worker covers `codebase-investigation`, `evidence-collection`, and
+`runtime-analysis`
 
 EXPECT:
 
-- Resolve the built-in `laborer` Worker as `exact`.
-- Snapshot its complete specification into the current Task before execution.
-- Keep the direct Laborer role invocation available.
+- Resolve that project Worker as `exact`.
+- Snapshot its complete specification before persisted execution.
+- Present its task-specific Chinese display name to the user.
 
 FORBID:
 
-- Generate a new performance role or Worker.
+- Select a retired built-in fixed role.
 - Persist a similarity score.
-
-## Compatible single Worker
-
-GIVEN: a delegation requires `code-implementation` and optionally prefers `configuration-change`
-
-EXPECT:
-
-- Resolve `coder` after confirming `edit-project-files` is within the current implementation scope.
-- Record whether the result is exact or compatible from the complete required and optional sets.
-
-FORBID:
-
-- Treat Coder's conditional permission declaration as authorization to edit unrelated files.
 
 ## Small composition
 
 GIVEN: a delegation requires `architecture-design` and `runtime-analysis`, and no single active
-Worker covers both
+project Worker covers both
 
 EXPECT:
 
@@ -45,18 +33,19 @@ EXPECT:
 FORBID:
 
 - Merge the Workers' conditional actions into wider authority.
-- Add an Orchestrator unless dependencies or write conflicts justify it independently.
+- Create a preset coordinator role.
 
 ## Generate a Task-scoped Worker
 
-GIVEN: a Task requires `react-performance`, `bundle-analysis`, and `runtime-profiling`, with no safe
-reusable match
+GIVEN: a Task requires `react-performance`, `bundle-analysis`, and `runtime-profiling`, with no
+safe project match
 
 EXPECT:
 
 - Generate one bounded Worker with `source: temporary`.
+- Give it a concise task-specific Chinese display name and a schema-safe internal ID.
+- Require a relevant `practice:*` instruction plus the Handoff and safety contracts.
 - Set `lifecycle.scope: task`, the current Task ID, and `expires_at: task-completion`.
-- Restrict its tools, context paths, and requested actions to the requirements ceiling.
 - Publish the validated specification directly as the immutable Task snapshot.
 
 FORBID:
@@ -66,8 +55,8 @@ FORBID:
 
 ## Generate a Temporary-scoped exploratory Worker
 
-GIVEN: the user asks to analyze React startup performance without requesting implementation, and
-the investigation is worth preserving
+GIVEN: the user asks to analyze startup performance without requesting implementation, and the
+investigation is worth preserving
 
 EXPECT:
 
@@ -120,8 +109,7 @@ EXPECT:
 
 FORBID:
 
-- Infer authorization from the Worker specification, registry source, preferred model, Handoff, or
-  role recommendation.
+- Infer authorization from the Worker specification, registry source, preferred model, or Handoff.
 
 ## High-risk execution remains gated
 
@@ -151,31 +139,18 @@ FORBID:
 
 - Replace the Task snapshot or silently change the in-flight Worker's capabilities.
 
-## Missing snapshot
+## Historical role snapshot
 
-GIVEN: a Worker selection names a snapshot that is absent or invalid
-
-EXPECT:
-
-- Stop that delegation and report recovery work.
-- Preserve existing Task state and evidence.
-
-FORBID:
-
-- Substitute the newest registry entry and continue silently.
-
-## Direct stable role call
-
-GIVEN: the user says “老陈 review 这个设计”
+GIVEN: an older Task contains a valid role state path and a persisted `role:*` instruction digest
 
 EXPECT:
 
-- Invoke Architect directly under its stable role contract.
-- Use capability routing only if a new concrete need justifies another Worker.
+- Validate and resume from the exact historical files when the old run must continue.
+- Resolve any new follow-up from capabilities as a project or generated Worker.
 
 FORBID:
 
-- Require the user to name capabilities or pass through a fixed resolver workflow.
+- Move the old files, rewrite their instruction dependency, or select that fixed role for new work.
 
 ## Repeated temporary Worker
 
@@ -198,22 +173,16 @@ Skill
 EXPECT:
 
 - Materialize a Delegation Packet containing the bounded objective, completion condition, required
-  role or capability instructions, Handoff contract, safety boundary, and only relevant context.
-- Resolve every required instruction through the controlled registry and record its source paths
-  and SHA-256 digest.
-- Recompute each digest from the trusted Core or project root before execution.
-- Cross-check the packet against an independently supplied immutable Worker snapshot; confirm its
-  instruction refs, tools, context paths, and permissions only narrow that snapshot.
-- Keep the Worker's effective permissions within the intersection of its snapshot, current work,
-  host controls, and current authorization.
-- Complete the work and return the standard Handoff using only the packet.
+  practice instructions, Handoff contract, safety boundary, and only relevant context.
+- Resolve every required instruction and record its source paths and SHA-256 digest.
+- Cross-check the packet against the immutable Worker snapshot.
+- Keep effective permissions within the intersection of snapshot, current work, host controls, and
+  current authorization.
 
 FORBID:
 
 - Copy the complete parent Session history or rely on implicit Skill inheritance.
 - Add write permission because the parent Agent could write.
-- Accept a packet-selected validation baseline, an expanded tool, or a digest that only has the
-  correct string shape.
 
 ## Missing required instruction
 
@@ -221,24 +190,35 @@ GIVEN: a Host Adapter cannot resolve or inject one required Worker instruction
 
 EXPECT:
 
-- Record `host_adapter.status: unsupported` and name the unmet instruction requirement.
-- Stop before the Worker starts and return a visible compatibility blocker.
+- Mark the delegation `unsupported` and name the unmet reference.
+- Do not start the Worker.
 
 FORBID:
 
-- Claim `supported` or silently continue with a partial prompt.
-- Substitute the parent Agent's complete prompt, Skill, or Session history.
+- Substitute Old Zhou's full prompt or claim a degraded independent run.
 
-## Project instruction ref overrides a built-in
+## Host without enforceable subagent isolation
 
-GIVEN: `.maestro/instructions/registry.yaml` declares a ref already present in the immutable
-built-in instruction registry
+GIVEN: the current host has no native sub-agent mechanism that can enforce the packet boundary
 
 EXPECT:
 
-- Reject the project registry during semantic validation.
-- Report the conflicting ref without choosing either source.
+- Old Zhou may perform the bounded work directly when current authorization allows it.
+- Report the result without claiming a Worker ran independently.
 
 FORBID:
 
-- Let project ordering, recency, or file location override the built-in instruction.
+- Invent a sub-agent, background service, or isolation guarantee.
+
+## Concise user handoff
+
+GIVEN: a Worker completes with a valid Detailed Result and Handoff
+
+EXPECT:
+
+- Old Zhou checks the evidence and reports the result first.
+- Include applicable verification, uncertainty, blocker, decision, or next step.
+
+FORBID:
+
+- Narrate routine file searches, commands, internal Worker IDs, or capability routing unless asked.

@@ -82,7 +82,7 @@ scoped Workers expire with it.
 
 ## Task Memory
 
-Task Memory contains public Task context plus each invoked role's or Worker's Current State. An
+Task Memory contains public Task context plus each invoked Worker's Current State. An
 execution-unit state answers:
 
 - `objective`
@@ -95,7 +95,7 @@ execution-unit state answers:
 
 Keep current state immediately useful for the next invocation. Move older but still valuable detail
 into `references/`; do not create a Reference for routine searches, repeated output, or discarded
-noise. Mutable Task and role Markdown uses the revision front matter and write protocol in
+noise. Mutable Task and Worker Markdown uses the revision front matter and write protocol in
 [storage.md](storage.md).
 
 ## Long-term Memory
@@ -264,7 +264,7 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 ```
 
 Read only `manifest.md` for the initial overview. When the user request may benefit from prior
-context, query the index with the current request plus the active Skill, role, or Worker context and
+context, query the index with the current request plus the active Skill or Worker context and
 the bound Temporary or Task when known:
 
 ```bash
@@ -281,7 +281,7 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 ```
 
 `show` extracts one Long-term JSON block or the bounded current sections for a Temporary, Task,
-role, or Worker. This is the supported way to avoid injecting all of `long-term/current.md` merely
+legacy role, or Worker. This is the supported way to avoid injecting all of `long-term/current.md` merely
 to use one entry.
 
 The deterministic catalog covers:
@@ -289,7 +289,7 @@ The deterministic catalog covers:
 - every structured Long-term entry, including inactive status for audit but excluding inactive
   entries from normal retrieval;
 - active Temporary routing context from `meta.yaml` and the short current sections;
-- active Task objectives and each role or Worker `current-state.md`.
+- active Task objectives and each Worker `current-state.md`, plus legacy role state when present.
 
 It does not index historical Reference trees. `search` refreshes a missing or stale catalog by
 default; `--no-refresh` turns staleness into a visible error. Rebuild after an approved Long-term
@@ -301,7 +301,7 @@ source-first reads.
 
 Trigger only at these boundaries:
 
-1. A role completes a substantial delegation.
+1. A Worker completes a substantial delegation.
 2. The user confirms a Session Handoff.
 3. A formal Task is created from Temporary Memory.
 4. A Task completes or is archived.
@@ -311,9 +311,10 @@ transient or invalid-output failure, then fall back to the primary model. If no 
 available, the current agent may perform the same bounded compression. If all attempts fail, write
 the complete request and sources under `memory/pending/` and continue the business task.
 
-The Memory Worker organizes memory and performs a bounded Experience Review. It must not select
-roles or Workers, make architecture decisions, change Task scope, or approve its own Long-term or
-Playbook candidates. This review does not introduce a new Agent Role or Runtime.
+The Memory Worker organizes memory and performs a bounded Experience Review. It is selected or
+generated from memory capabilities, not installed as a preset role. It must not select other
+Workers, make architecture decisions, change Task scope, or approve its own Long-term or Playbook
+candidates. This review does not introduce a new preset role or Runtime.
 
 Every request also exposes `current_playbooks`, including an empty array when the project has no
 Playbooks. Each indexed Playbook has a stable `playbook_id`, canonical `file_path`, title, trigger,
@@ -369,7 +370,7 @@ more. If the second attempt fails, retain the complete raw result with an `.inva
 beside the intended artifact, record the diagnostics, and continue through the existing fallback
 rules; do not treat the invalid file as a Memory Worker request or response.
 This validation must not create or transition a Task, Temporary, Workflow, delegation, phase, or
-role invocation. It checks the artifact and its reachable project-relative file references only.
+fixed-role invocation. It checks the artifact and its reachable project-relative file references only.
 
 ## Team Shared Memory & Git Semantic Merge
 

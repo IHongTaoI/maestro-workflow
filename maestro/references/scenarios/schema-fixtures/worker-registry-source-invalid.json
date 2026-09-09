@@ -18,7 +18,7 @@
       "responsibility": "Demonstrate a registry source mismatch.",
       "inputs": ["project context"],
       "outputs": ["review"],
-      "instructions": { "required": ["role:architect", "contract:handoff", "policy:safety-boundary"], "optional": [] },
+      "instructions": { "required": ["practice:design", "contract:handoff", "policy:safety-boundary"], "optional": [] },
       "tools": [],
       "context": { "read_paths": ["."], "write_paths": [".maestro/"] },
       "permissions": { "autonomous": ["inspect-project"], "conditional": [] },

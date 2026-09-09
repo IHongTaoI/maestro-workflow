@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "id": "frontend-performance",
-  "name": "Frontend Performance Worker",
+  "name": "小林（首页性能分析）",
   "source": "temporary",
   "status": "active",
   "capabilities": ["bundle-analysis", "react-performance", "runtime-profiling"],
@@ -10,7 +10,7 @@
   "inputs": ["homepage trace", "bundle statistics", "current source"],
   "outputs": ["profile evidence", "ranked bottlenecks", "Handoff"],
   "preferred_model": null,
-  "instructions": { "required": ["contract:handoff", "policy:safety-boundary"], "optional": [] },
+  "instructions": { "required": ["practice:investigation", "contract:handoff", "policy:safety-boundary"], "optional": [] },
   "tools": ["browser-trace", "bundle-inspector"],
   "context": {
     "read_paths": ["src/", "dist/stats.json"],

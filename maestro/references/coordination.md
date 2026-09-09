@@ -1,12 +1,12 @@
 # Coordination
 
-Use this reference for substantial work, role or Worker delegation, Task creation, resumption, and
+Use this reference for substantial work, Worker delegation, Task creation, resumption, and
 closure.
 
 ## Start from the user's intent
 
-Determine whether the request is a one-off action, an exploratory discussion, a direct role call,
-or formal work. Do not create `.maestro/` state for trivial requests unless the user asks to retain
+Determine whether the request is a conversational one-off, an exploratory discussion, or formal
+work. Do not create `.maestro/` state for trivial requests unless the user asks to retain
 the result.
 
 For exploration worth preserving, create or update Temporary Memory. Before formal execution,
@@ -47,10 +47,9 @@ roll back a committed promotion or resume its source Temporary.
 The promoted Task owns future execution state. Its archived source Temporary remains auditable and
 must not be deleted, merged with unrelated Temporaries, or treated as another active candidate.
 
-A direct role request remains valid and does not require a prescribed role sequence. Role choice is
-orthogonal to promotion: a substantial direct Coder request with implementation intent may create a
-Task, while Architect or Laborer investigation normally remains Temporary. A trivial one-off role
-request may run without persistent Maestro state.
+Worker choice is orthogonal to promotion. A substantial implementation request may create a Task,
+while investigation normally remains Temporary. Conversation and clarification may run without
+persistent Maestro state.
 
 ## Select active Temporary Memory
 
@@ -96,32 +95,27 @@ resolve two otherwise plausible candidates.
 
 ## Dynamic delegation
 
-Choose the smallest useful role set. Common paths are examples, not required sequences:
+Translate the bounded objective into capabilities; the user does not need to name them or choose a
+specialist. Use the resolver in [workers.md](workers.md). Convert the bounded delegation into
+capability requirements before selection. Reuse one safe project Worker where possible, compose
+only when no single Worker covers every required capability, and generate the smallest bounded
+Worker when reusable matches are insufficient. Use Task scope for formal execution, Temporary scope
+for preserved exploration, and Session scope for a trivial one-off. Worker resolution must not
+promote exploratory work into a Task.
 
-- Unknown current behavior: Laborer, then possibly Architect or Coder.
-- Clear small change: Coder, then Test Runner if verification is meaningful.
-- Ambiguous feature: TPM, then whichever specialist the clarified scope needs.
-- Complex parallel work: Orchestrator only after the work is clear enough to decompose.
-- Release readiness: Delivery may ask Test Runner for missing evidence.
-
-When the user invokes a role directly, honor it. Add another role only when a concrete dependency or
-risk justifies doing so, and tell the user.
-
-When the work is better described by concrete capabilities than one stable role, use the resolver
-in [workers.md](workers.md). Convert the bounded delegation into capability requirements before
-selection. Reuse one safe Worker where possible, compose only when no single Worker covers every
-required capability, and generate a bounded Worker only when reusable matches are insufficient.
-Use Task scope for formal execution, Temporary scope for preserved exploration, and Session scope
-for a trivial one-off. Worker resolution must not promote exploratory work into a Task.
+Use a concise task-specific Chinese display name in user-facing progress, such as
+`小林（首页性能排查）`. Internal Worker IDs and capability lists stay in machine records unless the
+user asks for them. Complex dependency planning is another bounded capability delegation; it does
+not introduce a preset coordinator role.
 
 The resolver proposes an execution unit; Old Zhou still owns task judgment, authorization,
-delegation, and result integration. Resolver output must not force a role sequence or override a
-direct role request. Snapshot every persisted Worker before execution so Task or Temporary
+delegation, and result integration. Resolver output must not force a workflow sequence. Snapshot
+every persisted Worker before execution so Task or Temporary
 resumption is independent of later registry changes. Do not persist a Session-scoped Worker.
 
 ## Await delegated execution
 
-A delegated role or Worker run remains the owner of its bounded objective while the host reports it
+A delegated Worker run remains the owner of its bounded objective while the host reports it
 as queued or running. Record the run ID and status in the active Session, Temporary, or Task context
 needed for recovery. A main-loop iteration, goal continuation, Session resume, or unrelated Worker
 completion is not evidence that the run stopped.
@@ -141,7 +135,7 @@ Authorization follows the action, target, and scope rather than the role perform
 | --- | --- |
 | Inspect or search code; analyze logs or traces | Autonomous within the selected project and approved scope |
 | Run non-destructive checks; create reversible local artifacts | Autonomous within approved scope |
-| Write Maestro memory/state; delegate roles | Autonomous under the storage and delegation contracts |
+| Write Maestro memory/state; delegate Workers | Autonomous under the storage and delegation contracts |
 | Edit project files requested by an unambiguous implementation instruction | Authorized only within that stated objective |
 | Deploy, publish, release, merge, push, or otherwise expose changes externally | Require explicit action-specific authorization unless the current instruction already grants it for the same target |
 | Delete material data, perform an irreversible migration, or bypass recovery controls | Require explicit authorization immediately before execution |
@@ -157,13 +151,13 @@ grant permission for it.
 
 ## Delegation packet
 
-Do not assume a role or Worker inherits the parent Agent's instructions, Skill, Session history,
+Do not assume a Worker inherits the parent Agent's instructions, Skill, Session history,
 tools, or permissions. Give it:
 
 1. A bounded objective and completion condition.
 2. Relevant long-term project memory.
 3. The current Task or selected Temporary context, when persistent work exists.
-4. That role's or Worker's `current-state.md`, if it exists, plus the Worker's immutable snapshot from
+4. That Worker's `current-state.md`, if it exists, plus the Worker's immutable snapshot from
    the matching Task or Temporary.
 5. Relevant source, Evidence, Artifact, or earlier Detailed Result paths.
 6. The result directory and Handoff contract.
@@ -190,13 +184,13 @@ Long-term Memory
 + new delegation
 ```
 
-To resume a role or Worker in a formal Task, load:
+To resume a Worker in a formal Task, load:
 
 ```text
 Long-term Memory
 + Task context
-+ role or Worker current-state
-+ Worker spec snapshot, when applicable
++ Worker current-state
++ Worker spec snapshot
 + new delegation
 ```
 
