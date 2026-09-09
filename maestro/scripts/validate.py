@@ -394,6 +394,12 @@ def validate_recommended_next(value: Any, path: str, errors: list[Diagnostic]) -
         return
     required = {"capabilities", "reason"}
     check_object_shape(value, path, errors, required=required, allowed=required)
+    if "role" in value:
+        add_error(
+            errors,
+            f"{path}.role",
+            "legacy role field is no longer supported; use capabilities",
+        )
 
     if "reason" in value:
         check_string(value["reason"], f"{path}.reason", errors, min_length=1)
@@ -441,6 +447,12 @@ def validate_handoff(
     }
     allowed = required | {"questions"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
+    if "role_state_path" in value:
+        add_error(
+            errors,
+            "$.role_state_path",
+            "legacy role_state_path field is no longer supported; use worker_state_path",
+        )
 
     if "status" in value:
         check_enum(

@@ -158,6 +158,12 @@ try {
         "$validatorFixtureRoot/handoff-schema-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $handoffSchema "handoff" `
         "$validatorFixtureRoot/handoff-legacy-role-invalid.json" 1
+    Invoke-ProtocolDiagnosticCase "handoff" `
+        "$validatorFixtureRoot/handoff-legacy-role-invalid.json" `
+        '$.role_state_path' "legacy role_state_path field is no longer supported"
+    Invoke-ProtocolDiagnosticCase "handoff" `
+        "$validatorFixtureRoot/handoff-legacy-role-invalid.json" `
+        '$.recommended_next[0].role' "legacy role field is no longer supported"
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `
         "$validatorFixtureRoot/memory-index-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryIndexSchema "memory-index" `

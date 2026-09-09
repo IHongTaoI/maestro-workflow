@@ -5,5 +5,10 @@
   "role_state_path": "maestro/references/scenarios/validator-fixtures/files/current-state.md",
   "needs_user_input": false,
   "questions": [],
-  "recommended_next": []
+  "recommended_next": [
+    {
+      "role": "coder",
+      "reason": "Continue with the legacy Role protocol."
+    }
+  ]
 }

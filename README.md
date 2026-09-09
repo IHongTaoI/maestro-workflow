@@ -52,6 +52,15 @@ Codex Session 可见的项目目录；安装到本地 Windows 文件夹不会同
 npm install -g maestro-ai-workflow
 ```
 
+### 从旧 Role 协议升级
+
+`0.2.0` 是一次不兼容升级：Handoff 必须包含 `worker_state_path`，不再接受
+`role_state_path` 或 `recommended_next[].role`；Worker 来源也不再接受 `builtin`，并以
+`worker-compress` 取代 `role-compress`。Maestro 不会自动发现、迁移或恢复旧 Role 状态。
+
+升级前请归档仍需保留的 `.maestro/` 旧任务；升级后用当前 Worker 协议重新创建需要继续的任务。
+不要直接复用旧 Handoff 或 Worker 状态文件。后续 `0.x` 阶段的不兼容协议变更将通过次版本号发布。
+
 然后在项目中初始化 Maestro：
 
 ```bash
