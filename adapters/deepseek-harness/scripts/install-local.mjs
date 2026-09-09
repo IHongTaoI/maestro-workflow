@@ -149,7 +149,9 @@ async function install(options) {
 
   process.stdout.write(`Installing package into DSH profile "${options.profile}"...\n`)
   const dshEnvironment = { ...process.env, DSH_HOME: options.dshHome }
-  run('dsh', ['plugin', '--profile', options.profile, 'add', archivePath], {
+  // DSH profiles can be workspace roots. Permit this intentional add without
+  // using -w, which could redirect installation to an ancestor workspace.
+  run('dsh', ['plugin', '--profile', options.profile, 'add', '--ignore-workspace-root-check', archivePath], {
     env: dshEnvironment,
   })
 

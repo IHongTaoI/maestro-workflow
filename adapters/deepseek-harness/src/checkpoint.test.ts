@@ -267,9 +267,9 @@ test('Task progress target uses existing progress.md without creating current.md
   assert.equal(f.files.has(f.key('.maestro/tasks/task-one/current.md')), false)
 })
 
-test('adapter activation requires explicit config and tools; plain Skill fallback stays available', async () => {
+test('adapter defaults to automatic checkpoint, supports opt-out and plain Skill fallback', async () => {
   const f = fixture()
-  for (const [optIn, withTools, expected] of [[false, true, 0], [true, false, 0], [true, true, 1]] as const) {
+  for (const [checkpoint, withTools, expected] of [[undefined, true, 1], [false, true, 0], [{}, false, 0], [{ projectRoot: project }, true, 1]] as const) {
     const registered: string[] = [], cleanups: Array<() => void> = []
     let skillCount = 0
     const skills = { register: () => { skillCount++; return () => {} } }
@@ -278,14 +278,110 @@ test('adapter activation requires explicit config and tools; plain Skill fallbac
       registered.push(definition.name); return () => registered.pop()
     } }
     const ctx = { skills, get: (name: string) => services[name], provide: () => () => {},
+      inject: (deps: string[], callback: (ctx: unknown) => unknown) => {
+        if (deps.every((dep) => services[dep])) pending.push(Promise.resolve(callback(ctx)))
+      },
       effect: (factory: () => () => void) => { cleanups.push(factory()) }, logger: { info() {}, warn() {} } }
+    const pending: Promise<unknown>[] = []
     await apply(ctx as never, { coreDir: fileURLToPath(new URL('../../../maestro/', import.meta.url)),
-      ...(optIn ? { checkpoint: { projectRoot: project } } : {}) })
+      checkpoint })
+    for (const task of pending) await task
     assert.equal(skillCount, 1)
     assert.equal(registered.length, expected)
     cleanups.reverse().forEach((cleanup) => cleanup())
     assert.equal(registered.length, 0)
   }
+})
+
+test('real Cordis activates checkpoint when fs and tools arrive after the adapter', async () => {
+  const f = fixture()
+  const ctx = new Context()
+  ctx.provide('skills', { register: () => () => {} } as never)
+  const adapter = await ctx.plugin(apply, { coreDir: fileURLToPath(new URL('../../../maestro/', import.meta.url)) })
+  assert.equal(ctx.get('maestro.stateStore'), undefined)
+  new SystemPrompt(ctx, {})
+  const runtime = new ToolRuntime(ctx)
+  assert.equal(runtime.get('maestro_checkpoint'), undefined)
+  const releaseFs = ctx.provide('fs', f.fs as never)
+  try {
+    const deadline = Date.now() + 2000
+    while (!runtime.get('maestro_checkpoint') && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.ok(runtime.get('maestro_checkpoint'))
+    await adapter.dispose()
+    assert.equal(runtime.get('maestro_checkpoint'), undefined)
+  } finally { releaseFs(); await ctx.fiber.dispose() }
+})
+
+test('one automatic tool isolates simultaneous projects and recovery archives, with restart retry', async () => {
+  const f = fixture(); await ready
+  const other = path.resolve('second-project')
+  for (const rel of [statePath, metaPath]) f.files.set(path.join(other, rel), { ...f.files.get(f.key(rel))! })
+  const tool = checkpointTool(f.fs, validator, { recoveryRoot: backup })
+  const context = (cwd: string) => ({ agent: { id: cwd, session: { header: { cwd } } },
+    signal: new AbortController().signal }) as ToolRunContext
+  const results = await Promise.all([project, other].map((cwd) => tool.execute({ operation: 'save', ...f.input }, context(cwd))))
+  for (const result of results) assert.equal((result as { status: string }).status, 'committed')
+  for (const cwd of [project, other]) {
+    assert.match(f.files.get(path.join(cwd, statePath))!.content, /revision: 1/)
+    assert.ok([...f.files.keys()].some((p) => p.startsWith(path.join(backup, hash(cwd)) + path.sep)))
+    const fresh = checkpointTool(f.fs, validator, { recoveryRoot: backup })
+    const retried = await fresh.execute({ operation: 'retry', kind: 'temporary', target_id: 'test', request_id: 'save_1' }, context(cwd))
+    assert.equal((retried as { status: string }).status, 'already_committed')
+  }
+})
+
+test('automatic binding rejects absent/relative session and model root overrides without writing', async () => {
+  const f = fixture(); await ready
+  const tool = checkpointTool(f.fs, validator)
+  const args = { operation: 'inspect', kind: 'temporary', target_id: 'test' }
+  const context = (cwd: string) => ({ agent: { id: 's', session: { header: { cwd } } }, signal: new AbortController().signal }) as ToolRunContext
+  const before = [...f.files.entries()]
+  for (const [cwd, code] of [['', 'caller_session_required'], ['relative', 'absolute_project_required']]) {
+    assert.equal((await tool.execute(args, context(cwd)) as { code: string }).code, code)
+  }
+  assert.equal((await tool.execute({ ...args, projectRoot: backup }, context(project)) as { code: string }).code, 'invalid_arguments')
+  assert.equal((await checkpointTool(f.fs, validator, { recoveryRoot: project }).execute(args, context(project)) as { code: string }).code, 'recovery_root_overlaps_project')
+  assert.deepEqual([...f.files.entries()], before)
+})
+
+test('save carries session policy and falls back to project when default external archive is denied', async () => {
+  const f = fixture(); await ready
+  const original = f.fs.writeText
+  const policy = { mode: 'workspace-write', workspaceRoot: project }
+  const seen: unknown[] = []
+  f.fs.writeText = async (...args: Parameters<typeof original>) => {
+    seen.push((args as unknown[])[4])
+    assert.equal((args as unknown[])[4], policy)
+    if (!String(args[0].targetKey).startsWith(project + path.sep)) throw error('FS_SANDBOX_DENIED')
+    return original(...args)
+  }
+  const exec = { agent: { id: 's', session: { header: { cwd: project } },
+    ctx: { get: () => ({ resolve: () => policy }) } }, signal: new AbortController().signal } as unknown as ToolRunContext
+  const tool = checkpointTool(f.fs, validator)
+  const missing = await tool.execute({ operation: 'save', ...f.input, request_id: undefined }, exec)
+  assert.notEqual((missing as { status: string }).status, 'committed')
+  const result = await tool.execute({ operation: 'save', ...f.input }, exec)
+  assert.equal((result as { status: string }).status, 'committed')
+  assert.ok(seen.length > 0)
+  assert.match(f.files.get(f.key(statePath))!.content, /revision: 1/)
+  const readOnly = { ...exec, agent: { ...exec.agent, ctx: { get: () => ({ resolve: () => ({ mode: 'read-only', workspaceRoot: project }) }) } } } as unknown as ToolRunContext
+  f.fs.writeText = async () => { throw error('FS_SANDBOX_DENIED') }
+  const inspected = await tool.execute({ operation: 'inspect', kind: 'temporary', target_id: 'test' }, exec) as { revision: number; base_hash: string }
+  const denied = await tool.execute({ operation: 'save', ...f.input, request_id: 'save_2', base_revision: inspected.revision, base_hash: inspected.base_hash }, readOnly)
+  assert.equal((denied as { code: string }).code, 'filesystem_permission_denied')
+})
+
+test('automatic recovery uses canonical project identity across path aliases', async () => {
+  const f = fixture(); await ready
+  const aliasRoot = path.resolve('project-alias')
+  f.setAlias((p) => p === aliasRoot || p.startsWith(aliasRoot + path.sep)
+    ? project + p.slice(aliasRoot.length) : p)
+  const tool = checkpointTool(f.fs, validator, { recoveryRoot: backup })
+  const context = (cwd: string) => ({ agent: { id: 's', session: { header: { cwd } } }, signal: new AbortController().signal }) as ToolRunContext
+  assert.equal((await tool.execute({ operation: 'save', ...f.input }, context(aliasRoot)) as { status: string }).status, 'committed')
+  assert.ok([...f.files.keys()].some((p) => p.startsWith(path.join(backup, hash(project)) + path.sep)))
+  assert.ok(![...f.files.keys()].some((p) => p.startsWith(path.join(backup, hash(aliasRoot)) + path.sep)))
+  assert.equal((await tool.execute({ operation: 'retry', kind: 'temporary', target_id: 'test', request_id: 'save_1' }, context(project)) as { status: string }).status, 'already_committed')
 })
 
 test('a stale held lock survives retry until its owner is explicitly recovered', async () => {

@@ -1,11 +1,8 @@
 /**
  * Capability detection and graceful-fallback decision for the adapter.
  *
- * The adapter uses `ctx.get()` rather than `inject` for every optional seam:
- * `inject` would make the plugin refuse to start when a seam is absent, but
- * Issue #14 requires the Core Skill to keep working without any harness
- * enhancement. `ctx.get()` returns `undefined` for a missing service, which is
- * exactly the signal the fallback path needs.
+ * This is a point-in-time status snapshot. Optional fs/tools enhancements use
+ * child injections in index.ts so late services activate without blocking Core.
  *
  * @module @maestro-ai/dsh-adapter/detect
  */

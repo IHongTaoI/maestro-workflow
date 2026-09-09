@@ -3,7 +3,7 @@
 Checkpoint M1 的接入证据、拟定协议与后续验收见
 [checkpoint contract](../../docs/architecture/checkpoint-contract.md)。可在仓库根目录运行
 `node adapters/deepseek-harness/scripts/audit-checkpoint.mjs` 复核已安装 DSH 声明与 lockfile。
-该检查不访问 Session、不启动宿主，也不代表功能启用。现已有显式配置启用的 snapshot checkpoint
+该检查不访问 Session、不启动宿主，也不代表功能启用。现已有默认按当前 Session 绑定项目的 snapshot checkpoint
 工具；真实模型提供方与持久文件系统的端到端验收仍未完成。
 
 DeepSeek Harness (dsh) 的 Maestro 适配层。它把可移植的 Maestro Core Skill 挂进 dsh，并在
@@ -52,6 +52,9 @@ npm run dsh:install:local -- --profile web
 ```
 
 如果 PowerShell 的执行策略拦截 `npm.ps1`，把命令开头的 `npm` 换成 `npm.cmd` 即可。
+
+安装器仅在本次 `dsh plugin add` 中传入 `--ignore-workspace-root-check`，允许向 DSH
+profile 自身的 workspace 根添加插件，不修改全局 pnpm 配置。
 
 该命令会安装 adapter 的构建依赖，生成包含当前 Maestro Core 的本地 `.tgz`，并把它安装进
 `~/.dsh/profiles/web/`。DSH 会根据包内的 `dsh.bundle` 声明自动把它加入 profile，随后加载包内
@@ -115,7 +118,8 @@ export function apply(ctx, config) {
 
 ## Capability detection 与降级
 
-`src/detect.ts` 启动时探测以下 seam（用 `ctx.get()` 而非 `inject`，因为它们可选）：
+`src/detect.ts` 用 `ctx.get()` 获取启动时能力快照。可选 fs/tools 增强通过子级 `ctx.inject()`
+等待服务就绪后激活，跟随服务卸载释放，不阻塞 Core Skill：
 
 | Seam | 探测键 | 有 → | 无 → |
 | --- | --- | --- | --- |
@@ -190,9 +194,33 @@ adapters/deepseek-harness/
     └── hooks.test.ts   # hooks 监听原语单元测试（fake ctx）
 ```
 
-## 手动 checkpoint（显式启用）
+## 手动 checkpoint（自动配置项目）
 
-在宿主的 Maestro 插件配置中加入（路径由部署者配置，不接受模型参数）：
+安装更新后的 Adapter 并重启 DSH，即可在同一个 profile 中对多个项目使用 checkpoint，
+无需填写项目路径。每次调用从当前 Agent 的 `session.header.cwd` 绑定项目，不使用启动
+DSH 进程的目录，也不接受模型传入路径。缺少会话或绝对路径时拒绝操作。
+
+默认恢复目录为 `${DSH_HOME}/maestro-recovery/<项目标识>/`，未设置 `DSH_HOME` 时使用
+`~/.dsh/maestro-recovery/<项目标识>/`。项目标识是文件系统规范 target key 的 SHA-256，
+同名但路径不同的项目不会共用恢复目录。保存仍需用户明确要求，未增加关闭/压缩时自动保存。
+
+写入使用当前会话的 sandboxPolicy，保留会话只读等限制。默认外部恢复目录若被沙箱拒绝，
+自动退回项目内的 `references/checkpoints/` 恢复记录，`status` 返回 `recovery: project`；
+不会自动扩权。显式配置的 recoveryRoot 写入失败仍会报错，不静默忽略。权限拒绝返回
+`filesystem_permission_denied`。`save` 缺字段时返回 `missing_fields`，不要通过删除 request_id
+或改用绝对 source_refs 绕过校验。
+
+现有 profile 的空补丁 `[]` 可以保持原样。可选覆盖如下：
+
+```yaml
+- id: maestro-adapter
+  config:
+    checkpoint:
+      recoveryRoot: 'E:\maestro-recovery' # 自动模式下是基目录，下面再按项目隔离
+```
+
+设 `checkpoint: false` 可禁用工具。原有固定项目配置仍兼容，指定 `projectRoot` 时
+`recoveryRoot` 保持原来的精确目录语义（可省略）：
 
 ```yaml
 checkpoint:
@@ -200,14 +228,18 @@ checkpoint:
   recoveryRoot: 'E:\maestro-recovery'
 ```
 
-`recoveryRoot` 可省略；指定时必须位于项目之外，不能与项目互相包含。它保存有界快照、
+要从旧固定配置切换为自动模式，删除 `projectRoot`，或删除整个 checkpoint 覆盖配置。
+旧恢复文件不会自动迁移；处理旧的待重试请求时保留原配置。
+
+恢复目录及自动模式的恢复基目录必须位于项目之外，不能与项目互相包含。它保存有界快照、
 目标绑定及完整提案的写前副本，不是新的 Memory 层，也不会自动备份整个 transcript。
 同一磁盘/后端仍可能同时故障，路径分离不等于故障域独立。目录应由部署者配置访问权限和保留期；
 工具不会自动清理、扩权或将源材料发送到外部服务。
 
-宿主必须同时提供 `fs`、`tools`，并加载带 checkpoint schema 的 Core。配置生效后注册
+宿主必须同时提供 `fs`、`tools`，并加载带 checkpoint schema 的 Core。满足条件后默认注册
 `maestro_checkpoint`，保持原生 tools 审批/取消管线；缺少能力时日志说明未启用，裸 Skill 继续运行。
-调用 Agent 的 `session.header.cwd` 必须与配置项目的 canonical root 一致，不能借此操作其他项目。
+固定模式下，调用 Agent 的 `session.header.cwd` 必须与配置项目的 canonical root 一致。
+自动模式每次从该会话重新绑定项目，写入仍受同一 canonical root 的边界检查。
 
 操作顺序：
 

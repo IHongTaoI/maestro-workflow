@@ -38,7 +38,7 @@ interface RecordData extends CheckpointInput {
   proposal: string
   proposal_hash: string
 }
-export interface CheckpointConfig { projectRoot: string; recoveryRoot?: string }
+export interface CheckpointConfig { projectRoot: string; recoveryRoot?: string; optionalRecovery?: boolean }
 export interface CheckpointFs extends StateFileSystem {
   listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
 }
@@ -279,8 +279,14 @@ export class CheckpointWriter {
     await this.sources(record.snapshot)
     // Secondary write-ahead copy contains source, target binding AND exact proposal.
     if (this.backup) {
-      await this.secondary(kind, target_id, request_id, json(record))
-      this.recovery = 'secondary'
+      try {
+        await this.secondary(kind, target_id, request_id, json(record))
+        this.recovery = 'secondary'
+      } catch (error) {
+        // Default external archive may be outside the session's writable roots.
+        // Never widen permission; the project request remains the recovery source.
+        if (!this.config.optionalRecovery || (error as { code?: string }).code !== 'FS_SANDBOX_DENIED') throw error
+      }
     }
     await this.immutable(this.recordPath(kind, target_id, request_id), json(record))
     if (this.recovery === 'none') this.recovery = 'project'
@@ -367,6 +373,7 @@ export class CheckpointWriter {
     const code = (error as { code?: string })?.code
     return { status: 'failed', code: error instanceof CheckpointError ? error.code
       : this.signal.aborted ? 'cancelled' : code === 'FS_STALE_VERSION' ? 'conflict'
+        : code === 'FS_SANDBOX_DENIED' ? 'filesystem_permission_denied'
         : error instanceof Error && error.message.includes('lock contention') ? 'lock_contention'
           : 'storage_or_validation_error', recovery: this.recovery,
     has_recoverable_record: this.recovery !== 'none' }

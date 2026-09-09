@@ -39,6 +39,8 @@ await module.apply({
     return name === 'skills' ? skills : undefined
   },
   effect() {},
+  // This plain-Skill fixture never publishes optional filesystem/tools services.
+  inject(dependencies) { assert.deepEqual(dependencies, ['fs']) },
   logger: { info() {}, warn() {} },
 })
 assert.equal(registeredSkill.name, 'maestro')

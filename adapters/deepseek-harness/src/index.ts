@@ -18,7 +18,7 @@
  *   `MaestroStateStore` and `MaestroSchemaValidator` are constructed and
  *   registered as Cordis services (`maestro.stateStore` /
  *   `maestro.schemaValidator`). They are reachable via `ctx.get(...)` but are
- *   not exposed as unrestricted raw tools. An explicitly configured checkpoint
+ *   not exposed as unrestricted raw tools. A session-bound checkpoint
  *   tool uses them for single-target snapshot saves when `ctx.tools` exists.
  *   Other Core reads/writes still follow `storage.md` through host tools.
  * - **Lifecycle hooks**: `ctx.agents` is detected for status only; no handler
@@ -42,7 +42,7 @@ import type { AdapterConfig } from './types'
 /** Cordis plugin name. */
 export const name = 'maestro-adapter'
 
-/** Hard dependency: the skill registry. Optional seams are probed, not injected. */
+/** Only skills gate the Core; child injections wait for optional enhancements. */
 export const inject = ['skills']
 
 /** Cordis service name under which the deterministic state store is provided. */
@@ -58,6 +58,7 @@ export const SCHEMA_VALIDATOR_SERVICE = 'maestro.schemaValidator'
  * @param config - adapter config (see {@link AdapterConfig}).
  */
 export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<void> {
+  const checkpoint = config.checkpoint === false ? false : config.checkpoint ?? {}
   const capabilities = detectCapabilities(ctx)
   assertSkills(capabilities)
   const activation = planActivation(capabilities)
@@ -68,8 +69,9 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
   const disposer = registerCoreSkill(ctx, registration)
   ctx.effect(() => disposer, 'maestro-adapter: core skill')
 
-  // Product B — mount deterministic enhancements only where the seams exist.
-  if (activation.storage) {
+  // Do not snapshot optional services at startup: DSH can publish fs/tools later.
+  // Child injections preserve the plain Skill and follow service disposal/reload.
+  ctx.inject(['fs'], async (ctx) => {
     const fs = ctx.get('fs') as FileSystem
     const store = new MaestroStateStore(fs)
     const validator = new MaestroSchemaValidator()
@@ -90,21 +92,23 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
       disposeValidator()
     }, 'maestro-adapter: storage services')
 
-    const tools = ctx.get('tools') as ToolRuntime | undefined
-    if (config.checkpoint && tools && validator.has('https://maestro.local/schemas/checkpoint.schema.json')) {
-      if (!path.isAbsolute(config.checkpoint.projectRoot)
-        || (config.checkpoint.recoveryRoot && !path.isAbsolute(config.checkpoint.recoveryRoot))) {
+    if (checkpoint && validator.has('https://maestro.local/schemas/checkpoint.schema.json')) {
+      if ((checkpoint.projectRoot !== undefined && !path.isAbsolute(checkpoint.projectRoot))
+        || (checkpoint.recoveryRoot !== undefined && !path.isAbsolute(checkpoint.recoveryRoot))) {
         throw new Error('maestro-adapter: checkpoint roots must be absolute operator configuration')
       }
-      const disposeCheckpoint = tools.register(checkpointTool(fs, validator, config.checkpoint))
-      ctx.effect(() => disposeCheckpoint, 'maestro-adapter: checkpoint tool')
-      ctx.logger.info('maestro-adapter: checkpoint tool registered (snapshot mode; live durability not verified)')
-    } else if (config.checkpoint) {
+      ctx.inject(['tools'], (ctx) => {
+        const tools = ctx.get('tools') as ToolRuntime
+        const disposeCheckpoint = tools.register(checkpointTool(fs, validator, checkpoint))
+        ctx.effect(() => disposeCheckpoint, 'maestro-adapter: checkpoint tool')
+        ctx.logger.info('maestro-adapter: checkpoint tool registered (snapshot mode; live durability not verified)')
+      })
+    } else if (checkpoint) {
       ctx.logger.warn('maestro-adapter: checkpoint not activated; tools or schemas unavailable')
     }
-  }
-  if (config.checkpoint && !activation.storage) {
-    ctx.logger.warn('maestro-adapter: checkpoint not activated; filesystem unavailable')
+  })
+  if (checkpoint && !activation.storage) {
+    ctx.logger.info('maestro-adapter: checkpoint waiting for filesystem service')
   }
 
   // TODO(next): when Maestro's Handoff / session-boundary logic lands in the

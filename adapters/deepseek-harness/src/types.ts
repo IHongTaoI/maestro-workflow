@@ -16,10 +16,10 @@ export interface AdapterConfig {
    * the adapter probes the default roots below.
    */
   coreDir?: string
-  /** Explicit opt-in. Root must equal the calling Session's canonical cwd. */
-  checkpoint?: {
-    projectRoot: string
-    /** Optional operator-owned write-ahead archive outside the project. */
+  /** Automatic session binding by default; false disables the tool. */
+  checkpoint?: false | {
+    projectRoot?: string
+    /** Automatic archive base, or exact archive root when projectRoot is set. */
     recoveryRoot?: string
   }
 }

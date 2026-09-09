@@ -132,6 +132,11 @@ npm run dsh:install:local -- --profile web
 其他 profile 使用 `--profile <name>`。Core 或 Adapter 变更后重新运行同一命令，即可安装新的本地
 压缩包。如果 PowerShell 阻止 `npm.ps1` shim，改用 `npm.cmd` 执行相同命令。
 
+Checkpoint 工具默认按当前 DSH 会话的项目目录自动绑定，一个 profile 可以服务多个项目，
+不需要逐项目填写路径。恢复文件默认保存在 DSH home 下的 `maestro-recovery/` 并按项目隔离。
+保存仍需主动要求，不会自动备份聊天或代码；宿主需提供 fs/tools 能力。旧的固定 projectRoot
+配置继续有效；删除该字段可切换到自动模式。详见 [DSH Adapter 指南](adapters/deepseek-harness/README.md#手动-checkpoint自动配置项目)。
+
 ## 手动安装
 
 完整可移植 Skill Core 是 [`maestro/`](maestro/) 目录。支持 Agent Skills 的宿主可以直接复制其
