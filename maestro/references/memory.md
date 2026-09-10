@@ -127,10 +127,13 @@ updated_by: old-zhou/session-or-run-id
   "source_refs": [".maestro/tasks/archive/task-startup/evidence/trace.md"],
   "tags": ["performance", "trace"],
   "aliases": ["首屏性能"],
+  "search_hints": ["优化首页启动前需要做什么", "首屏 trace 怎么抓"],
   "status": "active"
 }
 ```
 ````
+
+`search_hints`（可选，字符串数组）定义“问什么问题时本条知识应被召回”，作为检索提示词匹配，不作为事实正文内容。检索打分命中 `search_hints` 时享受相关性加权并在候选理由中输出 `"search hint"`。
 
 `entries/` 只允许 `active` 或 `disputed`。经评审变为 `superseded` 或 `rejected` 的 entry snapshot
 移动到 `long-term/history/<entry_id>.md`，同时保留 decisions、conflicts 和 source refs。历史仍可通过
@@ -283,7 +286,21 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 
 - 所有结构化 Long-term 条目；inactive 状态为审计保留，但从常规检索排除；
 - 来自 `meta.yaml` 和简短当前章节的活动 Temporary 路由上下文；
-- 活动 Task 目标和各 Worker `current-state.md`。
+- 活动 Task 目标和各 Worker `current-state.md`；
+- 来自 `.maestro/memory/followups/pending/` 的待办跟进项。
+
+### Temporary 陈旧感知
+
+`manifest.md` 呈现活动 Temporary 时，根据其 `updated_at` 与目录生成时间的相对间隔展示更新天数（如 `(updated 2 days ago)`）。当时间超过陈旧阈值（默认 7 天，可在 `.maestro/config.yaml` 中配置 `temporary_stale_days`）时，索引将其标记为 `stale: true`，并在 `manifest.md` 显式标注 `(updated 18 days ago, stale)`。一旦跨越陈旧阈值，目录自动识别为 stale 并触发刷新。
+
+### 决策待办跟进项（Pending Follow-ups）
+
+决策产生需要后续跟踪或跨 Session 执行的待办时，遵循决策不可变原则，不得直接改写历史决策文件，而是通过 `.maestro/memory/followups/` 独立管理：
+
+- **待办创建：** 待办项存放于 `.maestro/memory/followups/pending/<followup_id>.yaml`，声明 `followup_id`、`title`、`status: pending`、`created_at`、指向决策等来源的 `source_refs` 以及可选的 `related_ids`；
+- **目录可见：** 目录自动将 pending 待办索引入 `index.json` 的 `pending_followups`，并在 `manifest.md` 的 `## Pending follow-ups` 区块展示未完结事项；
+- **解决归档：** 待办落地后，移入 `.maestro/memory/followups/resolved/<followup_id>.yaml`，设置 `status: resolved`，记录 `resolved_at`、`resolution` 解决说明与可选的 `resolution_refs`；
+- **统一查询：** 支持通过 `show <followup-id>` 统一查看待办详情（已解决事项需使用 `--include-inactive`）。待办项不是第 4 层 Memory，而是决策落地与闭环的可见性跟进机制。
 
 它不索引历史 Reference 树。`search` 默认刷新缺失或陈旧目录；`--no-refresh` 会把陈旧状态变成
 可见错误。批准 Long-term 写入、Temporary 生命周期变化、Task 生命周期变化或 current-state

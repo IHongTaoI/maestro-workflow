@@ -132,7 +132,22 @@
         "decision_context": { "$ref": "#/$defs/decisionContext" },
         "rationale": { "type": "string", "minLength": 1 },
         "source": { "$ref": "#/$defs/source" },
-        "source_refs": { "$ref": "#/$defs/sourceRefs" }
+        "source_refs": { "$ref": "#/$defs/sourceRefs" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "search_hints": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
       },
       "additionalProperties": false,
       "allOf": [

@@ -15,6 +15,9 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
   memory/
     manifest.md
     index.json
+    followups/
+      pending/<followup-id>.yaml
+      resolved/<followup-id>.yaml
     temporary/
       active/<temporary-id>/
         meta.yaml
@@ -84,10 +87,11 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 - **团队共享 Memory（纳入 Git）：**
   - `memory/long-term/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
     `conflicts/` 和显式迁移审计；
+  - `memory/followups/`：团队共享决策待办跟进项（`pending/` 与 `resolved/`）；
   - `playbooks/`：已批准的团队指导，以及已评审 `candidates/` 和 `decisions/`；
   - `workers/registry.yaml`：已评审、项目共享的可复用 Worker 规格；
   - `instructions/registry.yaml`：已评审的项目指令引用；不得覆盖内置 refs；
-  - `config.yaml`：共享项目配置。
+  - `config.yaml`：共享项目配置，可配置 `temporary_stale_days`（默认 7 天）等设置。
 
 目标项目可以使用标准 `.gitignore` 规则强制此边界：
 
@@ -108,6 +112,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 !.maestro/workers/registry.yaml
 !.maestro/instructions/registry.yaml
 !.maestro/memory/long-term/
+!.maestro/memory/followups/
 ```
 
 内置 Worker 注册表是不可变的已安装参考数据。只有需要可复用的项目特定 Worker 或能力别名时，

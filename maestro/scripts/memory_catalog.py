@@ -26,6 +26,11 @@ LONG_TERM_ENTRIES_PATH = LONG_TERM_ROOT / "entries"
 LONG_TERM_HISTORY_PATH = LONG_TERM_ROOT / "history"
 LONG_TERM_MIGRATIONS_PATH = LONG_TERM_ROOT / "migrations"
 LONG_TERM_MIGRATION_LOCK = Path(".maestro/locks/memory-long-term-migration.lock")
+FOLLOWUPS_ROOT = Path(".maestro/memory/followups")
+FOLLOWUPS_PENDING_PATH = FOLLOWUPS_ROOT / "pending"
+FOLLOWUPS_RESOLVED_PATH = FOLLOWUPS_ROOT / "resolved"
+CONFIG_PATH = Path(".maestro/config.yaml")
+DEFAULT_TEMPORARY_STALE_DAYS = 7
 CURRENT_POINTER_BODY = """# Long-term Memory
 
 长期记忆的权威内容按 entry 存放在 `entries/`；已取代或拒绝的历史快照存放在 `history/`。
@@ -105,13 +110,22 @@ def parse_simple_yaml(path: Path) -> dict[str, Any]:
         raise CatalogError(f"cannot read {path}: {error}") from error
     result: dict[str, Any] = {}
     current_list: str | None = None
+    current_dict: str | None = None
     for line_number, line in enumerate(lines, start=1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         list_match = re.fullmatch(r"\s+-\s+(.+?)\s*", line)
         if list_match and current_list is not None:
-            assert isinstance(result[current_list], list)
+            if not isinstance(result[current_list], list):
+                result[current_list] = []
             result[current_list].append(parse_scalar(list_match.group(1)))
+            continue
+        dict_match = re.fullmatch(r"\s{2,}([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*", line)
+        if dict_match and current_dict is not None:
+            d_key, d_raw = dict_match.groups()
+            if not isinstance(result[current_dict], dict):
+                result[current_dict] = {}
+            result[current_dict][d_key] = parse_scalar(d_raw)
             continue
         if line[0].isspace():
             continue
@@ -122,10 +136,31 @@ def parse_simple_yaml(path: Path) -> dict[str, Any]:
         if not raw_value:
             result[key] = []
             current_list = key
+            current_dict = key
         else:
             result[key] = parse_scalar(raw_value)
             current_list = None
+            current_dict = None
     return result
+
+
+def get_temporary_stale_days(project_root: Path) -> int:
+    config_path = project_root / CONFIG_PATH
+    if not config_path.is_file():
+        return DEFAULT_TEMPORARY_STALE_DAYS
+    try:
+        data = parse_simple_yaml(config_path)
+        val = data.get("temporary_stale_days")
+        if isinstance(val, int) and val > 0:
+            return val
+        memory_section = data.get("memory")
+        if isinstance(memory_section, dict):
+            val = memory_section.get("temporary_stale_days")
+            if isinstance(val, int) and val > 0:
+                return val
+    except Exception:
+        pass
+    return DEFAULT_TEMPORARY_STALE_DAYS
 
 
 def strip_front_matter(text: str) -> str:
@@ -316,6 +351,7 @@ def parse_long_term_entries(
             raise CatalogError(f"{path}: invalid status '{status}'")
         optional_string_list(entry, "tags", path)
         optional_string_list(entry, "aliases", path)
+        optional_string_list(entry, "search_hints", path)
         validate_decision_context(entry, path)
         entries.append(entry)
     return entries
@@ -435,8 +471,9 @@ def long_term_index_entries(project_root: Path, source_files: set[Path]) -> list
                 "memory_kind": require_string(entry, "memory_kind", path),
                 "tags": optional_string_list(entry, "tags", path),
                 "aliases": optional_string_list(entry, "aliases", path),
-                "search_hints": [],
+                "search_hints": optional_string_list(entry, "search_hints", path),
                 "updated_at": updated_at,
+                "stale": None,
             }
         )
     return result
@@ -447,6 +484,8 @@ def temporary_index_entries(project_root: Path, source_files: set[Path]) -> list
     if not active_root.is_dir():
         return []
     result: list[dict[str, Any]] = []
+    stale_threshold = get_temporary_stale_days(project_root)
+    now_dt = datetime.now(timezone.utc)
     for directory in sorted(path for path in active_root.iterdir() if path.is_dir()):
         meta_path = directory / "meta.yaml"
         if not meta_path.is_file():
@@ -468,6 +507,13 @@ def temporary_index_entries(project_root: Path, source_files: set[Path]) -> list
         if current_path.is_file():
             source_files.add(current_path)
         updated_at = meta.get("updated_at") if isinstance(meta.get("updated_at"), str) else None
+        is_stale = False
+        if updated_at:
+            try:
+                updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                is_stale = (now_dt - updated_dt).total_seconds() >= stale_threshold * 86400
+            except ValueError:
+                is_stale = False
         result.append(
             {
                 "memory_id": temporary_id,
@@ -483,6 +529,7 @@ def temporary_index_entries(project_root: Path, source_files: set[Path]) -> list
                 "aliases": aliases,
                 "search_hints": hints,
                 "updated_at": updated_at,
+                "stale": is_stale,
             }
         )
     return result
@@ -527,6 +574,7 @@ def current_state_entries(
                     "tags": [],
                     "aliases": [],
                     "search_hints": findings,
+                    "stale": None,
                     "updated_at": None,
                 }
             )
@@ -579,6 +627,7 @@ def task_index_entries(project_root: Path, source_files: set[Path]) -> list[dict
                 "tags": [],
                 "aliases": [],
                 "search_hints": hints,
+                "stale": None,
                 "updated_at": updated_at,
             }
         )
@@ -616,8 +665,149 @@ def validate_index(index: dict[str, Any], project_root: Path) -> None:
         raise CatalogError(f"generated Memory Index is invalid: {details}")
 
 
+def followup_records(
+    project_root: Path,
+    source_files: set[Path],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    followups_root = project_root / FOLLOWUPS_ROOT
+    if followups_root.exists() and not followups_root.is_dir():
+        raise CatalogError(f"{followups_root}: Follow-ups path must be a directory")
+    pending_followups: list[dict[str, Any]] = []
+    all_followups: dict[str, dict[str, Any]] = {}
+    validator = FileReferenceValidator(project_root)
+
+    pending_dir = project_root / FOLLOWUPS_PENDING_PATH
+    if pending_dir.exists() and not pending_dir.is_dir():
+        raise CatalogError(f"{pending_dir}: Follow-up pending path must be a directory")
+    if pending_dir.is_dir():
+        for path in sorted(pending_dir.iterdir()):
+            if path.name.startswith("."):
+                continue
+            if not path.is_file() or path.suffix not in {".yaml", ".yml"}:
+                raise CatalogError(f"{path}: Follow-up directories may contain only YAML files")
+            source_files.add(path)
+            record = parse_simple_yaml(path)
+            fid = require_string(record, "followup_id", path)
+            if not STABLE_ID.fullmatch(fid):
+                raise CatalogError(f"{path}: invalid followup_id '{fid}'")
+            if path.name not in {f"{fid}.yaml", f"{fid}.yml"}:
+                raise CatalogError(f"{path}: filename must match followup_id '{fid}.yaml'")
+            status = require_string(record, "status", path)
+            if status != "pending":
+                raise CatalogError(f"{path}: status must be 'pending' in pending directory")
+            title = require_string(record, "title", path)
+            created_at = require_string(record, "created_at", path)
+            try:
+                datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise CatalogError(f"{path}: invalid created_at timestamp '{created_at}'") from error
+            source_refs = require_string_list(record, "source_refs", path)
+            ref_errors: list[Diagnostic] = []
+            for index, ref in enumerate(source_refs):
+                validator(ref, f"source_refs[{index}]", ref_errors)
+            if ref_errors:
+                details = "; ".join(f"{err.path}: {err.message}" for err in ref_errors)
+                raise CatalogError(f"{path}: invalid source_refs: {details}")
+
+            related_ids = optional_string_list(record, "related_ids", path)
+            for rid in related_ids:
+                if not STABLE_ID.fullmatch(rid):
+                    raise CatalogError(f"{path}: invalid related_id '{rid}'")
+
+            for forbidden in ("resolved_at", "resolution", "resolution_refs"):
+                if forbidden in record and record[forbidden] is not None:
+                    raise CatalogError(f"{path}: pending follow-up cannot have '{forbidden}'")
+
+            if fid in all_followups:
+                raise CatalogError(f"duplicate followup_id '{fid}' across follow-up records")
+
+            record_copy = dict(record)
+            record_copy["path"] = project_relative(project_root, path)
+            record_copy["related_ids"] = related_ids
+            all_followups[fid] = record_copy
+            pending_followups.append(
+                {
+                    "followup_id": fid,
+                    "title": title,
+                    "status": "pending",
+                    "created_at": created_at,
+                    "source_refs": source_refs,
+                    "related_ids": related_ids,
+                    "path": project_relative(project_root, path),
+                }
+            )
+
+    resolved_dir = project_root / FOLLOWUPS_RESOLVED_PATH
+    if resolved_dir.exists() and not resolved_dir.is_dir():
+        raise CatalogError(f"{resolved_dir}: Follow-up resolved path must be a directory")
+    if resolved_dir.is_dir():
+        for path in sorted(resolved_dir.iterdir()):
+            if path.name.startswith("."):
+                continue
+            if not path.is_file() or path.suffix not in {".yaml", ".yml"}:
+                raise CatalogError(f"{path}: Follow-up directories may contain only YAML files")
+            source_files.add(path)
+            record = parse_simple_yaml(path)
+            fid = require_string(record, "followup_id", path)
+            if not STABLE_ID.fullmatch(fid):
+                raise CatalogError(f"{path}: invalid followup_id '{fid}'")
+            if path.name not in {f"{fid}.yaml", f"{fid}.yml"}:
+                raise CatalogError(f"{path}: filename must match followup_id '{fid}.yaml'")
+            status = require_string(record, "status", path)
+            if status != "resolved":
+                raise CatalogError(f"{path}: status must be 'resolved' in resolved directory")
+            require_string(record, "title", path)
+            created_at = require_string(record, "created_at", path)
+            try:
+                datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise CatalogError(f"{path}: invalid created_at timestamp '{created_at}'") from error
+            source_refs = require_string_list(record, "source_refs", path)
+            ref_errors = []
+            for index, ref in enumerate(source_refs):
+                validator(ref, f"source_refs[{index}]", ref_errors)
+            if ref_errors:
+                details = "; ".join(f"{err.path}: {err.message}" for err in ref_errors)
+                raise CatalogError(f"{path}: invalid source_refs: {details}")
+
+            related_ids = optional_string_list(record, "related_ids", path)
+            for rid in related_ids:
+                if not STABLE_ID.fullmatch(rid):
+                    raise CatalogError(f"{path}: invalid related_id '{rid}'")
+
+            resolved_at = require_string(record, "resolved_at", path)
+            try:
+                datetime.fromisoformat(resolved_at.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise CatalogError(f"{path}: invalid resolved_at timestamp '{resolved_at}'") from error
+            require_string(record, "resolution", path)
+
+            resolution_refs = optional_string_list(record, "resolution_refs", path)
+            res_errors: list[Diagnostic] = []
+            for index, ref in enumerate(resolution_refs):
+                validator(ref, f"resolution_refs[{index}]", res_errors)
+            if res_errors:
+                details = "; ".join(f"{err.path}: {err.message}" for err in res_errors)
+                raise CatalogError(f"{path}: invalid resolution_refs: {details}")
+
+            if fid in all_followups:
+                raise CatalogError(f"duplicate followup_id '{fid}' across follow-up records")
+
+            record_copy = dict(record)
+            record_copy["path"] = project_relative(project_root, path)
+            record_copy["related_ids"] = related_ids
+            record_copy["resolution_refs"] = resolution_refs
+            all_followups[fid] = record_copy
+
+    pending_followups.sort(key=lambda item: item["followup_id"])
+    return pending_followups, all_followups
+
+
 def derive_catalog(project_root: Path) -> dict[str, Any]:
     source_files: set[Path] = set()
+    config_path = project_root / CONFIG_PATH
+    if config_path.is_file():
+        source_files.add(config_path)
     entries = []
     entries.extend(long_term_index_entries(project_root, source_files))
     entries.extend(temporary_index_entries(project_root, source_files))
@@ -629,11 +819,16 @@ def derive_catalog(project_root: Path) -> dict[str, Any]:
         if memory_id in seen:
             raise CatalogError(f"duplicate memory_id across layers: '{memory_id}'")
         seen.add(memory_id)
+    pending_followups, all_followups = followup_records(project_root, source_files)
+    for fid in all_followups:
+        if fid in seen:
+            raise CatalogError(f"followup_id '{fid}' collides with memory_id")
     index = {
         "schema_version": 1,
         "generated_at": utc_now(),
         "source_digest": digest_sources(project_root, source_files),
         "entries": entries,
+        "pending_followups": pending_followups,
     }
     validate_index(index, project_root)
     return index
@@ -663,13 +858,39 @@ def manifest_text(index: dict[str, Any]) -> str:
         "",
         "This file is generated. Formal Memory files remain authoritative.",
     ]
+    generated_dt: datetime | None = None
+    try:
+        generated_dt = datetime.fromisoformat(index["generated_at"].replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
     for title, entries in groups:
         lines.extend(("", f"## {title}", ""))
         if not entries:
             lines.append("- None")
             continue
         for entry in entries:
-            lines.append(f"- **{entry['title']}** (`{entry['memory_id']}`) — {entry['summary']}")
+            timing = ""
+            if entry["record_type"] == "temporary":
+                timing_parts: list[str] = []
+                if entry.get("updated_at") and generated_dt:
+                    try:
+                        updated_dt = datetime.fromisoformat(
+                            entry["updated_at"].replace("Z", "+00:00")
+                        )
+                        days = max(0, int((generated_dt - updated_dt).total_seconds() // 86400))
+                        day_str = f"{days} days ago" if days != 1 else "1 day ago"
+                        timing_parts.append(f"updated {day_str}")
+                    except ValueError:
+                        pass
+                if entry.get("stale"):
+                    timing_parts.append("stale")
+                if timing_parts:
+                    timing = f" ({', '.join(timing_parts)})"
+            lines.append(
+                f"- **{entry['title']}** (`{entry['memory_id']}`){timing} — {entry['summary']}"
+            )
+
     state_count = sum(entry["record_type"] == "worker-state" for entry in visible)
     lines.extend(
         (
@@ -677,9 +898,19 @@ def manifest_text(index: dict[str, Any]) -> str:
             "## Indexed execution states",
             "",
             f"- {state_count} current Worker state(s)",
-            "",
         )
     )
+
+    pending_followups = index.get("pending_followups", [])
+    lines.extend(("", "## Pending follow-ups", ""))
+    if not pending_followups:
+        lines.append("- None")
+    else:
+        for item in pending_followups:
+            sources = ", ".join(item.get("source_refs", []))
+            ref_info = f" — from {sources}" if sources else ""
+            lines.append(f"- **{item['title']}** (`{item['followup_id']}`){ref_info}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -727,6 +958,7 @@ def entries_equal(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return (
         left.get("source_digest") == right.get("source_digest")
         and left.get("entries") == right.get("entries")
+        and left.get("pending_followups") == right.get("pending_followups")
     )
 
 
@@ -797,12 +1029,13 @@ def rank_entry(
     if binding and entry["memory_id"] == binding:
         score += 100
         reasons.append("current binding")
+    hint_label = "current state" if entry.get("record_type") in {"worker-state", "task"} else "search hint"
     for label, values, exact, token in (
         ("title", [entry["title"]], 30, 8),
         ("summary", [entry["summary"]], 20, 4),
         ("tag", entry["tags"], 25, 7),
         ("alias", entry["aliases"], 25, 7),
-        ("current state", entry["search_hints"], 10, 2),
+        (hint_label, entry["search_hints"], 10, 2),
     ):
         added, matched = field_score(normalized_query, tokens, values, exact, token)
         score += added
@@ -1203,21 +1436,43 @@ def main(argv: list[str] | None = None) -> int:
             ),
             None,
         )
-        if entry is None or (entry["status"] != "active" and not args.include_inactive):
-            raise CatalogError(f"Memory '{args.memory_id}' is unavailable")
-        print(
-            json.dumps(
-                {
-                    "memory": entry,
-                    "detail": detail_for_entry(project_root, entry),
-                    "catalog_refreshed": refreshed,
-                },
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
+        if entry is not None:
+            if entry["status"] != "active" and not args.include_inactive:
+                raise CatalogError(f"Memory '{args.memory_id}' is unavailable")
+            print(
+                json.dumps(
+                    {
+                        "memory": entry,
+                        "detail": detail_for_entry(project_root, entry),
+                        "catalog_refreshed": refreshed,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
             )
-        )
-        return 0
+            return 0
+
+        _, all_followups = followup_records(project_root, set())
+        followup = all_followups.get(args.memory_id)
+        if followup is not None:
+            if followup["status"] != "pending" and not args.include_inactive:
+                raise CatalogError(f"Follow-up '{args.memory_id}' is unavailable")
+            print(
+                json.dumps(
+                    {
+                        "followup": followup,
+                        "detail": followup,
+                        "catalog_refreshed": refreshed,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+
+        raise CatalogError(f"Memory '{args.memory_id}' is unavailable")
     except (CatalogError, OSError, RuntimeError, ValueError) as error:
         print(f"memory catalog error: {error}", file=sys.stderr)
         return 2

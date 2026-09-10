@@ -426,3 +426,263 @@ test('migration ID conflict never changes either storage format', async (t) => {
   assert.match(missingActor.stderr, /--actor/);
   assert.equal(await readFile(currentPath, 'utf8'), original);
 });
+
+test('indexes long-term search hints, ranks by them with search hint reason, and preserves them on migration', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const hintEntry = {
+    entry_id: 'lt-with-hints',
+    title: 'Startup tracing guidance',
+    memory_kind: 'experience',
+    content: 'Always capture CPU profiles before touching bootstrap.',
+    source_refs: ['.maestro/evidence/performance.md'],
+    tags: ['startup'],
+    aliases: ['启动分析'],
+    search_hints: ['优化启动性能', 'how to profile startup'],
+    status: 'active',
+  };
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/entries/lt-with-hints.md',
+    entryFile(hintEntry, { revision: 1, updatedAt: '2026-09-10T02:00:00Z' })
+  );
+
+  const build = JSON.parse((await runCatalog(projectRoot, ['build'])).stdout);
+  assert.equal(build.status, 'built');
+
+  const indexPath = path.join(projectRoot, '.maestro', 'memory', 'index.json');
+  const index = JSON.parse(await readFile(indexPath, 'utf8'));
+  const stored = index.entries.find((e) => e.memory_id === 'lt-with-hints');
+  assert.ok(stored);
+  assert.deepEqual(stored.search_hints, ['优化启动性能', 'how to profile startup']);
+  assert.equal(stored.stale, null);
+
+  const search = JSON.parse((await runCatalog(projectRoot, ['search', 'how to profile startup'])).stdout);
+  const match = search.candidates.find((e) => e.memory_id === 'lt-with-hints');
+  assert.ok(match);
+  assert.match(match.relevance_reason, /search hint/);
+
+  // Validate index file with validatorScript
+  await execFileAsync(python, [validatorScript, 'memory-index', indexPath, '--project-root', projectRoot]);
+});
+
+test('calculates active temporary staleness, marks stale in manifest and index, and honors config threshold', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  // temp-home has updated_at 2026-09-01T06:10:00Z (9 days before 2026-09-10) -> stale by default (7 days)
+  await runCatalog(projectRoot, ['build']);
+
+  const indexPath = path.join(projectRoot, '.maestro', 'memory', 'index.json');
+  let index = JSON.parse(await readFile(indexPath, 'utf8'));
+  let tempHome = index.entries.find((e) => e.memory_id === 'temp-home');
+  assert.ok(tempHome);
+  assert.equal(tempHome.stale, true);
+
+  let manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
+  assert.match(manifest, /homepage startup investigation.*\(updated 9 days ago, stale\)/);
+
+  // Write a fresh temporary entry
+  await writeProjectFile(projectRoot, '.maestro/memory/temporary/active/temp-fresh/meta.yaml', `id: temp-fresh
+topic: fresh exploration
+status: active
+created_at: 2026-09-09T10:00:00Z
+updated_at: 2026-09-09T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+  await writeProjectFile(projectRoot, '.maestro/memory/temporary/active/temp-fresh/current.md', `# Topic\nFresh exploration\n`);
+
+  await runCatalog(projectRoot, ['build']);
+  index = JSON.parse(await readFile(indexPath, 'utf8'));
+  const tempFresh = index.entries.find((e) => e.memory_id === 'temp-fresh');
+  assert.ok(tempFresh);
+  assert.equal(tempFresh.stale, false);
+
+  manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
+  assert.match(manifest, /fresh exploration.*\(updated 1 day ago\)/);
+  assert.doesNotMatch(manifest, /fresh exploration.*stale/);
+
+  // Configure custom threshold in .maestro/config.yaml: 14 days
+  await writeProjectFile(projectRoot, '.maestro/config.yaml', `temporary_stale_days: 14\n`);
+  // Since config changed, check detects catalog is stale
+  const staleCheck = await rejectedCommand(runCatalog(projectRoot, ['check']));
+  assert.equal(staleCheck.code, 1);
+
+  // Rebuild
+  await runCatalog(projectRoot, ['build']);
+  index = JSON.parse(await readFile(indexPath, 'utf8'));
+  tempHome = index.entries.find((e) => e.memory_id === 'temp-home');
+  assert.equal(tempHome.stale, false);
+
+  manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
+  assert.match(manifest, /homepage startup investigation.*\(updated 9 days ago\)/);
+  assert.doesNotMatch(manifest, /homepage startup investigation.*stale/);
+});
+
+test('indexes pending follow-ups, exposes them in manifest, and supports show command', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const pendingYaml = `followup_id: cleanup-redis
+title: Clean up obsolete Redis cluster nodes
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+related_ids:
+  - lt-startup-performance
+`;
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/cleanup-redis.yaml', pendingYaml);
+
+  const build = JSON.parse((await runCatalog(projectRoot, ['build'])).stdout);
+  assert.equal(build.status, 'built');
+
+  const indexPath = path.join(projectRoot, '.maestro', 'memory', 'index.json');
+  const index = JSON.parse(await readFile(indexPath, 'utf8'));
+  assert.ok(Array.isArray(index.pending_followups));
+  assert.equal(index.pending_followups.length, 1);
+  const item = index.pending_followups[0];
+  assert.equal(item.followup_id, 'cleanup-redis');
+  assert.equal(item.title, 'Clean up obsolete Redis cluster nodes');
+  assert.equal(item.status, 'pending');
+  assert.deepEqual(item.source_refs, ['.maestro/evidence/performance.md']);
+  assert.deepEqual(item.related_ids, ['lt-startup-performance']);
+  assert.equal(item.path, '.maestro/memory/followups/pending/cleanup-redis.yaml');
+
+  // Validate index via validator
+  await execFileAsync(python, [validatorScript, 'memory-index', indexPath, '--project-root', projectRoot]);
+
+  // Check manifest
+  const manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
+  assert.match(manifest, /## Pending follow-ups/);
+  assert.match(manifest, /- \*\*Clean up obsolete Redis cluster nodes\*\* \(`cleanup-redis`\) — from \.maestro\/evidence\/performance\.md/);
+
+  // Show pending followup
+  const showPending = JSON.parse((await runCatalog(projectRoot, ['show', 'cleanup-redis'])).stdout);
+  assert.equal(showPending.followup.followup_id, 'cleanup-redis');
+  assert.equal(showPending.followup.title, 'Clean up obsolete Redis cluster nodes');
+  assert.equal(showPending.followup.status, 'pending');
+
+  // Resolve the follow-up
+  await rm(path.join(projectRoot, '.maestro/memory/followups/pending/cleanup-redis.yaml'));
+  const resolvedYaml = `followup_id: cleanup-redis
+title: Clean up obsolete Redis cluster nodes
+status: resolved
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+related_ids:
+  - lt-startup-performance
+resolved_at: 2026-09-10T12:00:00Z
+resolution: Decommissioned old nodes and updated routing config.
+resolution_refs:
+  - .maestro/evidence/performance.md
+`;
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/resolved/cleanup-redis.yaml', resolvedYaml);
+
+  await runCatalog(projectRoot, ['build']);
+  const updatedIndex = JSON.parse(await readFile(indexPath, 'utf8'));
+  assert.deepEqual(updatedIndex.pending_followups, []);
+
+  const updatedManifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
+  assert.match(updatedManifest, /## Pending follow-ups\s+- None/);
+
+  // show without --include-inactive should fail
+  const unavailable = await rejectedCommand(runCatalog(projectRoot, ['show', 'cleanup-redis']));
+  assert.equal(unavailable.code, 2);
+  assert.match(unavailable.stderr, /Follow-up 'cleanup-redis' is unavailable/);
+
+  // show with --include-inactive succeeds
+  const showResolved = JSON.parse((await runCatalog(projectRoot, ['show', 'cleanup-redis', '--include-inactive'])).stdout);
+  assert.equal(showResolved.followup.status, 'resolved');
+  assert.equal(showResolved.followup.resolution, 'Decommissioned old nodes and updated routing config.');
+});
+
+test('rejects invalid follow-ups on schema, status mismatch, filename, or ID collision', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+
+  // 1. Filename mismatch
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/mismatched.yaml', `followup_id: correct-id
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+`);
+  let err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /filename must match followup_id/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups/pending/mismatched.yaml'));
+
+  // 2. Status mismatch (resolved in pending folder)
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/wrong-status.yaml', `followup_id: wrong-status
+title: Some Title
+status: resolved
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+resolved_at: 2026-09-10T12:00:00Z
+resolution: done
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /status must be 'pending' in pending directory/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups/pending/wrong-status.yaml'));
+
+  // 3. Pending has resolution forbidden fields
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/has-resolution.yaml', `followup_id: has-resolution
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+resolved_at: 2026-09-10T12:00:00Z
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /pending follow-up cannot have 'resolved_at'/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups/pending/has-resolution.yaml'));
+
+  // 4. Invalid source_refs (non-existent file)
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/bad-ref.yaml', `followup_id: bad-ref
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/missing-file.md
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /invalid source_refs/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups/pending/bad-ref.yaml'));
+
+  // 5. Duplicate ID across pending and resolved
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/dup-id.yaml', `followup_id: dup-id
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+`);
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/resolved/dup-id.yaml', `followup_id: dup-id
+title: Some Title
+status: resolved
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+resolved_at: 2026-09-10T12:00:00Z
+resolution: done
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /duplicate followup_id/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
+
+  // 6. Followup ID collides with memory_id
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/lt-startup-performance.yaml', `followup_id: lt-startup-performance
+title: Colliding Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /collides with memory_id/);
+});
