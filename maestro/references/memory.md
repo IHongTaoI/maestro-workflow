@@ -291,7 +291,7 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 
 ### Temporary 陈旧感知
 
-`manifest.md` 呈现活动 Temporary 时，根据其 `updated_at` 与目录生成时间的相对间隔展示更新天数（如 `(updated 2 days ago)`）。当时间超过陈旧阈值（默认 7 天，可在 `.maestro/config.yaml` 中配置 `temporary_stale_days`）时，索引将其标记为 `stale: true`，并在 `manifest.md` 显式标注 `(updated 18 days ago, stale)`。一旦跨越陈旧阈值，目录自动识别为 stale 并触发刷新。
+`manifest.md` 呈现活动 Temporary 时，根据其 `updated_at` 展示稳定的更新日期与陈旧状态标签（如 `(updated 2026-09-01, stale)` 或 `(updated 2026-09-09)`）。当时间超过陈旧阈值（默认 7 天，可在 `.maestro/config.yaml` 中配置 `temporary_stale_days`）时，索引将其标记为 `stale: true`。一旦跨越陈旧阈值，目录自动识别为 stale 并触发刷新。支持通过 `--now` 或环境变量 `MAESTRO_CURRENT_TIME` 注入基准时间进行确定性构建与测试。
 
 ### 决策待办跟进项（Pending Follow-ups）
 

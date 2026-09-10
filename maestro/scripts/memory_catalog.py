@@ -54,8 +54,24 @@ class CatalogError(ValueError):
     pass
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+def resolve_reference_time(arg_time: str | None = None) -> datetime:
+    if arg_time:
+        try:
+            return datetime.fromisoformat(arg_time.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise CatalogError(f"invalid --now timestamp '{arg_time}': {error}") from error
+    env_time = os.environ.get("MAESTRO_CURRENT_TIME")
+    if env_time:
+        try:
+            return datetime.fromisoformat(env_time.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise CatalogError(f"invalid MAESTRO_CURRENT_TIME '{env_time}': {error}") from error
+    return datetime.now(timezone.utc)
+
+
+def utc_now(reference_time: datetime | None = None) -> str:
+    current = reference_time if reference_time is not None else datetime.now(timezone.utc)
+    return current.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def project_relative(project_root: Path, path: Path) -> str:
@@ -479,13 +495,18 @@ def long_term_index_entries(project_root: Path, source_files: set[Path]) -> list
     return result
 
 
-def temporary_index_entries(project_root: Path, source_files: set[Path]) -> list[dict[str, Any]]:
+def temporary_index_entries(
+    project_root: Path,
+    source_files: set[Path],
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
     active_root = project_root / ".maestro/memory/temporary/active"
     if not active_root.is_dir():
         return []
     result: list[dict[str, Any]] = []
     stale_threshold = get_temporary_stale_days(project_root)
-    now_dt = datetime.now(timezone.utc)
+    now_dt = now if now is not None else datetime.now(timezone.utc)
     for directory in sorted(path for path in active_root.iterdir() if path.is_dir()):
         meta_path = directory / "meta.yaml"
         if not meta_path.is_file():
@@ -803,14 +824,14 @@ def followup_records(
     return pending_followups, all_followups
 
 
-def derive_catalog(project_root: Path) -> dict[str, Any]:
+def derive_catalog(project_root: Path, *, now: datetime | None = None) -> dict[str, Any]:
     source_files: set[Path] = set()
     config_path = project_root / CONFIG_PATH
     if config_path.is_file():
         source_files.add(config_path)
     entries = []
     entries.extend(long_term_index_entries(project_root, source_files))
-    entries.extend(temporary_index_entries(project_root, source_files))
+    entries.extend(temporary_index_entries(project_root, source_files, now=now))
     entries.extend(task_index_entries(project_root, source_files))
     entries.sort(key=lambda item: (item["layer"], item["record_type"], item["memory_id"]))
     seen: set[str] = set()
@@ -825,7 +846,7 @@ def derive_catalog(project_root: Path) -> dict[str, Any]:
             raise CatalogError(f"followup_id '{fid}' collides with memory_id")
     index = {
         "schema_version": 1,
-        "generated_at": utc_now(),
+        "generated_at": utc_now(now),
         "source_digest": digest_sources(project_root, source_files),
         "entries": entries,
         "pending_followups": pending_followups,
@@ -858,12 +879,6 @@ def manifest_text(index: dict[str, Any]) -> str:
         "",
         "This file is generated. Formal Memory files remain authoritative.",
     ]
-    generated_dt: datetime | None = None
-    try:
-        generated_dt = datetime.fromisoformat(index["generated_at"].replace("Z", "+00:00"))
-    except ValueError:
-        pass
-
     for title, entries in groups:
         lines.extend(("", f"## {title}", ""))
         if not entries:
@@ -873,16 +888,9 @@ def manifest_text(index: dict[str, Any]) -> str:
             timing = ""
             if entry["record_type"] == "temporary":
                 timing_parts: list[str] = []
-                if entry.get("updated_at") and generated_dt:
-                    try:
-                        updated_dt = datetime.fromisoformat(
-                            entry["updated_at"].replace("Z", "+00:00")
-                        )
-                        days = max(0, int((generated_dt - updated_dt).total_seconds() // 86400))
-                        day_str = f"{days} days ago" if days != 1 else "1 day ago"
-                        timing_parts.append(f"updated {day_str}")
-                    except ValueError:
-                        pass
+                if entry.get("updated_at"):
+                    date_prefix = str(entry["updated_at"])[:10]
+                    timing_parts.append(f"updated {date_prefix}")
                 if entry.get("stale"):
                     timing_parts.append("stale")
                 if timing_parts:
@@ -969,8 +977,13 @@ def manifest_is_current(project_root: Path, index: dict[str, Any]) -> bool:
     return read_optional(path) == manifest_text(index)
 
 
-def ensure_current_index(project_root: Path, *, refresh: bool) -> tuple[dict[str, Any], bool]:
-    expected = derive_catalog(project_root)
+def ensure_current_index(
+    project_root: Path,
+    *,
+    refresh: bool,
+    now: datetime | None = None,
+) -> tuple[dict[str, Any], bool]:
+    expected = derive_catalog(project_root, now=now)
     current = load_index(project_root)
     stale = (
         current is None
@@ -1343,13 +1356,19 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Maintain Maestro's derived Memory catalog.")
-    parser.add_argument("--project-root", type=Path, default=Path.cwd())
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("build")
-    subparsers.add_parser("check")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--project-root", type=Path, default=argparse.SUPPRESS)
+    common.add_argument("--now", help="Fixed ISO-8601 timestamp for reproducible builds or tests", default=argparse.SUPPRESS)
 
-    search = subparsers.add_parser("search")
+    parser = argparse.ArgumentParser(
+        description="Maintain Maestro's derived Memory catalog.",
+        parents=[common],
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("build", parents=[common])
+    subparsers.add_parser("check", parents=[common])
+
+    search = subparsers.add_parser("search", parents=[common])
     search.add_argument("query")
     search.add_argument("--layer", choices=("temporary", "task", "long-term"))
     search.add_argument("--memory-kind", choices=sorted(LONG_TERM_KINDS))
@@ -1358,15 +1377,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     search.add_argument("--limit", type=int, default=5)
     search.add_argument("--no-refresh", action="store_true")
 
-    show = subparsers.add_parser("show")
+    show = subparsers.add_parser("show", parents=[common])
     show.add_argument("memory_id")
     show.add_argument("--include-inactive", action="store_true")
     show.add_argument("--no-refresh", action="store_true")
 
-    migrate = subparsers.add_parser("migrate-long-term")
+    migrate = subparsers.add_parser("migrate-long-term", parents=[common])
     migrate.add_argument("--apply", action="store_true")
     migrate.add_argument("--actor", default="")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not hasattr(args, "project_root"):
+        args.project_root = Path.cwd()
+    if not hasattr(args, "now"):
+        args.now = None
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1375,13 +1399,14 @@ def main(argv: list[str] | None = None) -> int:
         project_root = args.project_root.resolve(strict=True)
         if not project_root.is_dir():
             raise CatalogError(f"project root is not a directory: {project_root}")
+        reference_time = resolve_reference_time(args.now)
         if args.command == "build":
-            index = derive_catalog(project_root)
+            index = derive_catalog(project_root, now=reference_time)
             persist_catalog(project_root, index)
             print(json.dumps({"status": "built", "entries": len(index["entries"])}, sort_keys=True))
             return 0
         if args.command == "check":
-            expected = derive_catalog(project_root)
+            expected = derive_catalog(project_root, now=reference_time)
             current = load_index(project_root)
             if (
                 current is None
@@ -1401,7 +1426,7 @@ def main(argv: list[str] | None = None) -> int:
             result = migrate_long_term(project_root, actor=args.actor, apply=args.apply)
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
-        index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh)
+        index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh, now=reference_time)
         if args.command == "search":
             if args.limit < 1 or args.limit > 5:
                 raise CatalogError("--limit must be between 1 and 5")

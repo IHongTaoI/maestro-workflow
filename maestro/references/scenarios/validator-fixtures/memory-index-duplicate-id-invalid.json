@@ -16,7 +16,8 @@
       "tags": [],
       "aliases": [],
       "search_hints": [],
-      "updated_at": null
+      "updated_at": null,
+      "stale": null
     },
     {
       "memory_id": "lt-repeated-index",
@@ -31,7 +32,9 @@
       "tags": [],
       "aliases": [],
       "search_hints": [],
-      "updated_at": null
+      "updated_at": null,
+      "stale": null
     }
-  ]
+  ],
+  "pending_followups": []
 }

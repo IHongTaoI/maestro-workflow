@@ -46,6 +46,19 @@
   "allOf": [
     {
       "if": {
+        "properties": { "status": { "const": "pending" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "resolved_at": false,
+          "resolution": false,
+          "resolution_refs": false
+        }
+      }
+    },
+    {
+      "if": {
         "properties": { "status": { "const": "resolved" } },
         "required": ["status"]
       },

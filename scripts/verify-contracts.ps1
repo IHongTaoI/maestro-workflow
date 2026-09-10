@@ -307,6 +307,13 @@ try {
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" "$fixtureRoot/task-valid.json" 0
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-promoted-invalid.json" 1
+    $memoryFollowupSchema = "maestro/references/schemas/memory-followup.schema.json"
+    Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-pending-valid.json" 0
+    Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-resolved-valid.json" 0
+    Invoke-AjvCase $memoryFollowupSchema `
+        "$fixtureRoot/memory-followup-pending-with-resolution-invalid.json" 1
+    Invoke-AjvCase $memoryFollowupSchema `
+        "$fixtureRoot/memory-followup-resolved-missing-resolution-invalid.json" 1
 
     $workerSchema = "maestro/references/schemas/worker.schema.json"
     $requirementsSchema = "maestro/references/schemas/capability-requirements.schema.json"

@@ -12,10 +12,11 @@ const python = process.platform === 'win32' ? 'python' : 'python3';
 const catalogScript = path.join(repositoryRoot, 'maestro', 'scripts', 'memory_catalog.py');
 const validatorScript = path.join(repositoryRoot, 'maestro', 'scripts', 'validate.py');
 
-function runCatalog(projectRoot, args) {
+function runCatalog(projectRoot, args, { env } = {}) {
   return execFileAsync(python, [catalogScript, '--project-root', projectRoot, ...args], {
     cwd: repositoryRoot,
     windowsHide: true,
+    env: { ...process.env, MAESTRO_CURRENT_TIME: '2026-09-10T12:00:00Z', ...env },
   });
 }
 
@@ -477,7 +478,7 @@ test('calculates active temporary staleness, marks stale in manifest and index, 
   assert.equal(tempHome.stale, true);
 
   let manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
-  assert.match(manifest, /homepage startup investigation.*\(updated 9 days ago, stale\)/);
+  assert.match(manifest, /homepage startup investigation.*\(updated 2026-09-01, stale\)/);
 
   // Write a fresh temporary entry
   await writeProjectFile(projectRoot, '.maestro/memory/temporary/active/temp-fresh/meta.yaml', `id: temp-fresh
@@ -497,8 +498,17 @@ revision: 1
   assert.equal(tempFresh.stale, false);
 
   manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
-  assert.match(manifest, /fresh exploration.*\(updated 1 day ago\)/);
+  assert.match(manifest, /fresh exploration.*\(updated 2026-09-09\)/);
   assert.doesNotMatch(manifest, /fresh exploration.*stale/);
+
+  // Test time-crossing threshold via --now argument:
+  // At 2026-09-05 (4 days after 2026-09-01), temp-home is fresh (within 7 days)
+  await runCatalog(projectRoot, ['build', '--now', '2026-09-05T12:00:00Z']);
+  index = JSON.parse(await readFile(indexPath, 'utf8'));
+  assert.equal(index.entries.find((e) => e.memory_id === 'temp-home').stale, false);
+  // Checking at 2026-09-10 (9 days after) detects catalog is stale because temp-home crossed threshold
+  const thresholdCrossedCheck = await rejectedCommand(runCatalog(projectRoot, ['check', '--now', '2026-09-10T12:00:00Z']));
+  assert.equal(thresholdCrossedCheck.code, 1);
 
   // Configure custom threshold in .maestro/config.yaml: 14 days
   await writeProjectFile(projectRoot, '.maestro/config.yaml', `temporary_stale_days: 14\n`);
@@ -506,14 +516,14 @@ revision: 1
   const staleCheck = await rejectedCommand(runCatalog(projectRoot, ['check']));
   assert.equal(staleCheck.code, 1);
 
-  // Rebuild
+  // Rebuild with 14 days threshold: 9-day-old temp-home is not stale
   await runCatalog(projectRoot, ['build']);
   index = JSON.parse(await readFile(indexPath, 'utf8'));
   tempHome = index.entries.find((e) => e.memory_id === 'temp-home');
   assert.equal(tempHome.stale, false);
 
   manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
-  assert.match(manifest, /homepage startup investigation.*\(updated 9 days ago\)/);
+  assert.match(manifest, /homepage startup investigation.*\(updated 2026-09-01\)/);
   assert.doesNotMatch(manifest, /homepage startup investigation.*stale/);
 });
 

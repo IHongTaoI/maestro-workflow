@@ -16,7 +16,9 @@
       "tags": ["memory", "retrieval"],
       "aliases": [],
       "search_hints": [],
-      "updated_at": "2026-09-01T06:29:00Z"
+      "updated_at": "2026-09-01T06:29:00Z",
+      "stale": null
     }
-  ]
+  ],
+  "pending_followups": []
 }
