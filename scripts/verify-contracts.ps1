@@ -714,7 +714,7 @@ try {
         @{ Path = "maestro/references/storage.md"; Text = "本地 Runtime 状态（不纳入 Git）" },
         @{ Path = "maestro/references/storage.md"; Text = "不读取、迁移或恢复旧 Role 目录" },
         @{ Path = "maestro/references/memory.md"; Text = '`long-term/entries/<entry_id>.md`' },
-        @{ Path = "maestro/references/memory.md"; Text = '`migrate-long-term`' },
+        @{ Path = "maestro/references/memory.md"; Text = "migrate-long-term" },
         @{ Path = "maestro/references/storage.md"; Text = "不同 entry 的独立 UPDATE 不共享 revision 或 lock" },
         @{ Path = "README.md"; Text = "CLI 只负责安装、更新和诊断" },
         @{ Path = "README.md"; Text = "绝不调度 Worker" },
