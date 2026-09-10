@@ -33,12 +33,15 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
     pending/
     long-term/
       current.md
+      entries/<entry-id>.md
+      history/<entry-id>.md
       candidates/
         pending/
         approved/
         rejected/
       decisions/
       conflicts/
+      migrations/<migration-id>/
   tasks/
     <task-id>/
       task.yaml
@@ -79,7 +82,8 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
   - `tasks/`：本地活动 Task 执行状态、Worker current-state 和临时选择。
 
 - **团队共享 Memory（纳入 Git）：**
-  - `memory/long-term/`：`current.md`、`candidates/`、`decisions/` 和 `conflicts/`；
+  - `memory/long-term/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
+    `conflicts/` 和显式迁移审计；
   - `playbooks/`：已批准的团队指导，以及已评审 `candidates/` 和 `decisions/`；
   - `workers/registry.yaml`：已评审、项目共享的可复用 Worker 规格；
   - `instructions/registry.yaml`：已评审的项目指令引用；不得覆盖内置 refs；
@@ -132,18 +136,21 @@ workers: []
 评审的 Worker 使用 `source: learned`；它仍是普通注册表条目，不获得额外权限。使用
 [worker-registry.schema.json](schemas/worker-registry.schema.json) 校验解析后的注册表。
 
-Long-term `current.md` 是已批准条目的当前视图。每个条目暴露稳定 `entry_id`、`memory_kind`、
-简洁内容和可达 `source_refs`；措辞更新不改变 ID，只有不可变决策能将其退役。每个通过校验的
+Long-term 当前知识以 `entries/<entry-id>.md` 为权威，一条 entry 一个文件。每个文件拥有独立
+revision 和按规范状态路径派生的独立 lock；措辞更新不改变 ID，只有不可变决策能将其退役。
+`current.md` 新格式只保存固定说明，不是聚合权威内容。已取代或拒绝的 snapshot 放入 `history/`，
+并继续由不可变 decision/conflict/source refs 审计。每个通过校验的
 Memory Worker 提案（包括 `SKIP`）都持久化到 `memory/long-term/candidates/pending/`，直到评审
 记录批准或拒绝。未解决合并冲突存入 `memory/long-term/conflicts/`，状态为
-`pending-confirmation`。`SKIP` 决策不修改 `current.md`，但应保留，避免没有新证据时重复评审
+`pending-confirmation`。`SKIP` 决策不修改 entry 文件，但应保留，避免没有新证据时重复评审
 同一 duplicate 或 low-value 声明。
 
 新批准的 `decision` 可以包含 [memory.md](memory.md) 定义的向后兼容 `decision_context`。更新和
 语义合并必须保留它。它解释理由和已记录的否定方案，但绝不授予权限或替代不可变评审记录。
 
 Long-term 条目使用 [memory.md](memory.md) 定义的 fenced `maestro-memory-entry` JSON 表示，使
-确定性目录构建器拥有可寻址记录边界，同时保持 `current.md` 为权威、可评审来源。生成的
+确定性目录构建器拥有可寻址记录边界。旧聚合 `current.md` 保持可读，但新写入只进入 entry 文件；
+同一 ID 跨旧聚合、`entries/`、`history/` 重复时失败。生成的
 `memory/manifest.md` 和 `memory/index.json` 是本地缓存，不通过 Git 共享，也不参与可变状态
 revision 协议。先发布正式 Memory 改动，再原子重建目录。目录失败绝不回滚已提交的正式写入。
 
@@ -279,7 +286,7 @@ Temporary 和 Task 目录使用从 `topic`（`meta.yaml.topic`）或 `objective`
 
 可变状态包括 Temporary `meta.yaml` 和 `current.md`，Task `task.yaml`、`context.md`、
 `decisions.md`、`progress.md`，Worker `current-state.md`，项目 Worker `registry.yaml`，Long-term
-`current.md`，以及每个规范正式 Playbook Markdown 或 YAML 文件。列出的可变 YAML 文件都携带
+`entries/<entry-id>.md` 与 `history/<entry-id>.md`，以及每个规范正式 Playbook Markdown 或 YAML 文件。列出的可变 YAML 文件都携带
 `revision`、`updated_at`、`updated_by`；Markdown 在 YAML front matter 携带相同字段。新状态从
 revision `0` 开始，每次成功替换只递增一次。Handoff、Detailed Result、source References、
 Evidence、决策记录、Task 或 Temporary `worker-selections/` 中的 Worker 选择，以及事务事件一经
@@ -353,6 +360,12 @@ revision，并在改变规范状态前准备以下不可变事务包：
 读取事务 overlay，或完成实体化。因此，已提交的提升即使仍在清理，也会暴露 Task 并排除来源
 Temporary；未提交的提升相反。不需要维护组不变量时，优先使用单文件更新。
 
+旧聚合 Long-term 的拆分迁移是显式维护操作，不在普通 Session 自动运行。迁移前取得
+`.maestro/locks/memory-long-term-migration.lock`；所有 Long-term writer 看到该锁时停止。工具先
+完整校验旧文件和全部目标 entry，在隐藏 staging 目录准备单文件，保存旧聚合原文与 intent 审计，
+再发布目录和轻量 `current.md`。发布后逐项验证 ID、内容、status、source refs 与 decision context
+一致；失败则恢复旧聚合，不能报告成功。迁移审计不可替代正常 UPDATE/MERGE 的多文件事务。
+
 ## 文件规则
 
 ### 快照 checkpoint 记录
@@ -403,9 +416,11 @@ Long-term Memory，也不能由模型选择。没有独立可达副本时，项�
 - Long-term candidate `pending` → 评审后的 `approved` 或 `rejected`。
 - Playbook Candidate `candidate` → 用户明确评审后的 `approved`、`rejected` 或 `superseded`。
 
-批准的 Long-term `UPDATE`、`MERGE` 或 `CREATE` 通过可变状态写入协议修改 `current.md`。
-`UPDATE` 保留目标 entry ID；`MERGE` 保留一个目标 ID 作为替代项，并在不可变决策中把其他目标
-标记为 superseded；`CREATE` 分配新的稳定 entry ID。`SKIP` 只记录决策，绝不创建当前条目。
+批准的 Long-term `CREATE` 创建 `entries/<entry-id>.md`，从 revision `0` 开始；`UPDATE` 只锁定
+并替换一个目标 entry，保留 ID 且 revision 准确递增一次。`MERGE` 更新一个获批 survivor，并把
+其他目标以各自递增的 revision 移入 `history/`，同时发布不可变 superseded 决策；它属于多文件
+事务，必须按路径排序获取所有锁并通过同一 transaction 发布。`SKIP` 只记录决策，绝不创建 entry。
+不同 entry 的独立 UPDATE 不共享 revision 或 lock。
 
 批准的 Playbook `UPDATE`、`MERGE` 或 `CREATE` 对受影响 Playbook 文件使用同一套 lock、revision
 和 transaction 规则。`CREATE` 分配一个稳定 `playbook_id`，从 revision `0` 开始。`UPDATE`

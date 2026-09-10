@@ -104,6 +104,18 @@ Prompt：`老周，请评审这个设计：应用启动时同步读取本地配�
 通过条件：提出需评审的持久 Memory 动作，保留 source references，不直接复制原始日志，也不自动
 删除来源 Temporary。
 
+## Issue #51：长期记忆拆文件
+
+在可丢弃项目中分别准备旧聚合 `long-term/current.md` 和新 `entries/*.md`，确认：
+
+1. `build/search/show` 对两种格式保持相同调用方式，只读取选中的 entry。
+2. 修改一个 entry 只改变它自己的文件与 revision，另一个 entry 的字节和 Git diff 不变。
+3. 同一 entry ID 跨旧聚合、`entries/`、`history/` 重复时明确失败。
+4. `migrate-long-term` 默认只预检；加 `--apply --actor <actor-id>` 才迁移，并保留旧聚合审计副本。
+5. 迁移前后 entry 数量、ID、内容、status、source refs、decision context 一致；inactive entry 不进入
+   常规搜索，但可通过 `show --include-inactive` 查看。
+6. CREATE/UPDATE 只触碰目标 entry；多 entry MERGE 仍产生 transaction 和不可变 decision。
+
 ## Issue #26：M1 checkpoint 真实宿主验收
 
 本节只在配置了真实 DSH 模型提供方、持久文件系统和显式 `checkpoint` 选项的宿主中执行。Codex
