@@ -135,7 +135,7 @@ npm run dsh:install:local -- --profile web
 Checkpoint 工具默认按当前 DSH 会话的项目目录自动绑定，一个 profile 可以服务多个项目，
 不需要逐项目填写路径。恢复文件默认保存在 DSH home 下的 `maestro-recovery/` 并按项目隔离。
 显式保存需宿主提供 fs/tools 能力；也可选择启用实验性的上下文压力自动 checkpoint。它只在
-DSH 能报告上下文窗口和 token usage 时提前请求当前 Agent 复用同一工具，不备份聊天或代码，
+DSH 能报告 canonical pressure projection 或 provider prompt usage 时提前请求当前 Agent 复用同一工具，不备份聊天或代码，
 也不声称拥有 pre-compaction Hook。旧的固定 projectRoot 配置继续有效；删除该字段可切换到
 自动项目绑定。详见 [DSH Adapter 指南](adapters/deepseek-harness/README.md#checkpoint自动配置项目)。
 

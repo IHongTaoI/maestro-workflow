@@ -117,7 +117,7 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
                   pressureUnavailable.add(payload.agent)
                   ctx.logger.warn(
                     'maestro-adapter: automatic checkpoint pressure trigger unavailable for this session; ' +
-                    'model context window or token usage was not reported',
+                    'DSH projection and provider prompt-usage fallback were both unavailable',
                   )
                 }
               },

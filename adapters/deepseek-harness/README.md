@@ -222,9 +222,13 @@ DSH 进程的目录，也不接受模型传入路径。缺少会话或绝对路�
 ### 自动触发（M2，实验性）
 
 DSH 当前没有可等待的 pre-compaction / Session End Hook。Adapter 不把 `turn-stopping` 冒充成
-pre-compaction，而是在宿主能报告 `contextWindow` 和最近一次模型 token usage 时，把真实
+pre-compaction，而是在宿主能报告上下文压力时，把真实
 `agent/turn-stopping` 作为提前量触发点：达到阈值且存在新进展后，向当前 Agent 加入一个专用步骤，
 由 Agent 复用同一个 `maestro_checkpoint inspect/save/status/retry` 工具完成保存。
+
+压力事实优先读取 DSH token-meter 的 `contextPressure.projectedTokens / contextWindow`，与 DSH
+占用率和 compaction 使用同一口径；projection 不可用时才退回最近一次 provider prompt usage
+（`inputTokens + cacheReadTokens + cacheWriteTokens`，不含输出）除以请求的 context window。
 
 该能力默认关闭。先在可丢弃项目中启用：
 

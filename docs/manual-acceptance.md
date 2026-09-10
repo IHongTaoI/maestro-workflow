@@ -158,7 +158,7 @@ npm run dsh:audit:checkpoint
 在 profile 中显式配置 `checkpoint.auto`，建议先把 `pressureThreshold` 临时调低以稳定触发，再恢复到
 实际要评估的值。
 
-记录：DSH/模型版本、Maestro commit、阈值、cooldown、实际 context window/usage、触发 turn、目标、
+记录：DSH/模型版本、Maestro commit、阈值、cooldown、压力来源（projection/fallback）、实际 context window/usage、触发 turn、目标、
 request_id、保存前后 revision、结果和失败恢复来源。不要记录敏感绝对路径。
 
 依次验收：

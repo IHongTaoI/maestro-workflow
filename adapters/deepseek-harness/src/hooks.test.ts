@@ -33,7 +33,7 @@ const payload: TurnStopPayload = { agent: {} as never, turn: 1, signal: new Abor
 function autoFixture(contextWindow = 1000) {
   const events: any[] = [
     { seq: 0, type: 'user/message', data: { source: { kind: 'user' } } },
-    { seq: 1, type: 'assistant/message', data: { usage: { inputTokens: 650, outputTokens: 100 } } },
+    { seq: 1, type: 'assistant/message', data: { usage: { inputTokens: 750, outputTokens: 100 } } },
   ]
   const steered: any[] = []
   const agent = {
@@ -138,6 +138,22 @@ test('automatic checkpoint stays quiet without measurable pressure or below thre
   assert.equal(coordinator.evaluateAndTrigger({ agent: low.agent, turn: 1,
     signal: new AbortController().signal }), 'below-threshold')
   assert.equal(missing.steered.length + low.steered.length, 0)
+})
+
+test('automatic checkpoint prefers DSH projected pressure and excludes output in usage fallback', () => {
+  const projected = autoFixture(10_000)
+  const projectedAgent = projected.agent as unknown as { ctx?: unknown }
+  projectedAgent.ctx = { get: (name: string) => name === 'sessionProjections' ? {
+    snapshot: () => ({ values: { contextPressure: { projectedTokens: 850, contextWindow: 1000 } } }),
+  } : undefined } as never
+  const coordinator = new AutoCheckpointCoordinator({ pressureThreshold: 0.8 })
+  assert.equal(coordinator.evaluateAndTrigger({ agent: projected.agent, turn: 1,
+    signal: new AbortController().signal }), 'triggered')
+
+  const fallback = autoFixture(1000)
+  fallback.events[1].data.usage = { inputTokens: 650, outputTokens: 500 }
+  assert.equal(coordinator.evaluateAndTrigger({ agent: fallback.agent, turn: 1,
+    signal: new AbortController().signal }), 'below-threshold')
 })
 
 test('automatic checkpoint deduplicates a trigger and observes cooldown after commit', () => {

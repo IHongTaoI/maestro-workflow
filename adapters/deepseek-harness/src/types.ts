@@ -31,7 +31,7 @@ export interface AdapterConfig {
 
 /** Experimental automatic checkpoint trigger settings. */
 export interface AutoCheckpointConfig {
-  /** Combined request/response usage ratio that starts a checkpoint step. */
+  /** Projected next-request prompt ratio (or provider prompt-usage fallback). */
   pressureThreshold?: number
   /** Minimum number of turns before another automatic reminder. */
   cooldownTurns?: number

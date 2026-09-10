@@ -147,7 +147,36 @@ function lastProgressSeq(events: readonly SessionEvent[], checkpointCallIds: Rea
   return seq
 }
 
-function contextPressure(agent: Agent): number | undefined {
+interface ContextPressureProjection {
+  projectedTokens?: unknown
+  contextWindow?: unknown
+}
+
+interface SessionProjectionReader {
+  snapshot(session: Agent['session']): {
+    values?: { contextPressure?: ContextPressureProjection }
+  }
+}
+
+function projectedContextPressure(agent: Agent): number | undefined {
+  const reader = agent.ctx?.get('sessionProjections') as SessionProjectionReader | undefined
+  if (!reader || typeof reader.snapshot !== 'function') return undefined
+  try {
+    const projection = reader.snapshot(agent.session).values?.contextPressure
+    const tokens = projection?.projectedTokens
+    const window = projection?.contextWindow
+    if (!Number.isFinite(tokens) || !Number.isFinite(window)
+      || (tokens as number) < 0 || (window as number) <= 0) return undefined
+    return (tokens as number) / (window as number)
+  } catch {
+    // A missing/unavailable projection is an optional capability, so fall back.
+    return undefined
+  }
+}
+
+function estimatedNextRequestPressure(agent: Agent): number | undefined {
+  const projected = projectedContextPressure(agent)
+  if (projected !== undefined) return projected
   const window = agent.session.requestContext()?.contextWindow
   if (!Number.isFinite(window) || !window || window <= 0) return undefined
   const events = agent.session.events
@@ -155,8 +184,9 @@ function contextPressure(agent: Agent): number | undefined {
     const event = events[index]
     if (event.type !== 'assistant/message' || !event.data.usage) continue
     const usage = event.data.usage
-    const used = usage.inputTokens + usage.outputTokens
-      + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
+    // Match DSH token-meter's prompt-side pressureTokens fallback. Output is
+    // excluded because it is not part of the next request's prompt.
+    const used = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
     return used / window
   }
   return undefined
@@ -180,7 +210,7 @@ export class AutoCheckpointCoordinator {
   evaluateAndTrigger(payload: TurnStopPayload): AutoCheckpointDecision {
     if (payload.signal.aborted) return 'cancelled'
     const events = payload.agent.session.events
-    const pressure = contextPressure(payload.agent)
+    const pressure = estimatedNextRequestPressure(payload.agent)
     if (pressure === undefined) return 'pressure-unknown'
     if (pressure < this.threshold) return 'below-threshold'
 
@@ -199,7 +229,7 @@ export class AutoCheckpointCoordinator {
       content: [{
         type: 'text',
         text: [
-          `Maestro 自动 checkpoint 触发：最近一次模型请求约占上下文窗口 ${percent}%，达到配置阈值。`,
+          `Maestro 自动 checkpoint 触发：预计下一次模型请求约占上下文窗口 ${percent}%，达到配置阈值。`,
           '这是 DSH 的真实 turn-stopping 压力提醒，不是 pre-compaction 事件。',
           '请先判断当前工作是否产生了值得恢复的新进展。若有，只选择当前相关且已存在的活动 Temporary 或 Task，调用 maestro_checkpoint：先 inspect，再用同一 revision/hash 执行 save；失败时保留同一 request_id 并按 status/retry 处理。',
           '不要创建新 Task，不要恢复无关旧任务，不要扩大权限，也不要向用户展开保存过程。若没有可安全选择的活动目标，则跳过并继续正常结束。',
