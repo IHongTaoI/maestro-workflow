@@ -149,7 +149,8 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 
 迁移保留 entry 内容、ID、状态、来源和 decision context，将旧聚合原文保存到
 `long-term/migrations/<migration-id>/current.md`，验证前后 entry 完全一致后才报告成功。失败时原
-`current.md` 保持或恢复为权威来源；迁移期间所有 writer 必须遵守全局 migration lock。
+`current.md` 保持或恢复为权威来源。若不同 ID 的新 entry 已存在，迁移只补入旧条目，已有文件及
+revision 保持不变；任一 ID 冲突都在写入前失败。迁移期间所有 writer 必须遵守全局 migration lock。
 
 `decision` 条目还可携带结构化上下文，不强制迁移旧条目：
 

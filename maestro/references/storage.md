@@ -364,7 +364,8 @@ Temporary；未提交的提升相反。不需要维护组不变量时，优先�
 `.maestro/locks/memory-long-term-migration.lock`；所有 Long-term writer 看到该锁时停止。工具先
 完整校验旧文件和全部目标 entry，在隐藏 staging 目录准备单文件，保存旧聚合原文与 intent 审计，
 再发布目录和轻量 `current.md`。发布后逐项验证 ID、内容、status、source refs 与 decision context
-一致；失败则恢复旧聚合，不能报告成功。迁移审计不可替代正常 UPDATE/MERGE 的多文件事务。
+一致；失败则恢复旧聚合，不能报告成功。已有的不同 ID entry 保持字节和 revision 不变；同 ID
+冲突在发布前失败。迁移审计不可替代正常 UPDATE/MERGE 的多文件事务。
 
 ## 文件规则
 

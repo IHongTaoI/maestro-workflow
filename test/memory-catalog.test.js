@@ -373,16 +373,52 @@ test('explicit migration preserves legacy entries and leaves an auditable snapsh
   assert.equal(check.entries, 5);
 });
 
-test('migration preflight failure never changes the legacy aggregate', async (t) => {
+test('mixed-mode migration preserves existing split entries byte for byte', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const existing = {
+    entry_id: 'lt-existing-split', title: 'Existing split entry', memory_kind: 'principle',
+    content: 'Keep this independently written entry unchanged.',
+    source_refs: ['.maestro/evidence/performance.md'], status: 'active',
+  };
+  const existingPath = path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-existing-split.md');
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-existing-split.md',
+    entryFile(existing, { revision: 7, updatedAt: '2026-09-10T04:00:00Z' }));
+  const before = await readFile(existingPath, 'utf8');
+
+  const preview = JSON.parse((await runCatalog(projectRoot, ['migrate-long-term'])).stdout);
+  assert.equal(preview.preserved_entries, 1);
+  const migrated = JSON.parse((await runCatalog(projectRoot,
+    ['migrate-long-term', '--apply', '--actor', 'old-zhou/migration'])).stdout);
+  assert.equal(migrated.preserved_entries, 1);
+  assert.equal(await readFile(existingPath, 'utf8'), before);
+  assert.match(await readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md'), 'utf8'),
+  /lt-startup-performance/);
+  const check = JSON.parse((await runCatalog(projectRoot, ['check'])).stdout);
+  assert.equal(check.entries, 6);
+});
+
+test('migration ID conflict never changes either storage format', async (t) => {
   const projectRoot = await createMemoryProject(t);
   const currentPath = path.join(projectRoot, '.maestro/memory/long-term/current.md');
   const original = await readFile(currentPath, 'utf8');
-  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/occupied.md', '# occupied\n');
+  const duplicate = {
+    entry_id: 'lt-startup-performance', title: 'Duplicate', memory_kind: 'experience',
+    content: 'A conflicting split copy.', source_refs: ['.maestro/evidence/performance.md'],
+    status: 'active',
+  };
+  const duplicatePath = path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md');
+  await writeProjectFile(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md', entryFile(duplicate));
+  const duplicateBefore = await readFile(duplicatePath, 'utf8');
   const collision = await rejectedCommand(runCatalog(projectRoot,
     ['migrate-long-term', '--apply', '--actor', 'old-zhou/migration']));
   assert.equal(collision.code, 2);
-  assert.match(collision.stderr, /migration target must be absent or empty/);
+  assert.match(collision.stderr, /duplicate Long-term entry_id/);
   assert.equal(await readFile(currentPath, 'utf8'), original);
+  assert.equal(await readFile(duplicatePath, 'utf8'), duplicateBefore);
 
   await rm(path.join(projectRoot, '.maestro/memory/long-term/entries'), { recursive: true, force: true });
   const missingActor = await rejectedCommand(runCatalog(projectRoot, ['migrate-long-term', '--apply']));

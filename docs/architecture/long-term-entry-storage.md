@@ -27,5 +27,7 @@
 `memory_catalog.py migrate-long-term` 默认只做完整预检。只有提供 `--apply --actor` 才会写入。
 迁移取得全局 migration lock，在隐藏 staging 中生成并校验全部目标文件，保存旧聚合原文和 intent，
 发布后再次比较所有 entry。验证失败会恢复旧聚合且不报告成功。普通 build/search/show 永不触发迁移。
+若旧聚合与不同 ID 的新单文件共存，迁移只补入旧 entry，已有单文件的内容和 revision 保持不变；
+任一 ID 冲突都会在写入前失败。
 
 迁移是旧存储格式的一次性维护操作，不代替正常 UPDATE/MERGE 的 lock、CAS 和 transaction 协议。

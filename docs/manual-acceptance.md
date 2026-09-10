@@ -111,7 +111,8 @@ Prompt：`老周，请评审这个设计：应用启动时同步读取本地配�
 1. `build/search/show` 对两种格式保持相同调用方式，只读取选中的 entry。
 2. 修改一个 entry 只改变它自己的文件与 revision，另一个 entry 的字节和 Git diff 不变。
 3. 同一 entry ID 跨旧聚合、`entries/`、`history/` 重复时明确失败。
-4. `migrate-long-term` 默认只预检；加 `--apply --actor <actor-id>` 才迁移，并保留旧聚合审计副本。
+4. `migrate-long-term` 默认只预检；加 `--apply --actor <actor-id>` 才迁移，并保留旧聚合审计副本；
+   mixed mode 下已有不同 ID 单文件的字节和 revision 不变，同 ID 冲突时不写入。
 5. 迁移前后 entry 数量、ID、内容、status、source refs、decision context 一致；inactive entry 不进入
    常规搜索，但可通过 `show --include-inactive` 查看。
 6. CREATE/UPDATE 只触碰目标 entry；多 entry MERGE 仍产生 transaction 和不可变 decision。

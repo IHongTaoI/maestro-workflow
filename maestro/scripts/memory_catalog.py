@@ -355,6 +355,49 @@ def split_entry_file(
     return entry, updated_at if isinstance(updated_at, str) else None
 
 
+def split_long_term_records(
+    project_root: Path,
+    source_files: set[Path],
+) -> list[tuple[dict[str, Any], Path, str | None]]:
+    records: list[tuple[dict[str, Any], Path, str | None]] = []
+    for relative_root, expected_statuses in (
+        (LONG_TERM_ENTRIES_PATH, CURRENT_ENTRY_STATUSES),
+        (LONG_TERM_HISTORY_PATH, HISTORY_ENTRY_STATUSES),
+    ):
+        root = project_root / relative_root
+        if root.exists() and not root.is_dir():
+            raise CatalogError(f"{root}: Long-term entry path must be a directory")
+        if not root.is_dir():
+            continue
+        for path in sorted(root.iterdir()):
+            if path.name.startswith("."):
+                continue
+            if not path.is_file() or path.suffix != ".md":
+                raise CatalogError(f"{path}: Long-term entry directories may contain only Markdown files")
+            source_files.add(path)
+            entry, updated_at = split_entry_file(
+                project_root,
+                path,
+                expected_statuses=expected_statuses,
+            )
+            records.append((entry, path, updated_at))
+    return records
+
+
+def validate_unique_long_term_records(
+    records: list[tuple[dict[str, Any], Path, str | None]],
+) -> None:
+    seen: dict[str, Path] = {}
+    for entry, path, _ in records:
+        entry_id = require_string(entry, "entry_id", path)
+        previous = seen.get(entry_id)
+        if previous is not None:
+            raise CatalogError(
+                f"duplicate Long-term entry_id '{entry_id}' in {previous} and {path}"
+            )
+        seen[entry_id] = path
+
+
 def long_term_records(
     project_root: Path,
     source_files: set[Path],
@@ -370,35 +413,8 @@ def long_term_records(
             validate_entry_sources(project_root, entry, legacy_path)
             records.append((entry, legacy_path, updated_at if isinstance(updated_at, str) else None))
 
-    for relative_root, expected_statuses in (
-        (LONG_TERM_ENTRIES_PATH, CURRENT_ENTRY_STATUSES),
-        (LONG_TERM_HISTORY_PATH, HISTORY_ENTRY_STATUSES),
-    ):
-        root = project_root / relative_root
-        if not root.is_dir():
-            continue
-        for path in sorted(root.iterdir()):
-            if path.name.startswith("."):
-                continue
-            if not path.is_file() or path.suffix != ".md":
-                raise CatalogError(f"{path}: Long-term entry directories may contain only Markdown files")
-            source_files.add(path)
-            entry, updated_at = split_entry_file(
-                project_root,
-                path,
-                expected_statuses=expected_statuses,
-            )
-            records.append((entry, path, updated_at))
-
-    seen: dict[str, Path] = {}
-    for entry, path, _ in records:
-        entry_id = require_string(entry, "entry_id", path)
-        previous = seen.get(entry_id)
-        if previous is not None:
-            raise CatalogError(
-                f"duplicate Long-term entry_id '{entry_id}' in {previous} and {path}"
-            )
-        seen[entry_id] = path
+    records.extend(split_long_term_records(project_root, source_files))
+    validate_unique_long_term_records(records)
     return records
 
 
@@ -902,7 +918,13 @@ def entry_file_text(
     )
 
 
-def migration_preview(project_root: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def migration_preview(
+    project_root: Path,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, Any],
+    list[tuple[dict[str, Any], Path, str | None]],
+]:
     current_path = project_root / LONG_TERM_PATH
     if not current_path.is_file():
         raise CatalogError("legacy Long-term current.md does not exist")
@@ -912,12 +934,11 @@ def migration_preview(project_root: Path) -> tuple[list[dict[str, Any]], dict[st
         raise CatalogError("legacy Long-term current.md contains no entries to migrate")
     for entry in entries:
         validate_entry_sources(project_root, entry, current_path)
-    for relative_root in (LONG_TERM_ENTRIES_PATH, LONG_TERM_HISTORY_PATH):
-        target = project_root / relative_root
-        if target.exists() and (not target.is_dir() or any(target.iterdir())):
-            raise CatalogError(f"migration target must be absent or empty: {target}")
+    existing_records = split_long_term_records(project_root, set())
+    legacy_records = [(entry, current_path, None) for entry in entries]
+    validate_unique_long_term_records([*legacy_records, *existing_records])
     metadata = long_term_metadata(current_path, text, required=False)
-    return entries, metadata
+    return entries, metadata, existing_records
 
 
 def migration_lock(project_root: Path, actor: str) -> tuple[int, Path]:
@@ -940,13 +961,14 @@ def migration_lock(project_root: Path, actor: str) -> tuple[int, Path]:
 
 def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[str, Any]:
     if not apply:
-        entries, _ = migration_preview(project_root)
+        entries, _, existing_records = migration_preview(project_root)
         active = sum(entry.get("status", "active") in CURRENT_ENTRY_STATUSES for entry in entries)
         return {
             "status": "ready",
             "entries": len(entries),
             "current_entries": active,
             "history_entries": len(entries) - active,
+            "preserved_entries": len(existing_records),
             "entry_ids": sorted(
                 require_string(entry, "entry_id", project_root / LONG_TERM_PATH)
                 for entry in entries
@@ -964,13 +986,14 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
     try:
         # Re-read and validate only after taking the global lock. The preview is
         # deliberately advisory and cannot become the source for an applied migration.
-        entries, metadata = migration_preview(project_root)
+        entries, metadata, existing_records = migration_preview(project_root)
         active = sum(entry.get("status", "active") in CURRENT_ENTRY_STATUSES for entry in entries)
         preview = {
             "status": "migrated",
             "entries": len(entries),
             "current_entries": active,
             "history_entries": len(entries) - active,
+            "preserved_entries": len(existing_records),
             "entry_ids": sorted(
                 require_string(entry, "entry_id", current_path) for entry in entries
             ),
@@ -999,10 +1022,6 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
         stage_root = Path(
             tempfile.mkdtemp(prefix=".entry-migration-", dir=project_root / LONG_TERM_ROOT)
         )
-        for relative_root in (LONG_TERM_ENTRIES_PATH, LONG_TERM_HISTORY_PATH):
-            target = project_root / relative_root
-            if target.is_dir() and not any(target.iterdir()):
-                target.rmdir()
         for entry in entries:
             status = entry.get("status", "active")
             folder = "entries" if status in CURRENT_ENTRY_STATUSES else "history"
@@ -1035,28 +1054,37 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
                     "source_path": LONG_TERM_PATH.as_posix(),
                     "source_sha256": original_hash,
                     "entry_ids": preview["entry_ids"],
+                    "preserved_entry_ids": sorted(
+                        require_string(entry, "entry_id", path)
+                        for entry, path, _ in existing_records
+                    ),
                 },
                 ensure_ascii=False,
                 indent=2,
                 sort_keys=True,
             ) + "\n",
         )
-        for folder, relative_root in (
-            ("entries", LONG_TERM_ENTRIES_PATH),
-            ("history", LONG_TERM_HISTORY_PATH),
-        ):
-            staged = stage_root / folder
-            if staged.is_dir():
-                target = project_root / relative_root
-                os.replace(staged, target)
-                published.append(target)
+        for entry in entries:
+            status = entry.get("status", "active")
+            folder = "entries" if status in CURRENT_ENTRY_STATUSES else "history"
+            entry_id = require_string(entry, "entry_id", current_path)
+            staged = stage_root / folder / f"{entry_id}.md"
+            relative_root = LONG_TERM_ENTRIES_PATH if folder == "entries" else LONG_TERM_HISTORY_PATH
+            target = project_root / relative_root / f"{entry_id}.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                raise CatalogError(f"migration target appeared after preflight: {target}")
+            os.replace(staged, target)
+            published.append(target)
         atomic_write(current_path, CURRENT_POINTER_BODY)
 
         migrated_records = long_term_records(project_root, set())
         migrated = {entry["entry_id"]: entry for entry, _, _ in migrated_records}
-        expected = {entry["entry_id"]: entry for entry in entries}
+        expected = {entry["entry_id"]: entry for entry, _, _ in existing_records}
+        expected.update({entry["entry_id"]: entry for entry in entries})
         if migrated != expected:
             raise CatalogError("migration verification failed: Long-term entries changed")
+        persist_catalog(project_root, derive_catalog(project_root))
         atomic_write(
             audit_root / "committed.json",
             json.dumps(
@@ -1071,8 +1099,7 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
         if original is not None:
             atomic_write(current_path, original)
         for target in reversed(published):
-            if target.is_dir():
-                shutil.rmtree(target)
+            target.unlink(missing_ok=True)
         raise
     finally:
         os.close(descriptor)
