@@ -3,8 +3,10 @@
 Status: **opt-in snapshot tool implemented; live model/backend acceptance remains open**.
 Scope: second increment for [#26](https://github.com/IHongTaoI/maestro-workflow/issues/26),
 within [#14](https://github.com/IHongTaoI/maestro-workflow/issues/14).
-Updated 2026-09-09. Core owns target selection and saved facts; Adapter owns validation,
-write-ahead records, locks, CAS and recovery. No automatic triggers or new Memory layer.
+Updated 2026-09-10. Core owns target selection and saved facts; Adapter owns validation,
+write-ahead records, locks, CAS and recovery. M1 does not depend on automatic triggers and adds no
+Memory layer. The opt-in M2 pressure trigger reuses this writer; see
+[automatic-checkpoint.md](automatic-checkpoint.md).
 Checkpoint and recovery only support the current Worker-based protocol. Legacy Role directories,
 `role:*`, `role_state_path` and old Role tasks are not discovered, migrated or restored.
 
@@ -23,7 +25,7 @@ an uninspected current upstream checkout.
 | Flush | dsh-session/index.d.ts: SessionStore.flush returns participating-listener status | Not proof of backend storage independence or retention; not used as a substitute for publishing our request. |
 | Physical persistence read | dsh-session-persistence/index.d.ts: readFrom(id, fromSeq, signal) returns stored prefix/suffix without synthetic closers | Verified interface, not connected here. Needed for a future session-events mode. May parse the entire artifact on sequential backends. |
 | Logical inspection | Same file: inspect can return a live immutable view with open turns | Not used to claim durable recovery. load can repair cold history and rejects unsafe repair of live turns. |
-| Lifecycle | dsh-agent/runtime-types.d.ts: session-start emit, pre-step waterfall, turn-stopping serial | No automatic checkpoint handler mounted. turn-stopping is not pre-compaction or Session End. |
+| Lifecycle | dsh-agent/runtime-types.d.ts: request context + assistant usage + awaited turn-stopping serial | Opt-in pressure trigger is mounted only with agents/fs/tools. turn-stopping is explicitly reported as a fallback, not pre-compaction or Session End. |
 | Worker / prompt | dsh-agent/index.d.ts factory; dsh-system-prompt/index.d.ts providers | Not activated by checkpoint. Current Agent supplies facts; fresh Worker context is not assumed. |
 | State store / validator | Adapter storage.ts / validate.ts | Used by checkpoint only; other Core writes do not automatically route through these services. |
 
@@ -150,5 +152,6 @@ Still open for the next acceptance stage: a configured DSH model/provider and pe
 filesystem, actual model-issued save, process exit, fresh-session request selection/status/retry,
 and induced storage failure. Record destination, exact revision and recovery source. Do not
 close #26 based solely on mocked storage, declaration scans or the Codex recovery reminder.
-M2 pressure/pre-compaction and M3 independent Worker/per-step injection remain separate.
+M2 pressure triggering is implemented behind opt-in configuration; real DSH acceptance and native
+pre-compaction/Session End support remain open. M3 independent Worker/per-step injection remains separate.
 Use the Issue #26 section in [manual-acceptance.md](../manual-acceptance.md) to record this evidence.

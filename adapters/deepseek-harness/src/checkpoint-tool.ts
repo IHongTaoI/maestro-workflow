@@ -17,7 +17,7 @@ export function checkpointTool(fs: CheckpointFs, validator: MaestroSchemaValidat
   config: CheckpointToolConfig = {}): ToolDefinition {
   return {
     name: 'maestro_checkpoint',
-    description: '用户明确要求 Maestro 保存或交接时：先 inspect 一个现有的活动 Temporary/Task，再使用其 revision/hash 保存有界事实快照。save 必须包含 request_id、base_revision、base_hash、snapshot。snapshot 的数组可以为空，source_refs 必须是项目内相对路径。出错后使用相同 request_id 执行 status/retry，不要随意换 ID 重复 save。快照不是 transcript 备份。不得自动创建 Task，也不得继承历史授权。',
+    description: '用户明确要求 Maestro 保存/交接，或已启用的可信 Adapter 发出 maestro-auto-checkpoint 生命周期提醒时：先 inspect 一个现有的活动 Temporary/Task，再使用其 revision/hash 保存有界事实快照。save 必须包含 request_id、base_revision、base_hash、snapshot。snapshot 的数组可以为空，source_refs 必须是项目内相对路径。出错后使用相同 request_id 执行 status/retry，不要随意换 ID 重复 save。快照不是 transcript 备份。不得自动创建 Task，也不得继承历史授权。',
     parameters: {
       type: 'object', additionalProperties: false, required: ['operation', 'kind', 'target_id'],
       properties: {

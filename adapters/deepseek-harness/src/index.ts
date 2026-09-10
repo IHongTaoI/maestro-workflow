@@ -21,9 +21,9 @@
  *   not exposed as unrestricted raw tools. A session-bound checkpoint
  *   tool uses them for single-target snapshot saves when `ctx.tools` exists.
  *   Other Core reads/writes still follow `storage.md` through host tools.
- * - **Lifecycle hooks**: `ctx.agents` is detected for status only; no handler
- *   is registered yet because Maestro's Handoff / session-boundary decision
- *   logic lives in the Core Skill and has not been implemented.
+ * - **Lifecycle hooks**: when explicitly enabled, `ctx.agents` supplies the
+ *   awaited turn-stopping pressure trigger. This is a fallback trigger, not a
+ *   pre-compaction or Session End lifecycle claim.
  *
  * @module @maestro-ai/dsh-adapter
  */
@@ -33,6 +33,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { checkpointTool } from './checkpoint-tool'
+import { AutoCheckpointCoordinator, registerLifecycleHooks } from './hooks'
 import { assertSkills, detectCapabilities, planActivation } from './detect'
 import { loadCoreSkill, registerCoreSkill, resolveCoreDir } from './skill'
 import { MaestroStateStore } from './storage'
@@ -59,6 +60,7 @@ export const SCHEMA_VALIDATOR_SERVICE = 'maestro.schemaValidator'
  */
 export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<void> {
   const checkpoint = config.checkpoint === false ? false : config.checkpoint ?? {}
+  const autoCheckpoint = checkpoint && checkpoint.auto !== false ? checkpoint.auto : undefined
   const capabilities = detectCapabilities(ctx)
   assertSkills(capabilities)
   const activation = planActivation(capabilities)
@@ -102,6 +104,31 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
         const disposeCheckpoint = tools.register(checkpointTool(fs, validator, checkpoint))
         ctx.effect(() => disposeCheckpoint, 'maestro-adapter: checkpoint tool')
         ctx.logger.info('maestro-adapter: checkpoint tool registered (snapshot mode; live durability not verified)')
+        if (autoCheckpoint !== undefined) {
+          const coordinator = new AutoCheckpointCoordinator(autoCheckpoint)
+          const pressureUnavailable = new WeakSet<object>()
+          ctx.inject(['agents'], (ctx) => {
+            registerLifecycleHooks(ctx, {
+              onTurnStopping: (payload) => {
+                const decision = coordinator.evaluateAndTrigger(payload)
+                if (decision === 'triggered') {
+                  ctx.logger.info('maestro-adapter: automatic checkpoint step requested by context pressure')
+                } else if (decision === 'pressure-unknown' && !pressureUnavailable.has(payload.agent)) {
+                  pressureUnavailable.add(payload.agent)
+                  ctx.logger.warn(
+                    'maestro-adapter: automatic checkpoint pressure trigger unavailable for this session; ' +
+                    'model context window or token usage was not reported',
+                  )
+                }
+              },
+            }, { timeoutMs: autoCheckpoint.timeoutMs })
+            ctx.logger.info(
+              `maestro-adapter: automatic checkpoint pressure trigger activated ` +
+              `(threshold=${coordinator.threshold}, cooldownTurns=${coordinator.cooldownTurns}; ` +
+              'turn-stopping fallback, not pre-compaction)',
+            )
+          })
+        }
       })
     } else if (checkpoint) {
       ctx.logger.warn('maestro-adapter: checkpoint not activated; tools or schemas unavailable')
@@ -110,15 +137,14 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
   if (checkpoint && !activation.storage) {
     ctx.logger.info('maestro-adapter: checkpoint waiting for filesystem service')
   }
-
-  // TODO(next): when Maestro's Handoff / session-boundary logic lands in the
-  // Core Skill, wire it here via registerLifecycleHooks(ctx, { onTurnStopping })
-  // (see src/hooks.ts). The trigger is deterministic; the decision stays in the
-  // Core. No no-op handler is registered today.
+  if (autoCheckpoint !== undefined && !capabilities.agents) {
+    ctx.logger.info('maestro-adapter: automatic checkpoint trigger waiting for agent service')
+  }
 
   ctx.logger.info(
     `maestro-adapter: registered skill "${registration.name}" ` +
-      `(storage=${activation.storage}, hooks=${activation.hooks}, degraded=${activation.degraded})`,
+      `(storage=${activation.storage}, autoCheckpointRequested=${autoCheckpoint !== undefined}, ` +
+      `degraded=${activation.degraded})`,
   )
 }
 

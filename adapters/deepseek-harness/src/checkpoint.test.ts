@@ -267,7 +267,7 @@ test('Task progress target uses existing progress.md without creating current.md
   assert.equal(f.files.has(f.key('.maestro/tasks/task-one/current.md')), false)
 })
 
-test('adapter defaults to automatic checkpoint, supports opt-out and plain Skill fallback', async () => {
+test('adapter defaults to automatic project binding, supports opt-out and plain Skill fallback', async () => {
   const f = fixture()
   for (const [checkpoint, withTools, expected] of [[undefined, true, 1], [false, true, 0], [{}, false, 0], [{ projectRoot: project }, true, 1]] as const) {
     const registered: string[] = [], cleanups: Array<() => void> = []
@@ -291,6 +291,35 @@ test('adapter defaults to automatic checkpoint, supports opt-out and plain Skill
     cleanups.reverse().forEach((cleanup) => cleanup())
     assert.equal(registered.length, 0)
   }
+})
+
+test('adapter activates the lifecycle trigger only when auto config and agent service are present', async () => {
+  const f = fixture()
+  const listeners: Array<{ name: string; options?: { global?: boolean } }> = []
+  const pending: Promise<unknown>[] = []
+  const services: Record<string, unknown> = {
+    skills: { register: () => () => {} },
+    fs: f.fs,
+    tools: { register: () => () => {} },
+    agents: {},
+  }
+  const ctx = {
+    skills: services.skills,
+    get: (key: string) => services[key],
+    provide: () => () => {},
+    inject: (deps: string[], callback: (value: unknown) => unknown) => {
+      if (deps.every((dep) => services[dep])) pending.push(Promise.resolve(callback(ctx)))
+    },
+    on: (name: string, _listener: unknown, options?: { global?: boolean }) => {
+      listeners.push({ name, options }); return () => false
+    },
+    effect: (factory: () => () => void) => { factory() },
+    logger: { info() {}, warn() {} },
+  }
+  await apply(ctx as never, { coreDir: fileURLToPath(new URL('../../../maestro/', import.meta.url)),
+    checkpoint: { auto: { pressureThreshold: 0.8, cooldownTurns: 3, timeoutMs: 250 } } })
+  for (let index = 0; index < pending.length; index++) await pending[index]
+  assert.deepEqual(listeners, [{ name: 'agent/turn-stopping', options: { global: true } }])
 })
 
 test('real Cordis activates checkpoint when fs and tools arrive after the adapter', async () => {
