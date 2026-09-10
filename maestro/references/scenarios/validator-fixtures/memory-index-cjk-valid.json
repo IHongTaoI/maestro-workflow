@@ -16,7 +16,8 @@
       "tags": [],
       "aliases": ["home startup performance"],
       "search_hints": [],
-      "updated_at": "2026-09-01T06:29:00Z"
+      "updated_at": "2026-09-01T06:29:00Z",
+      "stale": false
     },
     {
       "memory_id": "20260827T103000Z-a1b2c3",
@@ -31,7 +32,9 @@
       "tags": [],
       "aliases": [],
       "search_hints": [],
-      "updated_at": "2026-08-27T11:05:00Z"
+      "updated_at": "2026-08-27T11:05:00Z",
+      "stale": false
     }
-  ]
+  ],
+  "pending_followups": []
 }

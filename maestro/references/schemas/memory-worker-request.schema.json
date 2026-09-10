@@ -62,6 +62,24 @@
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "search_hints": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "status": {
+          "enum": ["active", "disputed", "superseded", "rejected"]
         }
       },
       "additionalProperties": false,

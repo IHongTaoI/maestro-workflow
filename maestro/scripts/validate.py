@@ -701,7 +701,7 @@ def validate_long_term_entry(
     if not require_object(value, path, errors):
         return
     required = {"entry_id", "title", "memory_kind", "content", "source_refs"}
-    allowed = required | {"status", "decision_context"}
+    allowed = required | {"status", "decision_context", "tags", "aliases", "search_hints"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
     if "entry_id" in value:
         check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
@@ -720,7 +720,7 @@ def validate_long_term_entry(
             value["status"],
             f"{path}.status",
             errors,
-            {"active", "superseded", "rejected"},
+            {"active", "disputed", "superseded", "rejected"},
         )
     if "decision_context" in value:
         validate_decision_context(
@@ -740,6 +740,14 @@ def validate_long_term_entry(
         min_items=1,
     ):
         check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+    for key in ("tags", "aliases", "search_hints"):
+        if key in value and check_array(
+            value[key],
+            f"{path}.{key}",
+            errors,
+            make_string_validator(min_length=1),
+        ):
+            check_unique_strings(value[key], f"{path}.{key}", errors)
 
 
 def validate_memory_index_entry(
@@ -764,6 +772,7 @@ def validate_memory_index_entry(
         "aliases",
         "search_hints",
         "updated_at",
+        "stale",
     }
     check_object_shape(value, path, errors, required=required, allowed=required)
     if "memory_id" in value:
@@ -800,6 +809,7 @@ def validate_memory_index_entry(
     layer = value.get("layer")
     record_type = value.get("record_type")
     memory_kind = value.get("memory_kind")
+    stale = value.get("stale")
     if layer == "long-term":
         if record_type != "long-term-entry":
             add_error(
@@ -809,16 +819,161 @@ def validate_memory_index_entry(
             )
         if memory_kind is None:
             add_error(errors, f"{path}.memory_kind", "is required for a Long-term entry")
+        if stale is not None:
+            add_error(errors, f"{path}.stale", "must be null outside the Temporary layer")
     elif layer == "temporary":
         if record_type != "temporary":
             add_error(errors, f"{path}.record_type", "must be 'temporary' for Temporary Memory")
         if memory_kind is not None:
             add_error(errors, f"{path}.memory_kind", "must be null outside the Long-term layer")
+        if not is_boolean(stale):
+            add_error(errors, f"{path}.stale", "must be a boolean for Temporary Memory")
     elif layer == "task":
         if record_type not in {"task", "worker-state"}:
             add_error(errors, f"{path}.record_type", "must be a Task current-state record type")
         if memory_kind is not None:
             add_error(errors, f"{path}.memory_kind", "must be null outside the Long-term layer")
+        if stale is not None:
+            add_error(errors, f"{path}.stale", "must be null outside the Temporary layer")
+
+
+def validate_memory_followup(
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, "$", errors):
+        return
+
+    status = value.get("status")
+    if status == "pending":
+        required = {"followup_id", "title", "status", "created_at", "source_refs"}
+        allowed = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "related_ids",
+        }
+    elif status == "resolved":
+        required = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "resolved_at",
+            "resolution",
+        }
+        allowed = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "related_ids",
+            "resolved_at",
+            "resolution",
+            "resolution_refs",
+        }
+    else:
+        required = {"followup_id", "title", "status", "created_at", "source_refs"}
+        allowed = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "related_ids",
+            "resolved_at",
+            "resolution",
+            "resolution_refs",
+        }
+
+    check_object_shape(value, "$", errors, required=required, allowed=allowed)
+
+    if "followup_id" in value:
+        check_stable_id(value["followup_id"], "$.followup_id", errors)
+    if "title" in value:
+        check_string(value["title"], "$.title", errors, min_length=1)
+    if "status" in value:
+        check_enum(value["status"], "$.status", errors, {"pending", "resolved"})
+    if "created_at" in value:
+        check_date_time(value["created_at"], "$.created_at", errors)
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        "$.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], "$.source_refs", errors)
+    if "related_ids" in value and check_array(
+        value["related_ids"],
+        "$.related_ids",
+        errors,
+        lambda item, item_path, item_errors: check_stable_id(item, item_path, item_errors),
+    ):
+        check_unique_strings(value["related_ids"], "$.related_ids", errors)
+
+    if status == "resolved":
+        if "resolved_at" in value:
+            check_date_time(value["resolved_at"], "$.resolved_at", errors)
+        if "resolution" in value:
+            check_string(value["resolution"], "$.resolution", errors, min_length=1)
+        if "resolution_refs" in value and check_array(
+            value["resolution_refs"],
+            "$.resolution_refs",
+            errors,
+            file_reference,
+        ):
+            check_unique_strings(value["resolution_refs"], "$.resolution_refs", errors)
+
+
+def validate_pending_followup_entry(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "followup_id",
+        "title",
+        "status",
+        "created_at",
+        "source_refs",
+        "related_ids",
+        "path",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    if "followup_id" in value:
+        check_stable_id(value["followup_id"], f"{path}.followup_id", errors)
+    if "title" in value:
+        check_string(value["title"], f"{path}.title", errors, min_length=1)
+    if "status" in value:
+        check_enum(value["status"], f"{path}.status", errors, {"pending"})
+    if "created_at" in value:
+        check_date_time(value["created_at"], f"{path}.created_at", errors)
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+    if "related_ids" in value and check_array(
+        value["related_ids"],
+        f"{path}.related_ids",
+        errors,
+        lambda item, item_path, item_errors: check_stable_id(item, item_path, item_errors),
+    ):
+        check_unique_strings(value["related_ids"], f"{path}.related_ids", errors)
+    if "path" in value:
+        file_reference(value["path"], f"{path}.path", errors)
 
 
 def validate_memory_index(
@@ -828,7 +983,7 @@ def validate_memory_index(
 ) -> None:
     if not require_object(value, "$", errors):
         return
-    required = {"schema_version", "generated_at", "source_digest", "entries"}
+    required = {"schema_version", "generated_at", "source_digest", "entries", "pending_followups"}
     check_object_shape(value, "$", errors, required=required, allowed=required)
     if value.get("schema_version") != 1:
         add_error(errors, "$.schema_version", "must equal 1")
@@ -860,6 +1015,28 @@ def validate_memory_index(
                     "must be unique within the Memory Index",
                 )
             seen_ids.add(memory_id)
+    if "pending_followups" in value and check_array(
+        value["pending_followups"],
+        "$.pending_followups",
+        errors,
+        lambda item, item_path, item_errors: validate_pending_followup_entry(
+            item, item_path, item_errors, file_reference
+        ),
+    ):
+        seen_followup_ids: set[str] = set()
+        for index, followup in enumerate(value["pending_followups"]):
+            if not is_object(followup):
+                continue
+            fid = followup.get("followup_id")
+            if not isinstance(fid, str):
+                continue
+            if fid in seen_followup_ids:
+                add_error(
+                    errors,
+                    f"$.pending_followups[{index}].followup_id",
+                    "must be unique within pending follow-ups",
+                )
+            seen_followup_ids.add(fid)
 
 
 def validate_playbook(
@@ -1001,7 +1178,7 @@ def validate_long_term_candidate(
         "source",
         "source_refs",
     }
-    allowed = required | {"decision_context"}
+    allowed = required | {"decision_context", "tags", "aliases", "search_hints"}
     check_object_shape(value, path, errors, required=required, allowed=allowed)
 
     if "candidate_id" in value:
@@ -1043,6 +1220,14 @@ def validate_long_term_candidate(
                 f"{path}.decision_context",
                 "is allowed only when memory_kind is 'decision'",
             )
+    for key in ("tags", "aliases", "search_hints"):
+        if key in value and check_array(
+            value[key],
+            f"{path}.{key}",
+            errors,
+            make_string_validator(min_length=1),
+        ):
+            check_unique_strings(value[key], f"{path}.{key}", errors)
 
     classification: str | None = None
     entry_ids: list[Any] | None = None
@@ -1775,6 +1960,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "memory-response",
             "memory-merge-request",
             "memory-merge-response",
+            "memory-followup",
         ),
     )
     parser.add_argument("file", type=Path)
@@ -1862,8 +2048,10 @@ def main(argv: list[str] | None = None) -> int:
         validate_memory_response(value, errors, file_reference, request_file)
     elif args.kind == "memory-merge-request":
         validate_memory_merge_request(value, errors, file_reference)
-    else:
+    elif args.kind == "memory-merge-response":
         validate_memory_merge_response(value, errors, file_reference)
+    elif args.kind == "memory-followup":
+        validate_memory_followup(value, errors, file_reference)
 
     emit_result(args, errors, output_file=output_file)
     return 1 if errors else 0

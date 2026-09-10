@@ -4,7 +4,7 @@
   "title": "Maestro Memory Index",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "generated_at", "source_digest", "entries"],
+  "required": ["schema_version", "generated_at", "source_digest", "entries", "pending_followups"],
   "properties": {
     "schema_version": { "const": 1 },
     "generated_at": { "type": "string", "format": "date-time" },
@@ -12,6 +12,10 @@
     "entries": {
       "type": "array",
       "items": { "$ref": "#/$defs/entry" }
+    },
+    "pending_followups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pendingFollowup" }
     }
   },
   "$defs": {
@@ -25,6 +29,49 @@
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
+    },
+    "pendingFollowup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "followup_id",
+        "title",
+        "status",
+        "created_at",
+        "source_refs",
+        "related_ids",
+        "path"
+      ],
+      "properties": {
+        "followup_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "status": { "const": "pending" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "source_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "related_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "uniqueItems": true
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+        }
+      }
     },
     "entry": {
       "type": "object",
@@ -42,7 +89,8 @@
         "tags",
         "aliases",
         "search_hints",
-        "updated_at"
+        "updated_at",
+        "stale"
       ],
       "properties": {
         "memory_id": { "$ref": "#/$defs/storageId" },
@@ -69,6 +117,9 @@
         "updated_at": {
           "type": ["string", "null"],
           "format": "date-time"
+        },
+        "stale": {
+          "type": ["boolean", "null"]
         }
       },
       "allOf": [
@@ -82,7 +133,8 @@
               "record_type": { "const": "long-term-entry" },
               "memory_kind": {
                 "enum": ["fact", "experience", "principle", "decision", "constraint", "other"]
-              }
+              },
+              "stale": { "type": "null" }
             }
           }
         },
@@ -94,7 +146,8 @@
           "then": {
             "properties": {
               "record_type": { "const": "temporary" },
-              "memory_kind": { "const": null }
+              "memory_kind": { "const": null },
+              "stale": { "type": "boolean" }
             }
           }
         },
@@ -106,7 +159,8 @@
           "then": {
             "properties": {
               "record_type": { "enum": ["task", "worker-state"] },
-              "memory_kind": { "const": null }
+              "memory_kind": { "const": null },
+              "stale": { "type": "null" }
             }
           }
         }
