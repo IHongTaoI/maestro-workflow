@@ -152,6 +152,30 @@ npm run dsh:audit:checkpoint
 每一步同时保存宿主工具调用证据、生成的 request/observation 路径和 revision。只有上述真实链路
 通过，才在 #26 勾选“真实宿主执行链”；mock 测试、模型口头说明或文件存在本身都不算通过。
 
+## Issue #56：M2 自动 checkpoint 真实宿主验收
+
+首版只验收 DSH 上的上下文压力触发，不把 `turn-stopping` 记录成 pre-compaction。使用可丢弃项目，
+在 profile 中显式配置 `checkpoint.auto`，建议先把 `pressureThreshold` 临时调低以稳定触发，再恢复到
+实际要评估的值。
+
+记录：DSH/模型版本、Maestro commit、阈值、cooldown、压力来源（projection/fallback）、实际 context window/usage、触发 turn、目标、
+request_id、保存前后 revision、结果和失败恢复来源。不要记录敏感绝对路径。
+
+依次验收：
+
+1. 低于阈值时正常结束，不出现自动 checkpoint 步骤。
+2. 产生值得恢复的新进展并超过阈值；确认真实 `agent/turn-stopping` 触发专用步骤，模型实际执行
+   `inspect` 后再 `save`，且用户侧不出现大段保存过程。
+3. 在同一状态再次结束；不得重复推进 revision。冷却期内的新 turn 也不得重复提醒。
+4. 冷却后产生新进展；应使用新 request_id 保存，并只推进一次 revision。
+5. 让模型无法安全选中唯一活动目标；应跳过，不创建 Task，也不随意恢复旧目标。
+6. 关闭 `checkpoint.auto`，或使用没有 context window/usage 的路由；显式 checkpoint 仍可用，自动功能
+   明确降级。
+7. 制造一次可恢复的保存失败；结果不得显示成功，后续沿相同 request_id 使用 `status/retry`。
+8. 记录 Hook 的实际等待时间；取消、异常或超时不能无限阻止 turn 结束。
+
+自动化测试只证明策略逻辑。以上真实宿主证据完成前，#56 保持开放。
+
 ## 发布决定
 
 目标宿主中的受影响场景通过，且以下确定性检查全部通过后发布：

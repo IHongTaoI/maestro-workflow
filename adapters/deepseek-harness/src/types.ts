@@ -21,7 +21,22 @@ export interface AdapterConfig {
     projectRoot?: string
     /** Automatic archive base, or exact archive root when projectRoot is set. */
     recoveryRoot?: string
+    /**
+     * Opt-in context-pressure trigger. This is a DSH turn-boundary fallback,
+     * not a claim that DSH exposes a pre-compaction hook.
+     */
+    auto?: false | AutoCheckpointConfig
   }
+}
+
+/** Experimental automatic checkpoint trigger settings. */
+export interface AutoCheckpointConfig {
+  /** Projected next-request prompt ratio (or provider prompt-usage fallback). */
+  pressureThreshold?: number
+  /** Minimum number of turns before another automatic reminder. */
+  cooldownTurns?: number
+  /** Maximum time the serial lifecycle hook waits for its handler. */
+  timeoutMs?: number
 }
 
 /** Default probe order for the Maestro Core directory, relative to cwd. */
@@ -49,12 +64,7 @@ export interface Activation {
   skill: boolean
   /** Deterministic state store was mounted (requires `fs`). */
   storage: boolean
-  /**
-   * Whether session-lifecycle hooks were actually registered. This is a
-   * *feature activated* flag, distinct from the {@link Capabilities.agents}
-   * capability: it stays `false` until a real lifecycle handler is wired
-   * (currently a `TODO(next)` in the Core Skill).
-   */
+  /** Base startup snapshot; dynamic lifecycle activation is reported separately. */
   hooks: boolean
   /** Whether the adapter degraded to the plain-skill fallback. */
   degraded: boolean

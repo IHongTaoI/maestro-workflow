@@ -189,12 +189,12 @@ adapters/deepseek-harness/
     ├── skill.ts        # 产物 A：注册 Core 为 dsh skill
     ├── storage.ts      # 产物 B：ctx.fs 上的锁 / CAS 写协议（含 .maestro/ 边界强制）
     ├── validate.ts     # 产物 B：schema 校验
-    ├── hooks.ts        # 产物 B：turn-stopping 监听原语（正确 await，尚未接线）
+    ├── hooks.ts        # 产物 B：可等待的 turn-stopping 与上下文压力 checkpoint 触发器
     ├── storage.test.ts # storage / lock 单元测试（fake seam）
     └── hooks.test.ts   # hooks 监听原语单元测试（fake ctx）
 ```
 
-## 手动 checkpoint（自动配置项目）
+## Checkpoint（自动配置项目）
 
 安装更新后的 Adapter 并重启 DSH，即可在同一个 profile 中对多个项目使用 checkpoint，
 无需填写项目路径。每次调用从当前 Agent 的 `session.header.cwd` 绑定项目，不使用启动
@@ -202,7 +202,7 @@ DSH 进程的目录，也不接受模型传入路径。缺少会话或绝对路�
 
 默认恢复目录为 `${DSH_HOME}/maestro-recovery/<项目标识>/`，未设置 `DSH_HOME` 时使用
 `~/.dsh/maestro-recovery/<项目标识>/`。项目标识是文件系统规范 target key 的 SHA-256，
-同名但路径不同的项目不会共用恢复目录。保存仍需用户明确要求，未增加关闭/压缩时自动保存。
+同名但路径不同的项目不会共用恢复目录。默认仍是显式保存；自动触发需要单独配置。
 
 写入使用当前会话的 sandboxPolicy，保留会话只读等限制。默认外部恢复目录若被沙箱拒绝，
 自动退回项目内的 `references/checkpoints/` 恢复记录，`status` 返回 `recovery: project`；
@@ -218,6 +218,46 @@ DSH 进程的目录，也不接受模型传入路径。缺少会话或绝对路�
     checkpoint:
       recoveryRoot: 'E:\maestro-recovery' # 自动模式下是基目录，下面再按项目隔离
 ```
+
+### 自动触发（M2，实验性）
+
+DSH 当前没有可等待的 pre-compaction / Session End Hook。Adapter 不把 `turn-stopping` 冒充成
+pre-compaction，而是在宿主能报告上下文压力时，把真实
+`agent/turn-stopping` 作为提前量触发点：达到阈值且存在新进展后，向当前 Agent 加入一个专用步骤，
+由 Agent 复用同一个 `maestro_checkpoint inspect/save/status/retry` 工具完成保存。
+
+压力事实优先读取 DSH token-meter 的 `contextPressure.projectedTokens / contextWindow`，与 DSH
+占用率和 compaction 使用同一口径；projection 不可用时才退回最近一次 provider prompt usage
+（`inputTokens + cacheReadTokens + cacheWriteTokens`，不含输出）除以请求的 context window。
+
+该能力默认关闭。先在可丢弃项目中启用：
+
+```yaml
+- id: maestro-adapter
+  config:
+    checkpoint:
+      auto:
+        pressureThreshold: 0.72 # 实验起点，不是通用安全值；允许 0.5–0.95
+        cooldownTurns: 2       # 同一状态去重后，再限制提醒间隔
+        timeoutMs: 1000        # Hook 最多等待 50–5000ms
+```
+
+触发条件同时满足才会增加 checkpoint 步骤：
+
+- 最近请求用量可计算，且达到配置阈值；
+- 上次成功 checkpoint 或自动提醒之后，出现新的用户输入或非 checkpoint 工具结果；
+- 已经过冷却 turn 数；
+- 当前 turn 未取消。
+
+成功的 `save/retry` 从 DSH 持久 Session 日志识别，重启后仍可去重。同一自动提醒也写入带稳定来源的
+Session 事件，模型忽略或保存失败时不会在同一 turn 无限循环。失败仍通过 M1 工具结果、持久 request
+和 `status/retry` 暴露，不虚报成功。宿主未提供 context window、usage、agents、fs 或 tools 时明确
+降级，不自动触发，裸 Core 和显式 checkpoint 继续可用。
+
+这不是 transcript 备份，也不保证卡在宿主压缩阈值之后仍来得及保存。阈值必须通过真实模型逐步
+校准。自动提醒只负责“什么时候检查”；目标选择、事实摘要和是否值得保存仍由 Core/当前 Agent 决定，
+不能创建新 Task、恢复无关任务或扩大权限。能力矩阵见
+[自动 checkpoint 架构说明](../../docs/architecture/automatic-checkpoint.md)。
 
 设 `checkpoint: false` 可禁用工具。原有固定项目配置仍兼容，指定 `projectRoot` 时
 `recoveryRoot` 保持原来的精确目录语义（可省略）：
@@ -257,7 +297,7 @@ checkpoint 区段并推进 revision。完整请求保存在目标 references/che
 提交点，随后发布 committed observation。不同请求之间的 pending 不会被自动清除；conflict
 需要重新查看当前事实，旧 pending 保留作为证据。
 
-本版不支持 Worker 目标、自动触发、事务 overlay 或 Task 晋升。存在任何 transaction bundle
+本版不支持 Worker 目标、宿主原生 pre-compaction 接线、事务 overlay 或 Task 晋升。存在任何 transaction bundle
 （即使已完成）时保守拒绝写入，空 transactions 目录允许。不要删除事务记录来绕过限制。
 进程被强制终止后若留下 held 锁，必须先由已有存储恢复流程核验 owner 已失活；工具不按过期时间
 抢锁。测试验证的是机制和真实 ToolRuntime 管线，完整 DSH 模型提供方/磁盘后端的人工验收仍待完成。
@@ -272,19 +312,20 @@ npm test            # tsx --test src/*.test.ts
 npm run test:package
 ```
 
-`storage` 与 `hooks` 模块只有 type-only 的 `@deepseek-ai/*` 导入，测试用一个内存 fake seam /
-fake ctx 即可覆盖锁 / CAS / 边界 / await 语义，无需真实 dsh runtime。
+自动化测试用内存 Session 事件覆盖压力计算、冷却、去重、成功观察、取消和有界等待；真实 DSH
+模型与持久后端仍需按人工验收清单验证。
 
 ## 落地顺序
 
 1. ~~产物 A：skill 注册~~（本 PR）
 2. ~~detect 骨架 + fallback~~（本 PR）
 3. ~~storage 的锁 / CAS 写 + `.maestro/` 边界强制~~（本 PR，含单测）
-4. ~~hooks 的 turn-stopping 监听原语（正确 await）~~（本 PR，含单测，但未接线）
+4. ~~hooks 的 turn-stopping 监听原语（正确 await）~~
 5. 已接通显式启用的 snapshot checkpoint 工具；通用 storage / validator 工具仍属后续
-6. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
-7. session hooks 的完整生命周期联动（Handoff / Memory 保存）——后续
-8. 将 Worker Delegation Packet 映射到 dsh subagent 指令、上下文、工具与权限隔离，并返回真实
+6. 已接通可选的上下文压力自动 checkpoint；真实宿主验收后再判断默认策略
+7. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
+8. 宿主未来提供 pre-compaction / Session End 时再接原生生命周期，不使用假事件
+9. 将 Worker Delegation Packet 映射到 dsh subagent 指令、上下文、工具与权限隔离，并返回真实
    `supported` / `degraded` / `unsupported` 状态——后续
 
 [issue-14]: https://github.com/IHongTaoI/maestro-workflow/issues/14

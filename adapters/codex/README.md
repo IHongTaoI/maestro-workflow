@@ -14,8 +14,10 @@
 - 没有有效 Maestro 项目元数据时安静退出；嵌套仓库 / worktree 不借用父项目的状态。
 - 输入或安装信息异常时跳过并输出诊断，不阻止 Codex，也不声称恢复成功。
 
-**这不是自动 checkpoint，也不是完整的 subagent 接线**：尚未实现压缩前总结、写入进度、
-失败补存，也没有接通 `SubagentStart` 的 Worker Packet 映射或权限隔离。当前只通过
+**这不是自动 checkpoint，也不是完整的 subagent 接线**：Codex 已提供真实 `PreCompact` 和
+`SessionEnd` Hook，但这些 Hook 本身没有当前 Maestro 的有界事实快照和目标选择结果；本插件不解析
+不稳定的 transcript 格式来猜状态，也不因此虚报保存。尚未实现压缩前总结、写入进度、失败补存，
+也没有接通 `SubagentStart` 的 Worker Packet 映射或权限隔离。当前只通过
 `SessionStart` reminder 澄清宿主工具选择。它只能帮助重新找到已经保存的状态，无法恢复
 从未落盘的结论。因此这只是 #14 / #26 的部分落地。
 
@@ -141,7 +143,7 @@ CI 另在 Windows 运行此套件。
 
 ## 官方接口依据
 
-- [Codex Hooks](https://learn.chatgpt.com/docs/hooks)：`SessionStart`、`additionalContext`、插件默认 Hook 路径、Hook 信任。
+- [Codex Hooks](https://learn.chatgpt.com/docs/hooks)：`SessionStart`、`PreCompact`、`SessionEnd`、插件默认 Hook 路径、Hook 信任。
 - [Codex 子智能体](https://learn.chatgpt.com/zh-Hans/docs/agent-configuration/subagents)：委派触发、agent thread、等待和汇总语义。
 - [插件打包和本地 marketplace](https://developers.openai.com/plugins/build/plugins)：个人来源、安装缓存和插件结构。
 
