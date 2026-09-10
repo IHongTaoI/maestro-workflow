@@ -34,6 +34,21 @@ async function writeProjectFile(projectRoot, relativePath, content) {
   await writeFile(target, content, 'utf8');
 }
 
+function entryFile(entry, { revision = 0, updatedAt = '2026-09-10T01:00:00Z' } = {}) {
+  return `---
+revision: ${revision}
+updated_at: ${updatedAt}
+updated_by: old-zhou/test
+---
+
+# Long-term Memory Entry
+
+\`\`\`maestro-memory-entry
+${JSON.stringify(entry)}
+\`\`\`
+`;
+}
+
 async function createMemoryProject(t) {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-catalog-'));
   t.after(() => rm(projectRoot, { recursive: true, force: true }));
@@ -119,9 +134,14 @@ Measure cache invalidation fan-out.
 
 test('builds a three-layer catalog and selectively returns one Memory detail', async (t) => {
   const projectRoot = await createMemoryProject(t);
+  const legacyPath = path.join(projectRoot, '.maestro', 'memory', 'long-term', 'current.md');
+  const legacyBefore = await readFile(legacyPath, 'utf8');
   const build = JSON.parse((await runCatalog(projectRoot, ['build'])).stdout);
   assert.equal(build.status, 'built');
   assert.equal(build.entries, 5);
+  assert.equal(await readFile(legacyPath, 'utf8'), legacyBefore);
+  await assert.rejects(readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md'), 'utf8'));
 
   const indexPath = path.join(projectRoot, '.maestro', 'memory', 'index.json');
   const index = JSON.parse(await readFile(indexPath, 'utf8'));
@@ -222,4 +242,187 @@ test('rejects decision context on a non-decision Long-term entry', async (t) => 
   const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(failure.code, 2);
   assert.match(failure.stderr, /decision_context.*only.*decision/);
+});
+
+test('indexes split Long-term files and updates one entry without rewriting another', async (t) => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-split-'));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await writeProjectFile(projectRoot, '.maestro/evidence/source.md', '# Evidence\n');
+  const first = {
+    entry_id: 'lt-api-boundary', title: 'API boundary', memory_kind: 'principle',
+    content: 'Keep API boundaries explicit.', source_refs: ['.maestro/evidence/source.md'], status: 'active',
+  };
+  const second = {
+    entry_id: 'lt-worker-isolation', title: 'Worker isolation', memory_kind: 'decision',
+    content: 'Workers receive bounded context.', source_refs: ['.maestro/evidence/source.md'], status: 'active',
+    decision_context: { reason: 'Bounded context avoids hidden authority.' },
+  };
+  const old = {
+    entry_id: 'lt-fixed-roles', title: 'Fixed roles', memory_kind: 'decision',
+    content: 'Use fixed roles.', source_refs: ['.maestro/evidence/source.md'], status: 'superseded',
+  };
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-api-boundary.md', entryFile(first));
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-worker-isolation.md',
+    entryFile(second, { revision: 4, updatedAt: '2026-09-10T02:00:00Z' }));
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/history/lt-fixed-roles.md', entryFile(old));
+
+  await runCatalog(projectRoot, ['build']);
+  const index = JSON.parse(await readFile(path.join(projectRoot, '.maestro/memory/index.json'), 'utf8'));
+  assert.deepEqual(index.entries.map((entry) => entry.path), [
+    '.maestro/memory/long-term/entries/lt-api-boundary.md',
+    '.maestro/memory/long-term/history/lt-fixed-roles.md',
+    '.maestro/memory/long-term/entries/lt-worker-isolation.md',
+  ]);
+  assert.equal(index.entries.find((entry) => entry.memory_id === 'lt-worker-isolation').updated_at,
+    '2026-09-10T02:00:00Z');
+  const before = await readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-worker-isolation.md'), 'utf8');
+  first.content = 'Keep public API boundaries explicit and versioned.';
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-api-boundary.md',
+    entryFile(first, { revision: 1, updatedAt: '2026-09-10T03:00:00Z' }));
+  await runCatalog(projectRoot, ['build']);
+  assert.equal(await readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-worker-isolation.md'), 'utf8'), before);
+  const detail = JSON.parse((await runCatalog(projectRoot, ['show', 'lt-api-boundary'])).stdout);
+  assert.equal(detail.detail.content, 'Keep public API boundaries explicit and versioned.');
+  const inactive = JSON.parse((await runCatalog(projectRoot,
+    ['show', 'lt-fixed-roles', '--include-inactive'])).stdout);
+  assert.equal(inactive.detail.status, 'superseded');
+});
+
+test('rejects duplicate IDs across legacy and split Long-term sources', async (t) => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-duplicate-source-'));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await writeProjectFile(projectRoot, '.maestro/evidence/source.md', '# Evidence\n');
+  const entry = {
+    entry_id: 'lt-duplicate', title: 'Duplicate', memory_kind: 'fact', content: 'One claim.',
+    source_refs: ['.maestro/evidence/source.md'], status: 'active',
+  };
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/current.md', `# Long-term Memory
+
+\`\`\`maestro-memory-entry
+${JSON.stringify(entry)}
+\`\`\`
+`);
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-duplicate.md', entryFile(entry));
+  const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(failure.code, 2);
+  assert.match(failure.stderr, /duplicate Long-term entry_id/);
+});
+
+test('split Long-term files enforce one matching entry and independent metadata', async (t) => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-invalid-split-'));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await writeProjectFile(projectRoot, '.maestro/evidence/source.md', '# Evidence\n');
+  const entry = {
+    entry_id: 'lt-right-name', title: 'Right name', memory_kind: 'fact', content: 'A fact.',
+    source_refs: ['.maestro/evidence/source.md'], status: 'active',
+  };
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-wrong-name.md', entryFile(entry));
+  let failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.match(failure.stderr, /filename must match entry_id/);
+
+  await rm(path.join(projectRoot, '.maestro/memory/long-term/entries'), { recursive: true, force: true });
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-right-name.md', `# Entry
+
+\`\`\`maestro-memory-entry
+${JSON.stringify(entry)}
+\`\`\`
+`);
+  failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.match(failure.stderr, /revision.*non-negative integer/);
+});
+
+test('explicit migration preserves legacy entries and leaves an auditable snapshot', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const currentPath = path.join(projectRoot, '.maestro/memory/long-term/current.md');
+  const original = await readFile(currentPath, 'utf8');
+  const beforeActive = JSON.parse((await runCatalog(projectRoot,
+    ['show', 'lt-startup-performance'])).stdout).detail;
+  const beforeInactive = JSON.parse((await runCatalog(projectRoot,
+    ['show', 'lt-old-workflow', '--include-inactive'])).stdout).detail;
+
+  const preview = JSON.parse((await runCatalog(projectRoot, ['migrate-long-term'])).stdout);
+  assert.equal(preview.status, 'ready');
+  assert.equal(preview.entries, 2);
+  await assert.rejects(readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md'), 'utf8'));
+  assert.equal(await readFile(currentPath, 'utf8'), original);
+
+  const migrated = JSON.parse((await runCatalog(projectRoot,
+    ['migrate-long-term', '--apply', '--actor', 'old-zhou/migration'])).stdout);
+  assert.equal(migrated.status, 'migrated');
+  assert.equal(migrated.current_entries, 1);
+  assert.equal(migrated.history_entries, 1);
+  assert.doesNotMatch(await readFile(currentPath, 'utf8'), /maestro-memory-entry/);
+  assert.equal(await readFile(path.join(projectRoot, ...migrated.legacy_snapshot.split('/')), 'utf8'), original);
+
+  const activeFile = await readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md'), 'utf8');
+  const historyFile = await readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/history/lt-old-workflow.md'), 'utf8');
+  assert.match(activeFile, /revision: 2/);
+  assert.match(historyFile, /status.*superseded/);
+  const afterActive = JSON.parse((await runCatalog(projectRoot,
+    ['show', 'lt-startup-performance'])).stdout).detail;
+  const afterInactive = JSON.parse((await runCatalog(projectRoot,
+    ['show', 'lt-old-workflow', '--include-inactive'])).stdout).detail;
+  assert.deepEqual(afterActive, beforeActive);
+  assert.deepEqual(afterInactive, beforeInactive);
+  const check = JSON.parse((await runCatalog(projectRoot, ['check'])).stdout);
+  assert.equal(check.entries, 5);
+});
+
+test('mixed-mode migration preserves existing split entries byte for byte', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const existing = {
+    entry_id: 'lt-existing-split', title: 'Existing split entry', memory_kind: 'principle',
+    content: 'Keep this independently written entry unchanged.',
+    source_refs: ['.maestro/evidence/performance.md'], status: 'active',
+  };
+  const existingPath = path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-existing-split.md');
+  await writeProjectFile(projectRoot, '.maestro/memory/long-term/entries/lt-existing-split.md',
+    entryFile(existing, { revision: 7, updatedAt: '2026-09-10T04:00:00Z' }));
+  const before = await readFile(existingPath, 'utf8');
+
+  const preview = JSON.parse((await runCatalog(projectRoot, ['migrate-long-term'])).stdout);
+  assert.equal(preview.preserved_entries, 1);
+  const migrated = JSON.parse((await runCatalog(projectRoot,
+    ['migrate-long-term', '--apply', '--actor', 'old-zhou/migration'])).stdout);
+  assert.equal(migrated.preserved_entries, 1);
+  assert.equal(await readFile(existingPath, 'utf8'), before);
+  assert.match(await readFile(path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md'), 'utf8'),
+  /lt-startup-performance/);
+  const check = JSON.parse((await runCatalog(projectRoot, ['check'])).stdout);
+  assert.equal(check.entries, 6);
+});
+
+test('migration ID conflict never changes either storage format', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const currentPath = path.join(projectRoot, '.maestro/memory/long-term/current.md');
+  const original = await readFile(currentPath, 'utf8');
+  const duplicate = {
+    entry_id: 'lt-startup-performance', title: 'Duplicate', memory_kind: 'experience',
+    content: 'A conflicting split copy.', source_refs: ['.maestro/evidence/performance.md'],
+    status: 'active',
+  };
+  const duplicatePath = path.join(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md');
+  await writeProjectFile(projectRoot,
+    '.maestro/memory/long-term/entries/lt-startup-performance.md', entryFile(duplicate));
+  const duplicateBefore = await readFile(duplicatePath, 'utf8');
+  const collision = await rejectedCommand(runCatalog(projectRoot,
+    ['migrate-long-term', '--apply', '--actor', 'old-zhou/migration']));
+  assert.equal(collision.code, 2);
+  assert.match(collision.stderr, /duplicate Long-term entry_id/);
+  assert.equal(await readFile(currentPath, 'utf8'), original);
+  assert.equal(await readFile(duplicatePath, 'utf8'), duplicateBefore);
+
+  await rm(path.join(projectRoot, '.maestro/memory/long-term/entries'), { recursive: true, force: true });
+  const missingActor = await rejectedCommand(runCatalog(projectRoot, ['migrate-long-term', '--apply']));
+  assert.equal(missingActor.code, 2);
+  assert.match(missingActor.stderr, /--actor/);
+  assert.equal(await readFile(currentPath, 'utf8'), original);
 });

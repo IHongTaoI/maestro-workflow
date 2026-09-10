@@ -105,10 +105,19 @@ Long-term Memory 是维护中的经验库，不是 Task 记录归档。绝不要
 将它们暴露为 `current_memory.long_term_entries`。空存储以空数组表示，不得省略索引。稳定 ID
 使候选能声明比较过哪些条目，而不依赖 Markdown 标题或宿主 API。
 
-在 `long-term/current.md` 中，每个条目保存为一个机器可读 JSON fenced block。外围 Markdown
-可以有简短的人类说明，但当前声明不得只存在于非结构化正文：
+新写入采用一条 Memory 一个文件，当前或待确认条目的规范路径是
+`long-term/entries/<entry_id>.md`。文件名必须与稳定 `entry_id` 完全一致；每个文件必须有独立的
+`revision`、`updated_at`、`updated_by` front matter，并且只能包含一个机器可读 JSON fenced block：
 
 ````markdown
+---
+revision: 0
+updated_at: 2026-09-10T08:00:00Z
+updated_by: old-zhou/session-or-run-id
+---
+
+# Long-term Memory Entry
+
 ```maestro-memory-entry
 {
   "entry_id": "lt-home-startup-trace",
@@ -122,6 +131,26 @@ Long-term Memory 是维护中的经验库，不是 Task 记录归档。绝不要
 }
 ```
 ````
+
+`entries/` 只允许 `active` 或 `disputed`。经评审变为 `superseded` 或 `rejected` 的 entry snapshot
+移动到 `long-term/history/<entry_id>.md`，同时保留 decisions、conflicts 和 source refs。历史仍可通过
+Catalog 的 `show --include-inactive` 审计，但不会进入常规检索。`long-term/current.md` 在新格式中只
+保留固定的人类说明，不聚合 entry 内容，也不随 entry 更新而改写。
+
+旧项目的聚合 `long-term/current.md` 继续可读，也可以和不同 ID 的新 entry 文件共存；同一
+`entry_id` 同时出现在聚合文件、`entries/` 或 `history/` 时必须失败，不能猜测权威版本。普通
+Session 不得自动拆分旧文件。用户需要迁移时先预检，再显式执行：
+
+```bash
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> migrate-long-term
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> migrate-long-term \
+  --apply --actor <actor-id>
+```
+
+迁移保留 entry 内容、ID、状态、来源和 decision context，将旧聚合原文保存到
+`long-term/migrations/<migration-id>/current.md`，验证前后 entry 完全一致后才报告成功。失败时原
+`current.md` 保持或恢复为权威来源。若不同 ID 的新 entry 已存在，迁移只补入旧条目，已有文件及
+revision 保持不变；任一 ID 冲突都在写入前失败。迁移期间所有 writer 必须遵守全局 migration lock。
 
 `decision` 条目还可携带结构化上下文，不强制迁移旧条目：
 
@@ -142,9 +171,9 @@ Long-term Memory 是维护中的经验库，不是 Task 记录归档。绝不要
 字段的既有 decision 仍有效，不需要批量迁移。Decision context 解释项目知识，绝不为未来动作
 授予权限。
 
-`tags`、`aliases`、`status` 可选，status 默认为 `active`。目录构建器拒绝重复 ID、无效 block 和
-非结构化当前声明，不得静默创建不完整索引。旧项目启用 Memory Awareness 前，应先把当前
-Long-term 条目迁移成这些 block。
+`tags`、`aliases`、`status` 可选，status 默认为 `active`。目录构建器同时读取旧聚合格式与新拆分
+格式，拒绝重复 ID、文件名不匹配、缺少独立 revision、无效 block 和非结构化当前声明，不得静默
+创建不完整索引。
 
 这是 Memory Worker 请求生产者的兼容变更。没有 Long-term 条目时，过去发送
 `"current_memory": {}` 的生产者必须迁移为
@@ -204,9 +233,9 @@ low-value 不指向目标。不得用 `CREATE` 逃避与现有主题比较。
 - 旧声明与冲突证据双方可达的 `source_refs`；
 - 评审者、时间戳、理由，以及 superseded 时的替代条目 ID。
 
-评审后，通过可变状态写入协议更新 Long-term `current.md`。用新批准声明替换当前摘要，或删除
-被拒绝声明。发布不可变决策，把保留的候选/条目标记为 `superseded` 或 `rejected`，存在替代项
-时链接它。不得静默把旧声明改写成新说法、删除其来源，或在已知矛盾未解决时仍作为当前事实。
+评审后，通过可变状态写入协议更新目标 entry 文件。用新批准声明替换该 entry，或把被拒绝、已
+取代的 entry 移入 `history/`。发布不可变决策，存在替代项时链接它。不得静默把旧声明改写成新
+说法、删除其来源，或在已知矛盾未解决时仍作为当前事实。
 
 矛盾尚未验证时，在当前上下文把旧条目标为 disputed，并在本次决策中采用较高优先级证据。
 Memory Worker 可以提议 supersession，但必须由老周或强模型评审者批准。
@@ -247,8 +276,8 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> show <memory-id>
 ```
 
-`show` 提取一个 Long-term JSON block，或 Temporary、Task、Worker 的有界当前章节。
-这是只使用一个条目而不注入全部 `long-term/current.md` 的受支持方式。
+`show` 从旧聚合或对应单文件提取一个 Long-term JSON block，或提取 Temporary、Task、Worker 的
+有界当前章节。这是只使用一个条目而不注入全部 Long-term entries 的受支持方式。
 
 确定性目录包含：
 
@@ -326,7 +355,8 @@ Memory Worker 请求或响应。
 ## 团队共享 Memory 与 Git 语义合并
 
 多个开发者或 Agent 在并行 Git 分支工作时，提交进 Git 的团队共享 memory
-（`.maestro/memory/long-term/current.md`、Playbooks 和已评审决策）可能分叉。标准 Git 文本
+（`.maestro/memory/long-term/entries/*.md`、历史、Playbooks 和已评审决策）可能分叉。不同 entry
+文件的独立修改由 Git 正常合并；同一 entry 或多文件语义变化发生冲突时，标准 Git 文本
 合并无法解决语义演进或发现矛盾。
 
 ### 三方语义合并协议
@@ -368,7 +398,7 @@ Memory Merger 按以下确定性规则，将 `OURS`、`THEIRS` 与 `BASE` 比较
 ```
 
 冲突以 `status: pending-confirmation` 持久化到 `.maestro/memory/long-term/conflicts/`。经过人工或
-证据评审后，发布不可变决策，把状态转换为 `resolved`，将已确认声明整合进 `current.md`，并用
+证据评审后，发布不可变决策，把状态转换为 `resolved`，将已确认声明写入目标 entry 文件，并用
 `superseded_by` 引用标记被取代声明，保证完整可审计性。
 
 ### Memory Merger Worker

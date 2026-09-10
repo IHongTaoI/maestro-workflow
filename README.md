@@ -189,8 +189,9 @@ Worker 不依赖父 Agent 的隐式继承。每个 Worker 声明 required 与 op
 
 Memory Awareness 会为活动 Temporary、Task 和 Long-term Memory 生成小型 Manifest 与机器可读
 Index。Agent 先加载 Manifest，最多检索五个相关候选，再按稳定 ID 提取一个选定记录，不注入完整
-Long-term 文件。`maestro/scripts/memory_catalog.py` 构建、检查、搜索并选择性读取本地派生目录；
-它不替代正式 Memory，也不增加后台 Runtime。
+Long-term 集合。新 Long-term Memory 按 `entries/<entry-id>.md` 独立存储，旧聚合 `current.md` 仍可
+读取且不会静默迁移。`maestro/scripts/memory_catalog.py` 构建、检查、搜索、选择性读取，并提供显式
+迁移预检；它不替代正式 Memory，也不增加后台 Runtime。
 
 ## 手动行为检查
 

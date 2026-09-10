@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, check, search, and selectively read Maestro's derived Memory catalog."""
+"""Build, check, search, selectively read, and explicitly migrate Maestro Memory."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -19,7 +20,17 @@ from validate import Diagnostic, FileReferenceValidator, validate_memory_index
 
 INDEX_PATH = Path(".maestro/memory/index.json")
 MANIFEST_PATH = Path(".maestro/memory/manifest.md")
-LONG_TERM_PATH = Path(".maestro/memory/long-term/current.md")
+LONG_TERM_ROOT = Path(".maestro/memory/long-term")
+LONG_TERM_PATH = LONG_TERM_ROOT / "current.md"
+LONG_TERM_ENTRIES_PATH = LONG_TERM_ROOT / "entries"
+LONG_TERM_HISTORY_PATH = LONG_TERM_ROOT / "history"
+LONG_TERM_MIGRATIONS_PATH = LONG_TERM_ROOT / "migrations"
+LONG_TERM_MIGRATION_LOCK = Path(".maestro/locks/memory-long-term-migration.lock")
+CURRENT_POINTER_BODY = """# Long-term Memory
+
+长期记忆的权威内容按 entry 存放在 `entries/`；已取代或拒绝的历史快照存放在 `history/`。
+请通过 `memory/manifest.md` 和 `memory/index.json` 渐进检索，不要在此文件聚合全部条目。
+"""
 LONG_TERM_FENCE = re.compile(
     r"^```maestro-memory-entry[ \t]*\r?\n(.*?)^```[ \t]*$",
     re.MULTILINE | re.DOTALL,
@@ -30,6 +41,8 @@ CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
 STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 ACTIVE_STATUSES = {"active"}
 LONG_TERM_KINDS = {"fact", "experience", "principle", "decision", "constraint", "other"}
+CURRENT_ENTRY_STATUSES = {"active", "disputed"}
+HISTORY_ENTRY_STATUSES = {"superseded", "rejected"}
 
 
 class CatalogError(ValueError):
@@ -125,6 +138,42 @@ def strip_front_matter(text: str) -> str:
     return text
 
 
+def split_front_matter(path: Path, text: str) -> tuple[dict[str, Any], str]:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+    closing = next(
+        (index for index, line in enumerate(lines[1:], start=1) if line.strip() in {"---", "..."}),
+        None,
+    )
+    if closing is None:
+        raise CatalogError(f"{path}: unterminated YAML front matter")
+    metadata: dict[str, Any] = {}
+    for line_number, line in enumerate(lines[1:closing], start=2):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*", line)
+        if match is None:
+            raise CatalogError(f"{path}:{line_number}: unsupported front matter")
+        key, raw_value = match.groups()
+        if key in metadata:
+            raise CatalogError(f"{path}:{line_number}: duplicate front matter field '{key}'")
+        metadata[key] = parse_scalar(raw_value)
+    return metadata, "\n".join(lines[closing + 1 :])
+
+
+def long_term_metadata(path: Path, text: str, *, required: bool) -> dict[str, Any]:
+    metadata, _ = split_front_matter(path, text)
+    if not required:
+        return metadata
+    revision = metadata.get("revision")
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
+        raise CatalogError(f"{path}: 'revision' must be a non-negative integer")
+    for key in ("updated_at", "updated_by"):
+        require_string(metadata, key, path)
+    return metadata
+
+
 def markdown_sections(text: str) -> dict[str, str]:
     body = strip_front_matter(text)
     matches = list(HEADING.finditer(body))
@@ -218,18 +267,27 @@ def validate_decision_context(entry: dict[str, Any], source: Path) -> None:
         require_string(alternative, "reason", source)
 
 
-def parse_long_term_entries(path: Path) -> list[dict[str, Any]]:
+def parse_long_term_entries(
+    path: Path,
+    *,
+    allow_pointer: bool = False,
+    require_single: bool = False,
+) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     text = read_optional(path)
     blocks = list(LONG_TERM_FENCE.finditer(text))
     if not blocks:
         meaningful = strip_front_matter(text).strip()
+        if allow_pointer and meaningful == CURRENT_POINTER_BODY.strip():
+            return []
         if meaningful and meaningful not in {"# Long-term Memory", "# Long-term memory"}:
             raise CatalogError(
                 f"{path}: Long-term entries must use fenced 'maestro-memory-entry' JSON blocks"
             )
         return []
+    if require_single and len(blocks) != 1:
+        raise CatalogError(f"{path}: an entry file must contain exactly one maestro-memory-entry block")
     entries: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, block in enumerate(blocks, start=1):
@@ -263,33 +321,106 @@ def parse_long_term_entries(path: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def long_term_index_entries(project_root: Path, source_files: set[Path]) -> list[dict[str, Any]]:
-    path = project_root / LONG_TERM_PATH
-    if not path.is_file():
-        return []
-    source_files.add(path)
+def validate_entry_sources(project_root: Path, entry: dict[str, Any], source: Path) -> None:
+    validator = FileReferenceValidator(project_root)
+    errors: list[Diagnostic] = []
+    for index, reference in enumerate(require_string_list(entry, "source_refs", source)):
+        validator(reference, f"source_refs[{index}]", errors)
+    if errors:
+        details = "; ".join(f"{error.path}: {error.message}" for error in errors)
+        raise CatalogError(f"{source}: invalid source_refs: {details}")
+
+
+def split_entry_file(
+    project_root: Path,
+    path: Path,
+    *,
+    expected_statuses: set[str],
+) -> tuple[dict[str, Any], str | None]:
     text = read_optional(path)
-    front_matter = {}
-    if text.startswith("---"):
-        lines = text.splitlines()
-        closing = next(
-            (
-                index
-                for index, line in enumerate(lines[1:], 1)
-                if line.strip() in {"---", "..."}
-            ),
-            None,
-        )
-        if closing is not None:
-            for line in lines[1:closing]:
-                match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*", line)
-                if match:
-                    front_matter[match.group(1)] = parse_scalar(match.group(2))
-    updated_at = front_matter.get("updated_at")
-    if not isinstance(updated_at, str):
-        updated_at = None
+    metadata = long_term_metadata(path, text, required=True)
+    entries = parse_long_term_entries(path, require_single=True)
+    if len(entries) != 1:
+        raise CatalogError(f"{path}: an entry file must contain exactly one maestro-memory-entry block")
+    entry = entries[0]
+    entry_id = require_string(entry, "entry_id", path)
+    if path.name != f"{entry_id}.md":
+        raise CatalogError(f"{path}: filename must match entry_id '{entry_id}.md'")
+    status = entry.get("status", "active")
+    if status not in expected_statuses:
+        expected = ", ".join(sorted(expected_statuses))
+        raise CatalogError(f"{path}: status '{status}' does not belong here; expected {expected}")
+    validate_entry_sources(project_root, entry, path)
+    updated_at = metadata.get("updated_at")
+    return entry, updated_at if isinstance(updated_at, str) else None
+
+
+def split_long_term_records(
+    project_root: Path,
+    source_files: set[Path],
+) -> list[tuple[dict[str, Any], Path, str | None]]:
+    records: list[tuple[dict[str, Any], Path, str | None]] = []
+    for relative_root, expected_statuses in (
+        (LONG_TERM_ENTRIES_PATH, CURRENT_ENTRY_STATUSES),
+        (LONG_TERM_HISTORY_PATH, HISTORY_ENTRY_STATUSES),
+    ):
+        root = project_root / relative_root
+        if root.exists() and not root.is_dir():
+            raise CatalogError(f"{root}: Long-term entry path must be a directory")
+        if not root.is_dir():
+            continue
+        for path in sorted(root.iterdir()):
+            if path.name.startswith("."):
+                continue
+            if not path.is_file() or path.suffix != ".md":
+                raise CatalogError(f"{path}: Long-term entry directories may contain only Markdown files")
+            source_files.add(path)
+            entry, updated_at = split_entry_file(
+                project_root,
+                path,
+                expected_statuses=expected_statuses,
+            )
+            records.append((entry, path, updated_at))
+    return records
+
+
+def validate_unique_long_term_records(
+    records: list[tuple[dict[str, Any], Path, str | None]],
+) -> None:
+    seen: dict[str, Path] = {}
+    for entry, path, _ in records:
+        entry_id = require_string(entry, "entry_id", path)
+        previous = seen.get(entry_id)
+        if previous is not None:
+            raise CatalogError(
+                f"duplicate Long-term entry_id '{entry_id}' in {previous} and {path}"
+            )
+        seen[entry_id] = path
+
+
+def long_term_records(
+    project_root: Path,
+    source_files: set[Path],
+) -> list[tuple[dict[str, Any], Path, str | None]]:
+    records: list[tuple[dict[str, Any], Path, str | None]] = []
+    legacy_path = project_root / LONG_TERM_PATH
+    if legacy_path.is_file():
+        source_files.add(legacy_path)
+        text = read_optional(legacy_path)
+        metadata = long_term_metadata(legacy_path, text, required=False)
+        updated_at = metadata.get("updated_at")
+        for entry in parse_long_term_entries(legacy_path, allow_pointer=True):
+            validate_entry_sources(project_root, entry, legacy_path)
+            records.append((entry, legacy_path, updated_at if isinstance(updated_at, str) else None))
+
+    records.extend(split_long_term_records(project_root, source_files))
+    validate_unique_long_term_records(records)
+    return records
+
+
+def long_term_index_entries(project_root: Path, source_files: set[Path]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
-    for entry in parse_long_term_entries(path):
+    for entry, path, updated_at in long_term_records(project_root, source_files):
         content = require_string(entry, "content", path)
         result.append(
             {
@@ -761,6 +892,223 @@ def detail_for_entry(project_root: Path, entry: dict[str, Any]) -> dict[str, Any
     return selected or {"content": compact_text(strip_front_matter(text), 2000)}
 
 
+def entry_file_text(
+    entry: dict[str, Any],
+    *,
+    revision: int,
+    updated_at: str,
+    updated_by: str,
+) -> str:
+    payload = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return "\n".join(
+        (
+            "---",
+            f"revision: {revision}",
+            f"updated_at: {updated_at}",
+            f"updated_by: {updated_by}",
+            "---",
+            "",
+            "# Long-term Memory Entry",
+            "",
+            "```maestro-memory-entry",
+            payload,
+            "```",
+            "",
+        )
+    )
+
+
+def migration_preview(
+    project_root: Path,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, Any],
+    list[tuple[dict[str, Any], Path, str | None]],
+]:
+    current_path = project_root / LONG_TERM_PATH
+    if not current_path.is_file():
+        raise CatalogError("legacy Long-term current.md does not exist")
+    text = read_optional(current_path)
+    entries = parse_long_term_entries(current_path)
+    if not entries:
+        raise CatalogError("legacy Long-term current.md contains no entries to migrate")
+    for entry in entries:
+        validate_entry_sources(project_root, entry, current_path)
+    existing_records = split_long_term_records(project_root, set())
+    legacy_records = [(entry, current_path, None) for entry in entries]
+    validate_unique_long_term_records([*legacy_records, *existing_records])
+    metadata = long_term_metadata(current_path, text, required=False)
+    return entries, metadata, existing_records
+
+
+def migration_lock(project_root: Path, actor: str) -> tuple[int, Path]:
+    path = project_root / LONG_TERM_MIGRATION_LOCK
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as error:
+        raise CatalogError(f"migration lock already exists: {path}") from error
+    try:
+        payload = json.dumps({"actor": actor, "created_at": utc_now()}, sort_keys=True).encode("utf-8")
+        os.write(descriptor, payload)
+        os.fsync(descriptor)
+    except Exception:
+        os.close(descriptor)
+        path.unlink(missing_ok=True)
+        raise
+    return descriptor, path
+
+
+def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[str, Any]:
+    if not apply:
+        entries, _, existing_records = migration_preview(project_root)
+        active = sum(entry.get("status", "active") in CURRENT_ENTRY_STATUSES for entry in entries)
+        return {
+            "status": "ready",
+            "entries": len(entries),
+            "current_entries": active,
+            "history_entries": len(entries) - active,
+            "preserved_entries": len(existing_records),
+            "entry_ids": sorted(
+                require_string(entry, "entry_id", project_root / LONG_TERM_PATH)
+                for entry in entries
+            ),
+        }
+
+    actor = " ".join(actor.split()).strip()
+    if not actor:
+        raise CatalogError("--actor must be a non-empty string when --apply is used")
+    descriptor, lock_path = migration_lock(project_root, actor)
+    current_path = project_root / LONG_TERM_PATH
+    original: str | None = None
+    stage_root: Path | None = None
+    published: list[Path] = []
+    try:
+        # Re-read and validate only after taking the global lock. The preview is
+        # deliberately advisory and cannot become the source for an applied migration.
+        entries, metadata, existing_records = migration_preview(project_root)
+        active = sum(entry.get("status", "active") in CURRENT_ENTRY_STATUSES for entry in entries)
+        preview = {
+            "status": "migrated",
+            "entries": len(entries),
+            "current_entries": active,
+            "history_entries": len(entries) - active,
+            "preserved_entries": len(existing_records),
+            "entry_ids": sorted(
+                require_string(entry, "entry_id", current_path) for entry in entries
+            ),
+        }
+        original = current_path.read_text(encoding="utf-8")
+        original_hash = hashlib.sha256(original.encode("utf-8")).hexdigest()
+        migration_time = utc_now()
+        migration_id = (
+            datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            + "-"
+            + original_hash[:8]
+        )
+        audit_root = project_root / LONG_TERM_MIGRATIONS_PATH / migration_id
+        if audit_root.exists():
+            raise CatalogError(f"migration audit already exists: {audit_root}")
+        revision = metadata.get("revision", 0)
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
+            raise CatalogError(f"{current_path}: 'revision' must be a non-negative integer")
+        updated_at = metadata.get("updated_at")
+        if not isinstance(updated_at, str) or not updated_at.strip():
+            updated_at = migration_time
+        updated_by = metadata.get("updated_by")
+        if not isinstance(updated_by, str) or not updated_by.strip():
+            updated_by = actor
+
+        stage_root = Path(
+            tempfile.mkdtemp(prefix=".entry-migration-", dir=project_root / LONG_TERM_ROOT)
+        )
+        for entry in entries:
+            status = entry.get("status", "active")
+            folder = "entries" if status in CURRENT_ENTRY_STATUSES else "history"
+            target = stage_root / folder / f"{require_string(entry, 'entry_id', current_path)}.md"
+            atomic_write(
+                target,
+                entry_file_text(
+                    entry,
+                    revision=revision,
+                    updated_at=updated_at,
+                    updated_by=updated_by,
+                ),
+            )
+            split_entry_file(
+                project_root,
+                target,
+                expected_statuses=(CURRENT_ENTRY_STATUSES if folder == "entries" else HISTORY_ENTRY_STATUSES),
+            )
+
+        audit_root.mkdir(parents=True)
+        atomic_write(audit_root / "current.md", original)
+        atomic_write(
+            audit_root / "intent.json",
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "migration_id": migration_id,
+                    "actor": actor,
+                    "created_at": migration_time,
+                    "source_path": LONG_TERM_PATH.as_posix(),
+                    "source_sha256": original_hash,
+                    "entry_ids": preview["entry_ids"],
+                    "preserved_entry_ids": sorted(
+                        require_string(entry, "entry_id", path)
+                        for entry, path, _ in existing_records
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ) + "\n",
+        )
+        for entry in entries:
+            status = entry.get("status", "active")
+            folder = "entries" if status in CURRENT_ENTRY_STATUSES else "history"
+            entry_id = require_string(entry, "entry_id", current_path)
+            staged = stage_root / folder / f"{entry_id}.md"
+            relative_root = LONG_TERM_ENTRIES_PATH if folder == "entries" else LONG_TERM_HISTORY_PATH
+            target = project_root / relative_root / f"{entry_id}.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                raise CatalogError(f"migration target appeared after preflight: {target}")
+            os.replace(staged, target)
+            published.append(target)
+        atomic_write(current_path, CURRENT_POINTER_BODY)
+
+        migrated_records = long_term_records(project_root, set())
+        migrated = {entry["entry_id"]: entry for entry, _, _ in migrated_records}
+        expected = {entry["entry_id"]: entry for entry, _, _ in existing_records}
+        expected.update({entry["entry_id"]: entry for entry in entries})
+        if migrated != expected:
+            raise CatalogError("migration verification failed: Long-term entries changed")
+        persist_catalog(project_root, derive_catalog(project_root))
+        atomic_write(
+            audit_root / "committed.json",
+            json.dumps(
+                {"schema_version": 1, "migration_id": migration_id, "committed_at": utc_now()},
+                sort_keys=True,
+            ) + "\n",
+        )
+        preview["migration_id"] = migration_id
+        preview["legacy_snapshot"] = project_relative(project_root, audit_root / "current.md")
+        return preview
+    except Exception:
+        if original is not None:
+            atomic_write(current_path, original)
+        for target in reversed(published):
+            target.unlink(missing_ok=True)
+        raise
+    finally:
+        os.close(descriptor)
+        if lock_path.exists():
+            lock_path.unlink()
+        if stage_root is not None and stage_root.exists():
+            shutil.rmtree(stage_root)
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Maintain Maestro's derived Memory catalog.")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -781,6 +1129,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     show.add_argument("memory_id")
     show.add_argument("--include-inactive", action="store_true")
     show.add_argument("--no-refresh", action="store_true")
+
+    migrate = subparsers.add_parser("migrate-long-term")
+    migrate.add_argument("--apply", action="store_true")
+    migrate.add_argument("--actor", default="")
     return parser.parse_args(argv)
 
 
@@ -811,6 +1163,10 @@ def main(argv: list[str] | None = None) -> int:
                     sort_keys=True,
                 )
             )
+            return 0
+        if args.command == "migrate-long-term":
+            result = migrate_long_term(project_root, actor=args.actor, apply=args.apply)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh)
         if args.command == "search":
