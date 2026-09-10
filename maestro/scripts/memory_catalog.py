@@ -15,7 +15,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from validate import Diagnostic, FileReferenceValidator, validate_memory_index
+from validate import (
+    Diagnostic,
+    FileReferenceValidator,
+    validate_memory_followup,
+    validate_memory_index,
+)
 
 
 INDEX_PATH = Path(".maestro/memory/index.json")
@@ -57,15 +62,25 @@ class CatalogError(ValueError):
 def resolve_reference_time(arg_time: str | None = None) -> datetime:
     if arg_time:
         try:
-            return datetime.fromisoformat(arg_time.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(arg_time.replace("Z", "+00:00"))
         except ValueError as error:
             raise CatalogError(f"invalid --now timestamp '{arg_time}': {error}") from error
+        if dt.tzinfo is None or dt.utcoffset() is None:
+            raise CatalogError(
+                f"--now timestamp must include timezone offset (e.g. 'Z' or '+00:00'): '{arg_time}'"
+            )
+        return dt
     env_time = os.environ.get("MAESTRO_CURRENT_TIME")
     if env_time:
         try:
-            return datetime.fromisoformat(env_time.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(env_time.replace("Z", "+00:00"))
         except ValueError as error:
             raise CatalogError(f"invalid MAESTRO_CURRENT_TIME '{env_time}': {error}") from error
+        if dt.tzinfo is None or dt.utcoffset() is None:
+            raise CatalogError(
+                f"MAESTRO_CURRENT_TIME must include timezone offset (e.g. 'Z' or '+00:00'): '{env_time}'"
+            )
+        return dt
     return datetime.now(timezone.utc)
 
 
@@ -697,128 +712,57 @@ def followup_records(
     all_followups: dict[str, dict[str, Any]] = {}
     validator = FileReferenceValidator(project_root)
 
-    pending_dir = project_root / FOLLOWUPS_PENDING_PATH
-    if pending_dir.exists() and not pending_dir.is_dir():
-        raise CatalogError(f"{pending_dir}: Follow-up pending path must be a directory")
-    if pending_dir.is_dir():
-        for path in sorted(pending_dir.iterdir()):
+    for directory, expected_status in (
+        (project_root / FOLLOWUPS_PENDING_PATH, "pending"),
+        (project_root / FOLLOWUPS_RESOLVED_PATH, "resolved"),
+    ):
+        if directory.exists() and not directory.is_dir():
+            raise CatalogError(f"{directory}: Follow-up {expected_status} path must be a directory")
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.iterdir()):
             if path.name.startswith("."):
                 continue
             if not path.is_file() or path.suffix not in {".yaml", ".yml"}:
                 raise CatalogError(f"{path}: Follow-up directories may contain only YAML files")
             source_files.add(path)
             record = parse_simple_yaml(path)
-            fid = require_string(record, "followup_id", path)
-            if not STABLE_ID.fullmatch(fid):
-                raise CatalogError(f"{path}: invalid followup_id '{fid}'")
+            errors: list[Diagnostic] = []
+            validate_memory_followup(record, errors, validator)
+            if errors:
+                details = "; ".join(f"{err.path}: {err.message}" for err in errors)
+                raise CatalogError(f"{path}: invalid follow-up: {details}")
+
+            fid = record["followup_id"]
             if path.name not in {f"{fid}.yaml", f"{fid}.yml"}:
                 raise CatalogError(f"{path}: filename must match followup_id '{fid}.yaml'")
-            status = require_string(record, "status", path)
-            if status != "pending":
-                raise CatalogError(f"{path}: status must be 'pending' in pending directory")
-            title = require_string(record, "title", path)
-            created_at = require_string(record, "created_at", path)
-            try:
-                datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            except ValueError as error:
-                raise CatalogError(f"{path}: invalid created_at timestamp '{created_at}'") from error
-            source_refs = require_string_list(record, "source_refs", path)
-            ref_errors: list[Diagnostic] = []
-            for index, ref in enumerate(source_refs):
-                validator(ref, f"source_refs[{index}]", ref_errors)
-            if ref_errors:
-                details = "; ".join(f"{err.path}: {err.message}" for err in ref_errors)
-                raise CatalogError(f"{path}: invalid source_refs: {details}")
-
-            related_ids = optional_string_list(record, "related_ids", path)
-            for rid in related_ids:
-                if not STABLE_ID.fullmatch(rid):
-                    raise CatalogError(f"{path}: invalid related_id '{rid}'")
-
-            for forbidden in ("resolved_at", "resolution", "resolution_refs"):
-                if forbidden in record and record[forbidden] is not None:
-                    raise CatalogError(f"{path}: pending follow-up cannot have '{forbidden}'")
+            status = record["status"]
+            if status != expected_status:
+                raise CatalogError(
+                    f"{path}: status must be '{expected_status}' in {expected_status} directory"
+                )
 
             if fid in all_followups:
                 raise CatalogError(f"duplicate followup_id '{fid}' across follow-up records")
 
             record_copy = dict(record)
             record_copy["path"] = project_relative(project_root, path)
-            record_copy["related_ids"] = related_ids
+            record_copy["related_ids"] = record.get("related_ids", [])
+            if status == "resolved":
+                record_copy["resolution_refs"] = record.get("resolution_refs", [])
             all_followups[fid] = record_copy
-            pending_followups.append(
-                {
-                    "followup_id": fid,
-                    "title": title,
-                    "status": "pending",
-                    "created_at": created_at,
-                    "source_refs": source_refs,
-                    "related_ids": related_ids,
-                    "path": project_relative(project_root, path),
-                }
-            )
-
-    resolved_dir = project_root / FOLLOWUPS_RESOLVED_PATH
-    if resolved_dir.exists() and not resolved_dir.is_dir():
-        raise CatalogError(f"{resolved_dir}: Follow-up resolved path must be a directory")
-    if resolved_dir.is_dir():
-        for path in sorted(resolved_dir.iterdir()):
-            if path.name.startswith("."):
-                continue
-            if not path.is_file() or path.suffix not in {".yaml", ".yml"}:
-                raise CatalogError(f"{path}: Follow-up directories may contain only YAML files")
-            source_files.add(path)
-            record = parse_simple_yaml(path)
-            fid = require_string(record, "followup_id", path)
-            if not STABLE_ID.fullmatch(fid):
-                raise CatalogError(f"{path}: invalid followup_id '{fid}'")
-            if path.name not in {f"{fid}.yaml", f"{fid}.yml"}:
-                raise CatalogError(f"{path}: filename must match followup_id '{fid}.yaml'")
-            status = require_string(record, "status", path)
-            if status != "resolved":
-                raise CatalogError(f"{path}: status must be 'resolved' in resolved directory")
-            require_string(record, "title", path)
-            created_at = require_string(record, "created_at", path)
-            try:
-                datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            except ValueError as error:
-                raise CatalogError(f"{path}: invalid created_at timestamp '{created_at}'") from error
-            source_refs = require_string_list(record, "source_refs", path)
-            ref_errors = []
-            for index, ref in enumerate(source_refs):
-                validator(ref, f"source_refs[{index}]", ref_errors)
-            if ref_errors:
-                details = "; ".join(f"{err.path}: {err.message}" for err in ref_errors)
-                raise CatalogError(f"{path}: invalid source_refs: {details}")
-
-            related_ids = optional_string_list(record, "related_ids", path)
-            for rid in related_ids:
-                if not STABLE_ID.fullmatch(rid):
-                    raise CatalogError(f"{path}: invalid related_id '{rid}'")
-
-            resolved_at = require_string(record, "resolved_at", path)
-            try:
-                datetime.fromisoformat(resolved_at.replace("Z", "+00:00"))
-            except ValueError as error:
-                raise CatalogError(f"{path}: invalid resolved_at timestamp '{resolved_at}'") from error
-            require_string(record, "resolution", path)
-
-            resolution_refs = optional_string_list(record, "resolution_refs", path)
-            res_errors: list[Diagnostic] = []
-            for index, ref in enumerate(resolution_refs):
-                validator(ref, f"resolution_refs[{index}]", res_errors)
-            if res_errors:
-                details = "; ".join(f"{err.path}: {err.message}" for err in res_errors)
-                raise CatalogError(f"{path}: invalid resolution_refs: {details}")
-
-            if fid in all_followups:
-                raise CatalogError(f"duplicate followup_id '{fid}' across follow-up records")
-
-            record_copy = dict(record)
-            record_copy["path"] = project_relative(project_root, path)
-            record_copy["related_ids"] = related_ids
-            record_copy["resolution_refs"] = resolution_refs
-            all_followups[fid] = record_copy
+            if status == "pending":
+                pending_followups.append(
+                    {
+                        "followup_id": fid,
+                        "title": record["title"],
+                        "status": "pending",
+                        "created_at": record["created_at"],
+                        "source_refs": record["source_refs"],
+                        "related_ids": record.get("related_ids", []),
+                        "path": project_relative(project_root, path),
+                    }
+                )
 
     pending_followups.sort(key=lambda item: item["followup_id"])
     return pending_followups, all_followups

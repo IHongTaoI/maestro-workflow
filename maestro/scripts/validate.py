@@ -837,6 +837,100 @@ def validate_memory_index_entry(
             add_error(errors, f"{path}.stale", "must be null outside the Temporary layer")
 
 
+def validate_memory_followup(
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, "$", errors):
+        return
+
+    status = value.get("status")
+    if status == "pending":
+        required = {"followup_id", "title", "status", "created_at", "source_refs"}
+        allowed = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "related_ids",
+        }
+    elif status == "resolved":
+        required = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "resolved_at",
+            "resolution",
+        }
+        allowed = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "related_ids",
+            "resolved_at",
+            "resolution",
+            "resolution_refs",
+        }
+    else:
+        required = {"followup_id", "title", "status", "created_at", "source_refs"}
+        allowed = {
+            "followup_id",
+            "title",
+            "status",
+            "created_at",
+            "source_refs",
+            "related_ids",
+            "resolved_at",
+            "resolution",
+            "resolution_refs",
+        }
+
+    check_object_shape(value, "$", errors, required=required, allowed=allowed)
+
+    if "followup_id" in value:
+        check_stable_id(value["followup_id"], "$.followup_id", errors)
+    if "title" in value:
+        check_string(value["title"], "$.title", errors, min_length=1)
+    if "status" in value:
+        check_enum(value["status"], "$.status", errors, {"pending", "resolved"})
+    if "created_at" in value:
+        check_date_time(value["created_at"], "$.created_at", errors)
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        "$.source_refs",
+        errors,
+        file_reference,
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], "$.source_refs", errors)
+    if "related_ids" in value and check_array(
+        value["related_ids"],
+        "$.related_ids",
+        errors,
+        lambda item, item_path, item_errors: check_stable_id(item, item_path, item_errors),
+    ):
+        check_unique_strings(value["related_ids"], "$.related_ids", errors)
+
+    if status == "resolved":
+        if "resolved_at" in value:
+            check_date_time(value["resolved_at"], "$.resolved_at", errors)
+        if "resolution" in value:
+            check_string(value["resolution"], "$.resolution", errors, min_length=1)
+        if "resolution_refs" in value and check_array(
+            value["resolution_refs"],
+            "$.resolution_refs",
+            errors,
+            file_reference,
+        ):
+            check_unique_strings(value["resolution_refs"], "$.resolution_refs", errors)
+
+
 def validate_pending_followup_entry(
     value: Any,
     path: str,
@@ -1866,6 +1960,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "memory-response",
             "memory-merge-request",
             "memory-merge-response",
+            "memory-followup",
         ),
     )
     parser.add_argument("file", type=Path)
@@ -1953,8 +2048,10 @@ def main(argv: list[str] | None = None) -> int:
         validate_memory_response(value, errors, file_reference, request_file)
     elif args.kind == "memory-merge-request":
         validate_memory_merge_request(value, errors, file_reference)
-    else:
+    elif args.kind == "memory-merge-response":
         validate_memory_merge_response(value, errors, file_reference)
+    elif args.kind == "memory-followup":
+        validate_memory_followup(value, errors, file_reference)
 
     emit_result(args, errors, output_file=output_file)
     return 1 if errors else 0

@@ -314,6 +314,14 @@ try {
         "$fixtureRoot/memory-followup-pending-with-resolution-invalid.json" 1
     Invoke-AjvCase $memoryFollowupSchema `
         "$fixtureRoot/memory-followup-resolved-missing-resolution-invalid.json" 1
+    Invoke-AjvCase $memoryFollowupSchema `
+        "$fixtureRoot/memory-followup-unknown-field-invalid.json" 1
+    Invoke-AjvCase $memoryFollowupSchema `
+        "$fixtureRoot/memory-followup-duplicate-source-refs-invalid.json" 1
+    Invoke-AjvCase $memoryFollowupSchema `
+        "$fixtureRoot/memory-followup-duplicate-related-ids-invalid.json" 1
+    Invoke-AjvCase $memoryFollowupSchema `
+        "$fixtureRoot/memory-followup-duplicate-resolution-refs-invalid.json" 1
 
     $workerSchema = "maestro/references/schemas/worker.schema.json"
     $requirementsSchema = "maestro/references/schemas/capability-requirements.schema.json"

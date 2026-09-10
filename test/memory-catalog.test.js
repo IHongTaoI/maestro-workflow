@@ -525,6 +525,20 @@ revision: 1
   manifest = await readFile(path.join(projectRoot, '.maestro', 'memory', 'manifest.md'), 'utf8');
   assert.match(manifest, /homepage startup investigation.*\(updated 2026-09-01\)/);
   assert.doesNotMatch(manifest, /homepage startup investigation.*stale/);
+
+  // Timezone enforcement on --now and MAESTRO_CURRENT_TIME:
+  // Offset-aware timestamp with non-UTC offset succeeds
+  await runCatalog(projectRoot, ['build', '--now', '2026-09-10T20:00:00+08:00']);
+  await runCatalog(projectRoot, ['build'], { env: { MAESTRO_CURRENT_TIME: '2026-09-10T20:00:00+08:00' } });
+
+  // Naive timestamps without timezone offset fail
+  const naiveNowErr = await rejectedCommand(runCatalog(projectRoot, ['build', '--now', '2026-09-10T12:00:00']));
+  assert.equal(naiveNowErr.code, 2);
+  assert.match(naiveNowErr.stderr, /--now timestamp must include timezone offset/);
+
+  const naiveEnvErr = await rejectedCommand(runCatalog(projectRoot, ['build'], { env: { MAESTRO_CURRENT_TIME: '2026-09-10T12:00:00' } }));
+  assert.equal(naiveEnvErr.code, 2);
+  assert.match(naiveEnvErr.stderr, /MAESTRO_CURRENT_TIME must include timezone offset/);
 });
 
 test('indexes pending follow-ups, exposes them in manifest, and supports show command', async (t) => {
@@ -646,7 +660,7 @@ resolved_at: 2026-09-10T12:00:00Z
 `);
   err = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(err.code, 2);
-  assert.match(err.stderr, /pending follow-up cannot have 'resolved_at'/);
+  assert.match(err.stderr, /\$\.resolved_at: is not allowed/);
   await rm(path.join(projectRoot, '.maestro/memory/followups/pending/has-resolution.yaml'));
 
   // 4. Invalid source_refs (non-existent file)
@@ -659,7 +673,7 @@ source_refs:
 `);
   err = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(err.code, 2);
-  assert.match(err.stderr, /invalid source_refs/);
+  assert.match(err.stderr, /invalid follow-up/);
   await rm(path.join(projectRoot, '.maestro/memory/followups/pending/bad-ref.yaml'));
 
   // 5. Duplicate ID across pending and resolved
@@ -695,4 +709,67 @@ source_refs:
   err = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(err.code, 2);
   assert.match(err.stderr, /collides with memory_id/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
+
+  // 7. Unknown field disallowed (additionalProperties: false)
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/unknown-field.yaml', `followup_id: unknown-field
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+unknown_field: disallowed
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /\$\.unknown_field: is not allowed/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
+
+  // 8. Duplicate source_refs disallowed (uniqueItems: true)
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/dup-source-refs.yaml', `followup_id: dup-source-refs
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+  - .maestro/evidence/performance.md
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /\$\.source_refs\[1\]: must be unique/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
+
+  // 9. Duplicate related_ids disallowed (uniqueItems: true)
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/dup-related-ids.yaml', `followup_id: dup-related-ids
+title: Some Title
+status: pending
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+related_ids:
+  - lt-startup-performance
+  - lt-startup-performance
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /\$\.related_ids\[1\]: must be unique/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
+
+  // 10. Duplicate resolution_refs disallowed in resolved follow-ups (uniqueItems: true)
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/resolved/dup-resolution-refs.yaml', `followup_id: dup-resolution-refs
+title: Some Title
+status: resolved
+created_at: 2026-09-09T12:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+resolved_at: 2026-09-10T12:00:00Z
+resolution: Decommissioned old nodes
+resolution_refs:
+  - .maestro/evidence/performance.md
+  - .maestro/evidence/performance.md
+`);
+  err = await rejectedCommand(runCatalog(projectRoot, ['build']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /\$\.resolution_refs\[1\]: must be unique/);
+  await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
 });
