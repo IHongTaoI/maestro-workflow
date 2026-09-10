@@ -41,6 +41,8 @@ MEMORY_RECORD_TYPES = {
 MEMORY_STATUSES = {"active", "disputed", "superseded", "rejected", "archived"}
 MEMORY_KINDS = {"fact", "experience", "principle", "decision", "constraint", "other"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+ACTIVITY_EVENT_TYPES = {"task_completed", "decision_approved"}
+ACTIVITY_EVENT_ID_PATTERN = re.compile(r"^activity-[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 @dataclass(frozen=True)
@@ -1039,6 +1041,88 @@ def validate_memory_index(
             seen_followup_ids.add(fid)
 
 
+def validate_activity_event(
+    value: Any,
+    path: str,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, path, errors):
+        return
+    required = {
+        "event_id",
+        "occurred_at",
+        "event_type",
+        "title",
+        "summary",
+        "source_refs",
+        "status",
+    }
+    check_object_shape(value, path, errors, required=required, allowed=required)
+    if "event_id" in value:
+        if check_string(value["event_id"], f"{path}.event_id", errors, min_length=1):
+            if not ACTIVITY_EVENT_ID_PATTERN.fullmatch(value["event_id"]):
+                add_error(errors, f"{path}.event_id", "must match 'activity-<stable-id>'")
+    if "occurred_at" in value:
+        check_date_time(value["occurred_at"], f"{path}.occurred_at", errors)
+    if "event_type" in value:
+        check_enum(value["event_type"], f"{path}.event_type", errors, ACTIVITY_EVENT_TYPES)
+    for key in ("title", "summary"):
+        if key in value:
+            check_string(value[key], f"{path}.{key}", errors, min_length=1)
+    if "source_refs" in value and check_array(
+        value["source_refs"],
+        f"{path}.source_refs",
+        errors,
+        lambda item, item_path, item_errors: file_reference(item, item_path, item_errors),
+        min_items=1,
+    ):
+        check_unique_strings(value["source_refs"], f"{path}.source_refs", errors)
+    if "status" in value and value["status"] != "completed":
+        add_error(errors, f"{path}.status", "must equal 'completed'")
+
+
+def validate_activity_index(
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, "$", errors):
+        return
+    required = {"schema_version", "generated_at", "source_digest", "events"}
+    check_object_shape(value, "$", errors, required=required, allowed=required)
+    if value.get("schema_version") != 1:
+        add_error(errors, "$.schema_version", "must equal 1")
+    if "generated_at" in value:
+        check_date_time(value["generated_at"], "$.generated_at", errors)
+    if "source_digest" in value:
+        if check_string(value["source_digest"], "$.source_digest", errors, min_length=1):
+            if not SHA256_PATTERN.fullmatch(value["source_digest"]):
+                add_error(errors, "$.source_digest", "must be a lowercase SHA-256 digest")
+    if "events" in value and check_array(
+        value["events"],
+        "$.events",
+        errors,
+        lambda item, item_path, item_errors: validate_activity_event(
+            item, item_path, item_errors, file_reference
+        ),
+    ):
+        seen_ids: set[str] = set()
+        for index, event in enumerate(value["events"]):
+            if not is_object(event):
+                continue
+            event_id = event.get("event_id")
+            if not isinstance(event_id, str):
+                continue
+            if event_id in seen_ids:
+                add_error(
+                    errors,
+                    f"$.events[{index}].event_id",
+                    "must be unique within the Activity Index",
+                )
+            seen_ids.add(event_id)
+
+
 def validate_playbook(
     value: Any,
     path: str,
@@ -1961,6 +2045,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "memory-merge-request",
             "memory-merge-response",
             "memory-followup",
+            "activity-event",
+            "activity-index",
         ),
     )
     parser.add_argument("file", type=Path)
@@ -2052,6 +2138,10 @@ def main(argv: list[str] | None = None) -> int:
         validate_memory_merge_response(value, errors, file_reference)
     elif args.kind == "memory-followup":
         validate_memory_followup(value, errors, file_reference)
+    elif args.kind == "activity-event":
+        validate_activity_event(value, "$", errors, file_reference)
+    elif args.kind == "activity-index":
+        validate_activity_index(value, errors, file_reference)
 
     emit_result(args, errors, output_file=output_file)
     return 1 if errors else 0
