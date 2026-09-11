@@ -6,7 +6,7 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 
 ## 当前范围
 
-当前派生 Task 完成事件和里程碑 Decision 事件。
+当前派生 Task 完成事件、里程碑 Decision 事件，以及里程碑 Playbook 评审事件。
 
 `task_completed`：
 
@@ -32,10 +32,27 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 记录及缺少可靠时间的历史记录保持原样，不迁移、不投影，也不得用 `updated_at`、Git 时间或文件
 mtime 猜测事件时间。
 
+`playbook_approved` 和 `playbook_superseded`：
+
+- 来源只包括 `.maestro/playbooks/decisions/<decision-id>.decision.json`，不会递归扫描
+  `candidates/` 或已批准 Playbook 文件；
+- 记录使用 [decision-record.schema.json](schemas/decision-record.schema.json)，必须是
+  `importance: milestone`，结果必须是 `approved` 或 `superseded`，`target_ids` 指向受影响的
+  `playbook_id`；
+- `occurred_at` 只取不可变记录的显式 `decided_at`，并归一化为 UTC；
+- `source_refs` 指向当前存在的不可变 Decision Record；发布后单纯缺少历史证据文件不会阻塞重建，
+  但证据路径格式无效或逃逸项目边界时构建失败；
+- 事件 ID 由事件类型、Decision ID 和 `decided_at` 确定性生成。
+
+Playbook 候选本身（`playbooks/candidates/`）和已批准 Playbook 文件遵循可变状态协议的
+`updated_at` 都不是事件时间：前者只是提案，后者是可变现状。只有不可变评审记录能进入时间线，
+也不得用它们回推批准时刻。
+
 ## 写入规则
 
 Activity 没有 `record` 操作，也不维护 `events/*.jsonl`。完成新 Task 时，在 Task 生命周期更新中
-写入并保留 `completed_at`；作出新的重要决策时，发布带 `decided_at` 的不可变 Decision Record。
+写入并保留 `completed_at`；作出新的重要决策时，发布带 `decided_at` 的不可变 Decision Record；
+批准或取代 Playbook 时，把评审记录发布到 `playbooks/decisions/`。
 Activity 只负责读取和派生。规范来源损坏、重复 ID、文件名不匹配或时间格式无效时，构建必须
 明确失败，不能静默跳过有问题的权威记录。Decision 的证据路径格式无效或逃逸项目边界时同样
 失败，但发布后单纯缺少历史证据文件不会阻塞重建。

@@ -191,7 +191,7 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
 
 ## Issue #54：Activity 派生时间线
 
-在可丢弃项目中准备活动、归档 Task 和不可变 Decision Record，确认：
+在可丢弃项目中准备活动、归档 Task，以及不可变 Decision 与 Playbook 评审记录，确认：
 
 1. 新 Task 以 `completed` 或 `archive` 状态写入显式 `completed_at` 后，不执行额外记录命令也能被
    月、年及日期范围查询找到；输出时间归一化为 UTC。
@@ -210,6 +210,13 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
    证据，Activity 仍能从 Decision Record 重建。
 10. 规范 Decision 缺少 `decided_at`、文件名与 ID 不一致，或证据路径越界时，构建明确失败；新增或
     修改规范记录后，`check` 能识别缓存陈旧。
+11. 新建 `importance: milestone`、结果为 `approved` 或 `superseded` 的规范 Playbook 评审记录
+    （`playbooks/decisions/<decision-id>.decision.json`）；查询分别返回 `playbook_approved` 和
+    `playbook_superseded`，时间只来自 `decided_at`，`--event-type playbook_approved` 能单独筛出。
+12. Playbook 候选（`playbooks/candidates/`）与已批准 Playbook 文件的 `updated_at` 不产生事件；
+    不得用它们推断批准时刻，`routine` 与 `rejected` 评审记录也不进入时间线。
+13. Playbook 评审记录文件名与 `decision_id` 不一致、重复 ID、缺少 `decided_at` 或证据路径越界时，
+    构建明确失败；发布后删除历史本地证据，Activity 仍能从评审记录重建。
 
 ## 发布决定
 

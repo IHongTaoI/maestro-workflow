@@ -41,7 +41,13 @@ MEMORY_RECORD_TYPES = {
 MEMORY_STATUSES = {"active", "disputed", "superseded", "rejected", "archived"}
 MEMORY_KINDS = {"fact", "experience", "principle", "decision", "constraint", "other"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-ACTIVITY_EVENT_TYPES = {"task_completed", "decision_approved", "decision_superseded"}
+ACTIVITY_EVENT_TYPES = {
+    "task_completed",
+    "decision_approved",
+    "decision_superseded",
+    "playbook_approved",
+    "playbook_superseded",
+}
 ACTIVITY_EVENT_ID_PATTERN = re.compile(r"^activity-[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 

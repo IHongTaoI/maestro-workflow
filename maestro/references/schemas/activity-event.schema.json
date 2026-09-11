@@ -25,7 +25,13 @@
       "format": "date-time"
     },
     "event_type": {
-      "enum": ["task_completed", "decision_approved", "decision_superseded"]
+      "enum": [
+        "task_completed",
+        "decision_approved",
+        "decision_superseded",
+        "playbook_approved",
+        "playbook_superseded"
+      ]
     },
     "title": {
       "type": "string",
