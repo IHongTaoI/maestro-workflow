@@ -535,3 +535,38 @@ test('malformed Task YAML and duplicate Task IDs fail instead of being skipped',
   const duplicate = await rejectedCommand(runActivity(duplicateRoot, ['build']));
   assert.match(duplicate.stderr, /duplicate Task id 'same'/);
 });
+
+
+test('rejecting a new Playbook candidate preserves audit without blocking Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot);
+  await runActivity(projectRoot, ['build']);
+  const candidatePath = '.maestro/playbooks/candidates/new.json';
+  await writeProjectFile(projectRoot, candidatePath, '{"candidate_id":"new","action":"CREATE"}\n');
+  const record = JSON.parse(decisionRecord({
+    id: 'reject-new', title: '拒绝全新流程', outcome: 'rejected',
+    decidedAt: '2026-09-08T02:00:00Z', targetIds: [],
+  }));
+  record.source_refs = [candidatePath];
+  await writeProjectFile(projectRoot, '.maestro/playbooks/decisions/reject-new.decision.json', JSON.stringify(record));
+  const stale = await rejectedCommand(runActivity(projectRoot, ['check']));
+  assert.match(stale.stderr, /stale/);
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.deepEqual(result.events.map((event) => event.event_type), ['task_completed']);
+  await rm(path.join(projectRoot, candidatePath));
+  await runActivity(projectRoot, ['build']);
+  await runActivity(projectRoot, ['check']);
+});
+
+test('approved and superseded Playbook records still require a target', async (t) => {
+  for (const outcome of ['approved', 'superseded']) {
+    const projectRoot = await createProject(t);
+    await seedPlaybookDecision(projectRoot, {
+      id: 'empty-target', title: '无目标记录', outcome,
+      decidedAt: '2026-09-08T02:00:00Z', targetIds: [],
+      ...(outcome === 'superseded' ? { supersededBy: 'replacement' } : {}),
+    });
+    const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+    assert.match(error.stderr, /target_ids.*must contain at least 1/);
+  }
+});

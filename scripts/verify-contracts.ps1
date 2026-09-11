@@ -318,6 +318,12 @@ try {
         "$fixtureRoot/decision-record-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
         "$fixtureRoot/decision-record-superseded-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-rejected-empty-targets-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-approved-empty-targets-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-superseded-empty-targets-invalid.json" 1
     $activityEventSchema = "maestro/references/schemas/activity-event.schema.json"
     Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
         "$validatorFixtureRoot/activity-event-playbook-approved-valid.json" 0

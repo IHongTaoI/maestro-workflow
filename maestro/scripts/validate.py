@@ -1145,8 +1145,9 @@ def validate_decision_record(
                 item, path, item_errors, min_length=1
             )
         )
+        min_items = 0 if key == "target_ids" and value.get("outcome") == "rejected" else 1
         if check_array(
-            value[key], f"$.{key}", errors, item_validator, min_items=1
+            value[key], f"$.{key}", errors, item_validator, min_items=min_items
         ):
             check_unique_strings(value[key], f"$.{key}", errors)
     outcome = value.get("outcome")

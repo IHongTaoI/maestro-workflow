@@ -45,6 +45,10 @@ UPDATE → MERGE → CREATE → SKIP
 发生的时间，发布后不可修改；不得用 `updated_at`、文件 mtime 或 Git 时间代替。Activity 只投影
 `importance: milestone` 的 `approved` 与 `superseded`，`routine` 与 `rejected` 保留为审计记录。
 
+拒绝全新的 `CREATE` 或无目标的 `SKIP` 候选时，没有受影响的正式 Playbook，允许
+`outcome: rejected` 使用 `target_ids: []`，并通过 `source_refs` 引用被拒绝的候选记录。
+不得为满足目标列表而虚构 `playbook_id`；批准和取代仍必须包含至少一个目标 ID。
+
 Memory Worker 不能批准候选或写入正式 Playbook。第一版必须由用户明确批准后才能提升。重复
 成功可以增加证据，但不会赋予自动提升权限。获批动作使用可变状态写入协议，保留现有证据和
 决策历史，且不超出用户当前授权。

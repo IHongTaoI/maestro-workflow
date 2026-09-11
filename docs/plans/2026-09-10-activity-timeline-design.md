@@ -78,6 +78,13 @@ Playbook 的批准、拒绝和取代同样发布不可变评审记录：
 事件时间：前者只是提案，后者是会被后续更新改写的现状。这一来源与 Long-term Memory 的 Decision
 记录共享同一套记录格式、去重规则与投影规则，只是归属不同目录并生成不同事件类型。
 
+### 无目标候选的拒绝
+
+共享 Decision Record schema 仅对 `rejected` 允许空 `target_ids`，以支持拒绝全新 Playbook
+候选；`source_refs` 引用候选，批准和取代仍要求非空目标。这样无需新增候选 ID 字段或虚构
+Playbook ID。回归测试覆盖缓存失效后自动重建、历史候选缺失后重建，以及批准/取代的非空目标
+约束；schema 与原生 validator 用三个 fixture 验证一致性。
+
 ## 构建和失效判断
 
 构建器对所有规范 Task、Decision 与 Playbook 评审记录来源的相对路径及文件内容计算 SHA-256

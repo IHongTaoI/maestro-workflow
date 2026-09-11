@@ -181,6 +181,9 @@ Playbook Candidate（包括 `SKIP`）都持久化在 `playbooks/candidates/`，�
 `decided_at` 是批准、拒绝或取代实际发生的时间，不得用 `updated_at` 或文件时间推断。候选记录包含
 可达 `source_refs` 和 `evidence_refs`；它们不是生效指导，且在用户明确批准前不能修改 Playbook。
 
+拒绝没有正式目标的 Playbook 候选时，Decision Record 允许 `target_ids: []`，并通过
+`source_refs` 引用候选；批准和取代仍必须有目标，拒绝记录仍保留为审计。
+
 ## 配置
 
 使用简短 `config.yaml`：
