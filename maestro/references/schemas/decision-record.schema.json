@@ -48,7 +48,7 @@
   "allOf": [
     {
       "if": { "properties": { "outcome": { "const": "rejected" } }, "required": ["outcome"] },
-      "else": { "properties": { "target_ids": { "minItems": 1 } } }
+      "else": { "properties": { "target_ids": { "type": "array", "minItems": 1 } } }
     },
     {
       "if": { "properties": { "outcome": { "const": "superseded" } }, "required": ["outcome"] },

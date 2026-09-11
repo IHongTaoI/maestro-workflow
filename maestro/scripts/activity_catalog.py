@@ -2,7 +2,7 @@
 """Build, check, and search Maestro's derived Activity Timeline.
 
 Activity is reconstructed from authoritative project records. Supported sources are completed
-Tasks carrying ``completed_at``, immutable Decision Records under the Long-term Memory decisions
+Tasks carrying ``completed_at``, Tasks promoted from Temporary carrying ``promoted_at``, immutable Decision Records under the Long-term Memory decisions
 directory carrying ``decided_at``, and immutable Playbook Decision Records under the Playbook
 decisions directory carrying ``decided_at``. No event journal is created, file mtimes are never
 treated as event time, and records without a reliable timestamp are left out rather than guessed.
@@ -39,12 +39,17 @@ PLAYBOOK_DECISIONS_ROOT = Path(".maestro/playbooks/decisions")
 DECISION_SUFFIX = ".decision.json"
 EVENT_TYPES = {
     "task_completed",
+    "temporary_promoted",
     "decision_approved",
     "decision_superseded",
     "playbook_approved",
     "playbook_superseded",
 }
 TASK_EVENT_STATUSES = {"completed", "archive"}
+# ``promoted_at`` is only written when the promotion transaction commits, so a ``preparing`` Task
+# should never carry it. The status gate keeps a malformed record from projecting an event for a
+# promotion that has not become logically visible yet.
+PROMOTION_EVENT_STATUSES = {"active", "completed", "cancelled", "archive"}
 MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 YEAR_PATTERN = re.compile(r"^\d{4}$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -79,6 +84,22 @@ def normalize_utc(value: str) -> str:
     if dt.tzinfo is None or dt.utcoffset() is None:
         raise CatalogError(f"timestamp must include timezone offset: '{value}'")
     return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def optional_timestamp(mapping: dict[str, Any], key: str, source: Path) -> str | None:
+    """Return a normalized UTC timestamp from an optional Task metadata field.
+
+    An absent field means the record predates the field and simply cannot produce a precise event;
+    callers skip it rather than substituting ``created_at``, ``updated_at``, Git time or file mtime.
+    A field that is present but empty or unparseable is a corrupt canonical record and fails the
+    build instead of silently disappearing from the timeline.
+    """
+    value = mapping.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise CatalogError(f"{source}: '{key}' must be a non-empty timestamp")
+    return normalize_utc(value.strip())
 
 
 def project_relative(project_root: Path, path: Path) -> str:
@@ -188,18 +209,43 @@ def derive_task_events(project_root: Path, sources: list[Path]) -> list[dict[str
         seen_task_ids[task_id] = path
 
         status = require_text(task, "status", path)
+        source_ref = project_relative(project_root, path)
+
+        promoted_at = optional_timestamp(task, "promoted_at", path)
+        source_temporary = task.get("source_temporary")
+        # A promoted Task that predates ``promoted_at`` stays valid but cannot produce a promotion
+        # event. ``promotion_transaction`` records when the transaction was opened, not when the
+        # promotion became logically visible, so it is never used as a substitute.
+        if promoted_at is not None and status in PROMOTION_EVENT_STATUSES:
+            if not isinstance(source_temporary, str) or not source_temporary.strip():
+                raise CatalogError(
+                    f"{path}: 'promoted_at' requires a non-empty 'source_temporary'"
+                )
+            # The Task metadata is the authoritative record of the promotion: the promotion time
+            # and the source Temporary id both live there, so the Temporary directory is not a
+            # second source and may already be archived or trashed without affecting the timeline.
+            objective = require_text(task, "objective", path)
+            promoted_temporary = source_temporary.strip()
+            event = {
+                "event_id": make_event_id("temporary_promoted", task_id, promoted_at),
+                "occurred_at": promoted_at,
+                "event_type": "temporary_promoted",
+                "title": objective,
+                "summary": f"由 Temporary {promoted_temporary} 晋升为 Task：{objective}",
+                "source_refs": [source_ref],
+                "status": "completed",
+            }
+            validate_event(project_root, event)
+            events.append(event)
+
         if status not in TASK_EVENT_STATUSES:
             continue
-        completed_at_value = task.get("completed_at")
-        if completed_at_value is None:
+        completed_at = optional_timestamp(task, "completed_at", path)
+        if completed_at is None:
             # Old Tasks without a trustworthy lifecycle time remain valid, but cannot produce a
             # precise timeline event. In particular, updated_at and mtime are not substitutes.
             continue
-        if not isinstance(completed_at_value, str) or not completed_at_value.strip():
-            raise CatalogError(f"{path}: 'completed_at' must be a non-empty timestamp")
-        completed_at = normalize_utc(completed_at_value.strip())
         objective = require_text(task, "objective", path)
-        source_ref = project_relative(project_root, path)
         event = {
             "event_id": make_event_id("task_completed", task_id, completed_at),
             "occurred_at": completed_at,

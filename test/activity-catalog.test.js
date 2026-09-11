@@ -50,6 +50,9 @@ function taskYaml({
   status = 'completed',
   completedAt = '2026-09-01T10:30:00+08:00',
   updatedAt = '2026-09-02T00:00:00Z',
+  sourceTemporary,
+  promotionTransaction,
+  promotedAt,
 } = {}) {
   const lines = [
     `id: ${id}`,
@@ -60,6 +63,11 @@ function taskYaml({
     'updated_by: old-zhou/test',
     'revision: 1',
   ];
+  if (typeof sourceTemporary === 'string') lines.push(`source_temporary: ${sourceTemporary}`);
+  if (typeof promotionTransaction === 'string') {
+    lines.push(`promotion_transaction: ${promotionTransaction}`);
+  }
+  if (typeof promotedAt === 'string') lines.push(`promoted_at: ${promotedAt}`);
   if (typeof completedAt === 'string') lines.push(`completed_at: ${completedAt}`);
   return `${lines.join('\n')}\n`;
 }
@@ -175,6 +183,166 @@ test('moving a Task to archive keeps the event and refreshes its source referenc
   assert.equal(after.events[0].event_id, before.events[0].event_id);
   assert.deepEqual(after.events[0].source_refs, ['.maestro/tasks/archive/task-a/task.yaml']);
   await access(path.join(projectRoot, ...after.events[0].source_refs[0].split('/')));
+});
+
+test('a promoted Task becomes a promotion event at its promotion time', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'promoted',
+    objective: '优化登录流程',
+    status: 'active',
+    completedAt: null,
+    sourceTemporary: '20260831-登录流程梳理',
+    promotionTransaction: '20260831T120000Z-p7q8r9',
+    promotedAt: '2026-08-31T12:00:15Z',
+  });
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--month', '2026-08']));
+  assert.equal(result.total, 1);
+  const [event] = result.events;
+  assert.equal(event.event_type, 'temporary_promoted');
+  assert.equal(event.occurred_at, '2026-08-31T12:00:15Z');
+  assert.notEqual(
+    event.occurred_at,
+    '2026-08-31T12:00:00Z',
+    'the transaction-open marker time must not be used as the event time',
+  );
+  assert.equal(event.title, '优化登录流程');
+  assert.match(event.summary, /20260831-登录流程梳理/);
+  assert.deepEqual(event.source_refs, ['.maestro/tasks/promoted/task.yaml']);
+
+  const filtered = parseJson(await runActivity(projectRoot, [
+    'search', '--year', '2026', '--event-type', 'temporary_promoted',
+  ]));
+  assert.equal(filtered.total, 1);
+  const completions = parseJson(await runActivity(projectRoot, [
+    'search', '--year', '2026', '--event-type', 'task_completed',
+  ]));
+  assert.equal(completions.total, 0);
+});
+
+test('a promoted and completed Task keeps promotion and completion events distinct', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'promoted-done',
+    objective: '优化登录流程',
+    status: 'completed',
+    completedAt: '2026-09-02T09:00:00Z',
+    sourceTemporary: '20260831-登录流程梳理',
+    promotionTransaction: '20260831T120000Z-p7q8r9',
+    promotedAt: '2026-08-31T12:00:15Z',
+  });
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 2);
+  assert.deepEqual(
+    result.events.map((event) => event.event_type),
+    ['temporary_promoted', 'task_completed'],
+  );
+  assert.notEqual(result.events[0].event_id, result.events[1].event_id);
+});
+
+test('promoted Tasks without promoted_at never invent a promotion event', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'legacy-promoted',
+    objective: '旧提升记录',
+    status: 'completed',
+    completedAt: '2026-09-03T00:00:00Z',
+    sourceTemporary: '20260901-主题',
+    promotionTransaction: '20260831T120000Z-p7q8r9',
+  });
+  await seedTask(projectRoot, {
+    id: 'source-only',
+    objective: '只有来源没有晋升时间',
+    status: 'completed',
+    completedAt: '2026-09-04T00:00:00Z',
+    sourceTemporary: '20260901-主题',
+    promotionTransaction: '20260901T000000Z-abcdef12',
+  });
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 2);
+  assert.deepEqual(
+    result.events.map((event) => event.event_type),
+    ['task_completed', 'task_completed'],
+  );
+  assert.ok(
+    result.events.every((event) => event.event_type !== 'temporary_promoted'),
+    'a well-formed promotion_transaction alone must never produce a promotion event',
+  );
+});
+
+test('a preparing Task never projects a promotion event', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'not-committed',
+    objective: '尚未提交的晋升',
+    status: 'preparing',
+    completedAt: null,
+    sourceTemporary: '20260905-主题',
+    promotionTransaction: '20260905T080000Z-abcdef12',
+    promotedAt: '2026-09-05T08:00:00Z',
+  });
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 0);
+});
+
+test('a malformed promoted_at fails the build', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'bad-promotion-time',
+    objective: '晋升时间非法',
+    status: 'active',
+    completedAt: null,
+    sourceTemporary: '20260901-主题',
+    promotionTransaction: '20260901T000000Z-abcdef12',
+    promotedAt: 'not-a-time',
+  });
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /invalid timestamp/);
+});
+
+test('promoted_at without source_temporary fails the build', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'orphan-promotion-time',
+    objective: '缺少来源的晋升时间',
+    status: 'active',
+    completedAt: null,
+    promotedAt: '2026-09-05T08:00:00Z',
+  });
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /'promoted_at' requires a non-empty 'source_temporary'/);
+});
+
+test('moving a promoted Task to archive keeps its promotion event stable', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot, {
+    id: 'promoted',
+    objective: '优化登录流程',
+    status: 'archive',
+    completedAt: null,
+    sourceTemporary: '20260831-登录流程梳理',
+    promotionTransaction: '20260831T120000Z-p7q8r9',
+    promotedAt: '2026-08-31T12:00:15Z',
+  });
+  const before = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+
+  const activeDir = path.join(projectRoot, '.maestro', 'tasks', 'promoted');
+  const archiveDir = path.join(projectRoot, '.maestro', 'tasks', 'archive', 'promoted');
+  await mkdir(path.dirname(archiveDir), { recursive: true });
+  await rename(activeDir, archiveDir);
+
+  const after = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(after.catalog_refreshed, true);
+  assert.equal(after.events[0].event_id, before.events[0].event_id);
+  assert.equal(after.events[0].event_type, 'temporary_promoted');
+  assert.equal(after.events[0].occurred_at, '2026-08-31T12:00:15Z');
+  assert.deepEqual(after.events[0].source_refs, ['.maestro/tasks/archive/promoted/task.yaml']);
 });
 
 test('approved and superseded Decision Records become Activity events', async (t) => {

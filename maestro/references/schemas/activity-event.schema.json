@@ -27,6 +27,7 @@
     "event_type": {
       "enum": [
         "task_completed",
+        "temporary_promoted",
         "decision_approved",
         "decision_superseded",
         "playbook_approved",

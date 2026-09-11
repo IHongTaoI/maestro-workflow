@@ -288,6 +288,11 @@ try {
         "$validatorFixtureRoot/memory-response-request-missing-invalid.json" 1
     Invoke-ProtocolValidatorCase "decision-record" `
         "$validatorFixtureRoot/decision-record-missing-reference-invalid.json" 1
+    $activityEventSchema = "maestro/references/schemas/activity-event.schema.json"
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-temporary-promoted-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-unknown-type-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -331,6 +336,8 @@ try {
         "$validatorFixtureRoot/activity-event-playbook-superseded-valid.json" 0
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-promoted-invalid.json" 1
+    Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
+        "$fixtureRoot/task-promoted-at-missing-source-invalid.json" 1
     $memoryFollowupSchema = "maestro/references/schemas/memory-followup.schema.json"
     Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-pending-valid.json" 0
     Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-resolved-valid.json" 0
@@ -763,6 +770,12 @@ try {
         @{ Path = "maestro/references/activity.md"; Text = '`playbook_approved` 和 `playbook_superseded`' },
         @{ Path = "maestro/references/playbooks.md"; Text = '### 不可变 Playbook 决策记录' },
         @{ Path = "maestro/references/storage.md"; Text = '`playbook_approved` / `playbook_superseded`' },
+        @{ Path = "maestro/references/activity.md"; Text = '`temporary_promoted`' },
+        @{ Path = "maestro/references/activity.md"; Text = '不产生晋升事件' },
+        @{ Path = "maestro/references/activity.md"; Text = '`promotion_transaction` **不是**事件时间' },
+        @{ Path = "maestro/references/storage.md"; Text = '`promotion_transaction` 是事务关联、恢复与审计标记，不是事件时间' },
+        @{ Path = "maestro/references/storage.md"; Text = '必须在同一次生命周期更新中写入一次 `promoted_at`' },
+        @{ Path = "maestro/references/storage.md"; Text = '`promoted_at` 是 Activity 中' },
         @{ Path = "maestro/references/memory.md"; Text = '`importance: milestone`' },
         @{ Path = "maestro/references/memory.md"; Text = '`decided_at` 是批准、取代或拒绝实际发生的时间' },
         @{ Path = "maestro/references/memory.md"; Text = '发布时必须严格验证其' },

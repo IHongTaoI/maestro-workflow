@@ -43,6 +43,7 @@ MEMORY_KINDS = {"fact", "experience", "principle", "decision", "constraint", "ot
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 ACTIVITY_EVENT_TYPES = {
     "task_completed",
+    "temporary_promoted",
     "decision_approved",
     "decision_superseded",
     "playbook_approved",
