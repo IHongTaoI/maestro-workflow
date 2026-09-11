@@ -288,6 +288,11 @@ try {
         "$validatorFixtureRoot/memory-response-request-missing-invalid.json" 1
     Invoke-ProtocolValidatorCase "decision-record" `
         "$validatorFixtureRoot/decision-record-missing-reference-invalid.json" 1
+    $activityEventSchema = "maestro/references/schemas/activity-event.schema.json"
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-temporary-promoted-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-unknown-type-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -749,6 +754,9 @@ try {
         @{ Path = "maestro/references/activity.md"; Text = '不要直接读取完整 `activity/index.json`' },
         @{ Path = "maestro/references/activity.md"; Text = '没有 `record` 操作' },
         @{ Path = "maestro/references/activity.md"; Text = '`decision_approved` 和 `decision_superseded`' },
+        @{ Path = "maestro/references/activity.md"; Text = '`temporary_promoted`' },
+        @{ Path = "maestro/references/activity.md"; Text = '不产生晋升事件' },
+        @{ Path = "maestro/references/storage.md"; Text = '`promotion_transaction` 的格式为 `<yyyymmddThhmmssZ>-<suffix>`' },
         @{ Path = "maestro/references/memory.md"; Text = '`importance: milestone`' },
         @{ Path = "maestro/references/memory.md"; Text = '`decided_at` 是批准、取代或拒绝实际发生的时间' },
         @{ Path = "maestro/references/memory.md"; Text = '发布时必须严格验证其' },
