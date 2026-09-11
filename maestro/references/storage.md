@@ -12,6 +12,8 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
   config.yaml
   locks/
   transactions/
+  activity/
+    index.json
   memory/
     manifest.md
     index.json
@@ -83,6 +85,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
   - `memory/pending/`：尚未压缩或解析的 Memory Worker 原始输入；
   - `locks/` 和 `transactions/`：并发和文件系统锁标记；
   - `tasks/`：本地活动 Task 执行状态、Worker current-state 和临时选择。
+  - `activity/index.json`：从本地 Task 权威记录重建的派生时间线目录；
 
 - **团队共享 Memory（纳入 Git）：**
   - `memory/long-term/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
@@ -104,6 +107,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 .maestro/locks/
 .maestro/transactions/
 .maestro/tasks/
+.maestro/activity/
 
 # 跟踪团队共享 memory 与配置
 !.maestro/
@@ -227,6 +231,11 @@ promotion_transaction: 20260831T120000Z-p7q8r9
 `source_temporary` 仅在 Task 由 Temporary Memory 提升时存在。根据明确执行请求直接创建的 Task
 省略它。提升后的 Task 还记录 `promotion_transaction`，其事务提交标记控制 Task 初始可见性。
 使用 [task.schema.json](schemas/task.schema.json) 校验解析后的 Task 元数据。
+
+新 Task 进入 `completed` 或 `archive` 终态时，必须在同一次生命周期更新中写入一次
+`completed_at`，并在后续移动到 `tasks/archive/` 时保持不变。`completed_at` 是 Activity 中
+“Task 已完成”的可靠发生时间。为兼容旧项目，它不是 schema 必填字段；旧 Task 缺失时仍可读取，
+但不会出现在 Activity 中。不得使用 `updated_at` 或文件 mtime 猜测完成时间。
 
 ## Temporary 与 Task ID 命名
 

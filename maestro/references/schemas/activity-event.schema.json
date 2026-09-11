@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://maestro.local/schemas/activity-event.schema.json",
   "title": "Maestro Activity Event",
-  "description": "一条追加到活动时间线的不可变事件。occurred_at 在事件发生时现场生成，不得从文件 mtime 反推。",
+  "description": "从现有权威记录确定性派生的活动条目，不是可单独追加或修改的事实源。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -25,7 +25,7 @@
       "format": "date-time"
     },
     "event_type": {
-      "enum": ["task_completed", "decision_approved"]
+      "const": "task_completed"
     },
     "title": {
       "type": "string",

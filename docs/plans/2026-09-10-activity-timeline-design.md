@@ -1,100 +1,58 @@
-# Activity Timeline Design
+# Activity 时间线设计
 
-## Context
+## 背景
 
-Long-term Memory answers "what does this project know now", but it deliberately does not retain a
-full chronological work log. When the user asks "what did we do this month" or "what did we finish
-this year", completed Tasks, Temporary investigations, and approved Decisions that never became
-Long-term knowledge are invisible.
+Long-term Memory 回答“项目现在知道什么”，不会保存完整工作流水。Issue #54 需要回答“这个月
+完成了什么”，但 Activity 不能成为第四层 Memory，也不能复制一份会与 Task、Decision、Memory
+或 Playbook 分叉的事实。
 
-Issue #54 asks for a queryable Activity / Timeline view. It must not add a fourth Memory layer,
-must not become a second business fact source, and must not dump process noise into the timeline.
+## 权威边界
 
-## Selected design
-
-Formal Task / Decision / Memory / Playbook / Worker records stay authoritative. A deterministic
-`activity_catalog.py` helper maintains a small append-only event log plus two derived caches:
+现有 Task、Decision、Memory、Playbook 和 Worker 记录继续是唯一权威来源。Activity 只保存一个
+可删除、可重建的本地查询缓存：
 
 ```text
 .maestro/activity/
-  events/<yyyy>/<mm>.jsonl    # append-only, the single source of truth
-  index.json                   # derived cache, deterministically rebuilt from events/
-  <yyyy>/<mm>.md              # human-readable monthly view, regenerated from events/
+  index.json  # 从权威记录确定性派生，不纳入 Git
 ```
 
-The event log is the only authoritative activity record. An event is appended at the moment it
-happens, carrying a wall-clock `occurred_at`. The index and monthly Markdown are derived caches that
-can be deleted and rebuilt without losing history. Event time is never inferred from file mtime,
-because checkout, sync, and copy would corrupt it.
+不存在 Activity 事件日志或手工 `record` 接口。这样无需解决第二套权威数据的并发追加、迁移和
+一致性问题，也不会要求各生命周期调用点同时写两份状态。
 
-## Decision 2: closed event_type allow-list
+## 第一阶段：Task 完成事件
 
-"Only collect high-value events" needs an enforceable rule. `event_type` is a closed enum; anything
-outside the allow-list is rejected:
-
-```text
-task_completed
-task_archived
-temporary_promoted
-decision_approved
-memory_updated          # Long-term CREATE / UPDATE / MERGE
-playbook_approved
-worker_approved
-checkpoint_created
-```
-
-Phase 1 implements only `task_completed` and `decision_approved`. Each additional type must add its
-own source parsing and schema validation before it is accepted.
-
-## Event model (Phase 1)
+当前权威格式中，只有 Task 能形成最小且可靠的自动闭环。Task 进入 `completed` 或 `archive`
+终态时，在同一次生命周期更新中写入一次 `completed_at`。目录构建器扫描活动及归档 Task，生成：
 
 ```json
 {
-  "event_id": "activity-20260910-a1b2c3d4",
+  "event_id": "activity-20260910-<stable-hash>",
   "occurred_at": "2026-09-10T12:00:00Z",
-  "event_type": "task_completed | decision_approved",
-  "title": "完成老周单入口与动态执行者重构",
-  "summary": "#48 完成并关闭，老周成为唯一预置入口。",
-  "source_refs": [".maestro/tasks/..."],
+  "event_type": "task_completed",
+  "title": "完成老周单入口重构",
+  "summary": "完成 Task：完成老周单入口重构",
+  "source_refs": [".maestro/tasks/archive/20260910-老周单入口/task.yaml"],
   "status": "completed"
 }
 ```
 
-- `event_id` is deterministic: `activity-<yyyymmdd>-<sha256(seed)[:8]>` unless the caller supplies
-  an explicit ID. Deterministic IDs make recording idempotent — appending the same event twice
-  produces no duplicate.
-- `occurred_at` is ISO 8601 UTC, generated when the event happens, and taken from a reliable source
-  field (Task lifecycle, Decision timestamp, immutable record timestamp) rather than mtime.
-- `source_refs` points back to authoritative records. Timeline entries never copy Long-term Memory
-  body text; they only link to it.
+- `event_id` 由事件类型、Task ID 和归一化后的 `completed_at` 确定性生成；
+- `occurred_at` 只来自显式 `completed_at`；
+- 旧 Task 缺少 `completed_at` 时保持兼容，但不进入时间线；
+- `updated_at`、文件 mtime 和 Git 时间都不能替代事件时间；
+- `source_refs` 每次从 Task 当前路径生成，Task 移入 archive 后会自动刷新；
+- 重复 Task ID、损坏 YAML、无效时间或越界引用必须使构建失败，不能静默忽略。
 
-## Decision 4: Timeline and Long-term Memory share references, not body text
+Decision 暂不进入第一阶段，因为当前记录没有统一且明确的批准时间字段。等权威格式定义批准时间
+及投影规则后，再单独扩展事件类型；不能从更新时间推断。
 
-`decision_approved` appears in both Long-term Memory ("this decision is in effect") and Timeline
-("this decision was approved in month X"). To avoid two diverging copies:
+## 构建和失效判断
 
-- Timeline records only event metadata plus `source_refs` to the Long-term entry / Decision record;
-- Long-term Memory keeps only currently-effective facts and never stores the full timeline;
-- neither copies the other's body text.
+构建器对所有 Task `task.yaml` 的相对路径和文件内容计算 SHA-256 `source_digest`。因此 Task 状态
+变化、内容修改或从活动目录移动到 archive 都会使旧 Index 失效。构建结果原子写入
+`.maestro/activity/index.json`；缺失或损坏时查询自动重建。
 
-## Data flow and authority
-
-```text
-authoritative Task / Decision / Memory / Playbook records
-        ↓  (event emitted at the moment it happens)
-events/<yyyy>/<mm>.jsonl
-        ↓  (deterministic build)
-index.json
-        ↓  (time-window query)
-monthly / yearly review
-```
-
-Recording is append-only and idempotent by `event_id`. Building scans the event log, deduplicates by
-`event_id`, sorts by `occurred_at`, and writes `index.json` with a SHA-256 `source_digest` over the
-event files for stale detection. Search reads the index (rebuilding it if missing or stale) and
-filters by month, year, or an arbitrary from/to range.
-
-## Query protocol
+## 查询协议
 
 ```text
 activity_catalog.py --project-root <root> search --month 2026-09
@@ -102,17 +60,14 @@ activity_catalog.py --project-root <root> search --year 2026
 activity_catalog.py --project-root <root> search --from 2026-09-01 --to 2026-09-30
 ```
 
-Old Zhou routes "what do we know now" to Long-term Memory and "what did we do" to the Activity
-Timeline, then drills into `source_refs` for detail.
+查询只返回所选窗口，默认最多 50 条、最多允许 200 条。老周不直接把完整 Index 读入上下文；只有
+用户需要详情时才读取少量 `source_refs`。
 
-## Error handling
+## 完成标准
 
-Invalid events (unknown `event_type`, missing fields, malformed timestamp, unreachable
-`source_refs`) fail validation before any write. Recording the same `event_id` twice is a no-op, not
-an error. A missing or corrupt index rebuilds from the event log on demand. A build failure cannot
-roll back or block already-appended events.
-
-## Deferred work
-
-`related_ids` graph traversal, monthly rollup aggregation for compact yearly review, and the
-remaining six event types are later phases. They are not prerequisites for the Phase 1 closed loop.
+1. 新完成 Task 无需额外记录命令即可出现在查询中；
+2. 旧 Task 不会被猜测时间；
+3. Task 归档后事件不丢失，引用指向当前文件；
+4. Index 缺失、损坏或陈旧时可安全重建；
+5. 不生成 `events/*.jsonl`，Activity 不成为权威源；
+6. 月、年和任意日期范围查询有边界且结果数量受限。
