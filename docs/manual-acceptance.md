@@ -206,8 +206,10 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
 7. 新建 `importance: milestone`、结果为 `approved` 或 `superseded` 的规范 Decision Record；查询
    分别返回 `decision_approved` 和 `decision_superseded`，时间只来自 `decided_at`，引用指向该记录。
 8. `routine`、`rejected`、旧扩展名和嵌套 Decision 不进入时间线；不得迁移历史记录或猜测时间。
-9. 规范 Decision 缺少 `decided_at`、文件名与 ID 不一致或来源不可达时，构建明确失败；新增或修改
-   规范记录后，`check` 能识别缓存陈旧。
+9. 发布 Decision 时，严格 validator 会拒绝不存在的 `source_refs`；发布后删除或不复制历史本地
+   证据，Activity 仍能从 Decision Record 重建。
+10. 规范 Decision 缺少 `decided_at`、文件名与 ID 不一致，或证据路径越界时，构建明确失败；新增或
+    修改规范记录后，`check` 能识别缓存陈旧。
 
 ## 发布决定
 

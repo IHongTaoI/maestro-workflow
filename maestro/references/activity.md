@@ -24,7 +24,8 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 - 来源只包括 `.maestro/memory/long-term/decisions/<decision-id>.decision.json`；
 - Decision Record 必须是 `importance: milestone`，结果必须是 `approved` 或 `superseded`；
 - `occurred_at` 只取不可变记录的显式 `decided_at`，并归一化为 UTC；
-- `source_refs` 指向该不可变 Decision Record，详情和证据可继续从记录内的 `source_refs` 追溯；
+- Activity Event 的 `source_refs` 指向当前存在的不可变 Decision Record；记录内保留发布时已验证的
+  证据路径，但历史本地证据后续可能因归档或未同步而暂不可达；
 - 事件 ID 由事件类型、Decision ID 和 `decided_at` 确定性生成。
 
 `routine` 决策和 `rejected` 结果保留审计价值，但不进入面向用户的 Activity。旧格式 Decision、嵌套
@@ -36,7 +37,8 @@ mtime 猜测事件时间。
 Activity 没有 `record` 操作，也不维护 `events/*.jsonl`。完成新 Task 时，在 Task 生命周期更新中
 写入并保留 `completed_at`；作出新的重要决策时，发布带 `decided_at` 的不可变 Decision Record。
 Activity 只负责读取和派生。规范来源损坏、重复 ID、文件名不匹配或时间格式无效时，构建必须
-明确失败，不能静默跳过有问题的权威记录。
+明确失败，不能静默跳过有问题的权威记录。Decision 的证据路径格式无效或逃逸项目边界时同样
+失败，但发布后单纯缺少历史证据文件不会阻塞重建。
 
 ## 查询协议
 

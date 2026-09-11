@@ -193,7 +193,14 @@ def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
             raise CatalogError(f"cannot parse Decision Record {path}: {error}") from error
         errors: list[Diagnostic] = []
-        validate_decision_record(record, errors, FileReferenceValidator(project_root))
+        # Evidence refs were verified when the immutable record was published. Historical local
+        # evidence may later move or be absent on another clone, so rebuild only rechecks that the
+        # stored paths are safe project-relative references.
+        validate_decision_record(
+            record,
+            errors,
+            FileReferenceValidator(project_root, require_existing=False),
+        )
         if errors:
             messages = "; ".join(f"{error.path}: {error.message}" for error in errors)
             raise CatalogError(f"invalid Decision Record {path}: {messages}")

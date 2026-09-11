@@ -56,6 +56,9 @@ Decision 使用独立的不可变权威记录：
 `rejected` 保留审计价值但不进入用户时间线。`source_refs` 指向 Decision Record 本身，证据再由
 Record 内的来源追溯。
 
+Decision 发布时严格验证记录内的证据引用可达；Activity 重建只复核其路径格式和项目边界，不要求
+历史证据在当前机器仍然存在。这样不可变的团队共享记录不会因本地 Task 归档或未同步而失效。
+
 旧 Decision 不要求迁移。只有直属目录、扩展名为 `.decision.json` 且通过 schema 校验的新记录才
 参与派生；不得从更新时间、文件 mtime 或 Git 时间推断 `decided_at`。
 
@@ -85,4 +88,5 @@ activity_catalog.py --project-root <root> search --from 2026-09-01 --to 2026-09-
 5. 不生成 `events/*.jsonl`，Activity 不成为权威源；
 6. 里程碑级批准和取代 Decision 使用显式 `decided_at` 进入时间线；
 7. routine、rejected 和旧格式 Decision 不进入时间线，也不猜测时间；
-8. 月、年和任意日期范围查询有边界且结果数量受限。
+8. 历史证据缺失不阻塞重建，但不安全或越界的证据路径仍明确失败；
+9. 月、年和任意日期范围查询有边界且结果数量受限。

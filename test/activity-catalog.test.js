@@ -240,6 +240,38 @@ test('legacy and nested Decision files are ignored', async (t) => {
   assert.equal(result.events[0].title, '规范决定');
 });
 
+test('missing historical Decision evidence does not block Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedDecision(projectRoot, {
+    id: 'decision-local-evidence',
+    title: '依赖本地 Task 证据的决定',
+    decidedAt: '2026-09-04T02:00:00Z',
+  });
+  await rm(path.join(projectRoot, '.maestro', 'evidence', 'decision.md'));
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 1);
+  assert.equal(result.events[0].title, '依赖本地 Task 证据的决定');
+});
+
+test('unsafe Decision evidence paths still block Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  const unsafe = JSON.parse(decisionRecord({
+    id: 'decision-unsafe-ref',
+    title: '包含越界证据路径的决定',
+    decidedAt: '2026-09-04T02:00:00Z',
+  }));
+  unsafe.source_refs = ['../outside.md'];
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/decisions/decision-unsafe-ref.decision.json',
+    `${JSON.stringify(unsafe)}\n`,
+  );
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /invalid Decision Record.*must not contain.*\.\./);
+});
+
 test('invalid canonical Decision Records fail instead of inventing an event', async (t) => {
   const projectRoot = await createProject(t);
   await writeProjectFile(projectRoot, '.maestro/evidence/decision.md', 'decision evidence\n');

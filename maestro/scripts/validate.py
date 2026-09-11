@@ -238,8 +238,9 @@ def check_canonical_path(value: Any, path: str, errors: list[Diagnostic]) -> boo
 
 
 class FileReferenceValidator:
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, *, require_existing: bool = True):
         self.project_root = project_root.resolve(strict=True)
+        self.require_existing = require_existing
 
     def __call__(self, value: Any, path: str, errors: list[Diagnostic]) -> None:
         if not check_string(value, path, errors, min_length=1):
@@ -273,6 +274,8 @@ class FileReferenceValidator:
             resolved.relative_to(self.project_root)
         except ValueError:
             add_error(errors, path, "resolves outside the project root")
+            return
+        if not self.require_existing:
             return
         try:
             is_file = resolved.is_file()

@@ -204,8 +204,14 @@ Memory Worker 输出只是候选。提升前，老周或强模型评审者必须
   "decided_by": "old-zhou/session-or-run-id",
   "reason": "让用户能按时间回顾关键取舍。",
   "target_ids": ["issue-54"],
-  "source_refs": [".maestro/tasks/20260911-decision-timeline/task.yaml"]
+  "source_refs": ["docs/plans/2026-09-10-activity-timeline-design.md"]
 }
+```
+
+先在规范路径外生成暂存文件，再执行严格校验；通过后才原子发布到规范路径：
+
+```text
+python maestro/scripts/validate.py decision-record <staged-record.json> --project-root <root>
 ```
 
 `decided_at` 是批准、取代或拒绝实际发生的时间，发布后不可修改；不得用 `updated_at`、文件 mtime
@@ -214,8 +220,9 @@ Memory Worker 输出只是候选。提升前，老周或强模型评审者必须
 `milestone` 的 `approved` 与 `superseded`，`rejected` 和 `routine` 仍保留为审计记录。
 
 旧 Decision 格式继续可读且无需迁移；没有规范文件和可靠 `decided_at` 的历史记录不会进入
-Activity。Decision Record 本身是评审权威，不依赖 Activity 存在，其 `source_refs` 必须指向可达
-证据。
+Activity。Decision Record 本身是评审权威，不依赖 Activity 存在。发布时必须严格验证其
+`source_refs` 可达；后续读取只检查路径格式、项目内边界和不可逃逸，不因本地 Task 已归档或另一台
+机器未同步历史证据而阻塞 Activity 重建。重要决策应优先引用纳入 Git 且路径稳定的证据。
 
 ### 演进提案
 

@@ -162,6 +162,10 @@ Memory Worker 提案（包括 `SKIP`）都持久化到 `memory/long-term/candida
 目标及可达来源。`superseded` 还必须记录 `superseded_by`。旧格式无需迁移；没有可靠 `decided_at`
 的历史记录不进入 Activity，也不得从更新时间或文件时间推断。
 
+发布 Decision 时必须确认 `source_refs` 当前存在；后续读取和 Activity 重建只验证引用是安全的项目
+相对路径，不再要求历史证据当前存在。这样本地 Task 归档或换机器后不会使团队共享的不可变记录
+失效。需要长期下钻的重要证据应优先放在 Git 跟踪且路径稳定的位置。
+
 Long-term 条目使用 [memory.md](memory.md) 定义的 fenced `maestro-memory-entry` JSON 表示，使
 确定性目录构建器拥有可寻址记录边界。旧聚合 `current.md` 保持可读，但新写入只进入 entry 文件；
 同一 ID 跨旧聚合、`entries/`、`history/` 重复时失败。生成的

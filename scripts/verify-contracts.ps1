@@ -286,6 +286,8 @@ try {
         "$validatorFixtureRoot/memory-request-empty-playbooks-valid.json"
     Invoke-ProtocolValidatorCase "memory-response" `
         "$validatorFixtureRoot/memory-response-request-missing-invalid.json" 1
+    Invoke-ProtocolValidatorCase "decision-record" `
+        "$validatorFixtureRoot/decision-record-missing-reference-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -749,6 +751,9 @@ try {
         @{ Path = "maestro/references/activity.md"; Text = '`decision_approved` 和 `decision_superseded`' },
         @{ Path = "maestro/references/memory.md"; Text = '`importance: milestone`' },
         @{ Path = "maestro/references/memory.md"; Text = '`decided_at` 是批准、取代或拒绝实际发生的时间' },
+        @{ Path = "maestro/references/memory.md"; Text = '发布时必须严格验证其' },
+        @{ Path = "maestro/references/memory.md"; Text = '后续读取只检查路径格式、项目内边界和不可逃逸' },
+        @{ Path = "maestro/references/memory.md"; Text = 'validate.py decision-record <staged-record.json>' },
         @{ Path = "maestro/SKILL.md"; Text = "references/activity.md" },
         @{ Path = "README.md"; Text = "CLI 只负责安装、更新和诊断" },
         @{ Path = "README.md"; Text = "绝不调度 Worker" },
