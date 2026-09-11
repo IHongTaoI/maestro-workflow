@@ -83,8 +83,17 @@ def task_source_files(project_root: Path) -> list[Path]:
         raise CatalogError(f"Task root must be a directory: {root}")
     if not root.is_dir():
         return []
+
+    archive_root = root / "archive"
+    if archive_root.exists() and not archive_root.is_dir():
+        raise CatalogError(f"Task archive root must be a directory: {archive_root}")
+
+    candidates = [path for path in root.glob("*/task.yaml") if path.parent.name != "archive"]
+    if archive_root.is_dir():
+        candidates.extend(archive_root.glob("*/task.yaml"))
+
     result: list[Path] = []
-    for path in sorted(root.rglob("task.yaml")):
+    for path in sorted(candidates):
         if path.is_symlink():
             raise CatalogError(f"Task metadata must not be a symlink: {path}")
         project_relative(project_root, path)

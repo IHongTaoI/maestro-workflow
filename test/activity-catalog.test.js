@@ -97,6 +97,25 @@ test('active and legacy completed Tasks are omitted instead of guessing timestam
   assert.deepEqual(result.events, []);
 });
 
+test('Task metadata files below artifacts or references are ignored', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot);
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/tasks/task-a/artifacts/task.yaml',
+    taskYaml({ id: 'task-a', objective: '不应进入时间线' }),
+  );
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/tasks/task-a/references/task.yaml',
+    '这不是 Task 元数据，也不应让构建失败\n',
+  );
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 1);
+  assert.equal(result.events[0].title, '完成示例任务');
+});
+
 test('moving a Task to archive keeps the event and refreshes its source reference', async (t) => {
   const projectRoot = await createProject(t);
   await seedTask(projectRoot);
