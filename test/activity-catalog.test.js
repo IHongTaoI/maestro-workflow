@@ -69,6 +69,40 @@ async function seedTask(projectRoot, options = {}, root = '.maestro/tasks') {
   return writeProjectFile(projectRoot, `${root}/${id}/task.yaml`, taskYaml(options));
 }
 
+function decisionRecord({
+  id,
+  title,
+  outcome = 'approved',
+  decidedAt,
+  reason = '已有证据支持该决定。',
+  supersededBy,
+} = {}) {
+  const record = {
+    schema_version: 1,
+    record_type: 'decision',
+    decision_id: id,
+    title,
+    outcome,
+    importance: 'milestone',
+    decided_at: decidedAt,
+    decided_by: 'old-zhou/test',
+    reason,
+    target_ids: ['lt-example'],
+    source_refs: ['.maestro/evidence/decision.md'],
+  };
+  if (supersededBy !== undefined) record.superseded_by = supersededBy;
+  return `${JSON.stringify(record, null, 2)}\n`;
+}
+
+async function seedDecision(projectRoot, options, fileId = options.id) {
+  await writeProjectFile(projectRoot, '.maestro/evidence/decision.md', 'decision evidence\n');
+  return writeProjectFile(
+    projectRoot,
+    `.maestro/memory/long-term/decisions/${fileId}.decision.json`,
+    decisionRecord(options),
+  );
+}
+
 test('completed Task automatically becomes a UTC Activity event without an event journal', async (t) => {
   const projectRoot = await createProject(t);
   await seedTask(projectRoot);
@@ -131,6 +165,148 @@ test('moving a Task to archive keeps the event and refreshes its source referenc
   assert.equal(after.events[0].event_id, before.events[0].event_id);
   assert.deepEqual(after.events[0].source_refs, ['.maestro/tasks/archive/task-a/task.yaml']);
   await access(path.join(projectRoot, ...after.events[0].source_refs[0].split('/')));
+});
+
+test('approved and superseded Decision Records become Activity events', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedDecision(projectRoot, {
+    id: 'decision-approve',
+    title: '采用派生 Activity',
+    decidedAt: '2026-09-04T10:00:00+08:00',
+  });
+  await seedDecision(projectRoot, {
+    id: 'decision-supersede',
+    title: '取代旧索引方案',
+    outcome: 'superseded',
+    decidedAt: '2026-09-05T03:00:00Z',
+    supersededBy: 'decision-approve',
+  });
+  await seedDecision(projectRoot, {
+    id: 'decision-reject',
+    title: '拒绝事件日志方案',
+    outcome: 'rejected',
+    decidedAt: '2026-09-06T03:00:00Z',
+  });
+  const routine = JSON.parse(decisionRecord({
+    id: 'decision-routine',
+    title: '普通评审决定',
+    decidedAt: '2026-09-07T03:00:00Z',
+  }));
+  routine.importance = 'routine';
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/decisions/decision-routine.decision.json',
+    `${JSON.stringify(routine)}\n`,
+  );
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--month', '2026-09']));
+  assert.equal(result.total, 2);
+  assert.deepEqual(
+    result.events.map((event) => event.event_type),
+    ['decision_approved', 'decision_superseded'],
+  );
+  assert.equal(result.events[0].occurred_at, '2026-09-04T02:00:00Z');
+  assert.deepEqual(result.events[0].source_refs, [
+    '.maestro/memory/long-term/decisions/decision-approve.decision.json',
+  ]);
+
+  const approved = parseJson(await runActivity(projectRoot, [
+    'search', '--year', '2026', '--event-type', 'decision_approved',
+  ]));
+  assert.equal(approved.total, 1);
+  assert.equal(approved.events[0].title, '采用派生 Activity');
+});
+
+test('legacy and nested Decision files are ignored', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedDecision(projectRoot, {
+    id: 'decision-current',
+    title: '规范决定',
+    decidedAt: '2026-09-04T02:00:00Z',
+  });
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/decisions/legacy.json',
+    '{old unstructured record',
+  );
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/decisions/archive/nested.decision.json',
+    '{broken nested record',
+  );
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 1);
+  assert.equal(result.events[0].title, '规范决定');
+});
+
+test('missing historical Decision evidence does not block Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedDecision(projectRoot, {
+    id: 'decision-local-evidence',
+    title: '依赖本地 Task 证据的决定',
+    decidedAt: '2026-09-04T02:00:00Z',
+  });
+  await rm(path.join(projectRoot, '.maestro', 'evidence', 'decision.md'));
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 1);
+  assert.equal(result.events[0].title, '依赖本地 Task 证据的决定');
+});
+
+test('unsafe Decision evidence paths still block Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  const unsafe = JSON.parse(decisionRecord({
+    id: 'decision-unsafe-ref',
+    title: '包含越界证据路径的决定',
+    decidedAt: '2026-09-04T02:00:00Z',
+  }));
+  unsafe.source_refs = ['../outside.md'];
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/decisions/decision-unsafe-ref.decision.json',
+    `${JSON.stringify(unsafe)}\n`,
+  );
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /invalid Decision Record.*must not contain.*\.\./);
+});
+
+test('invalid canonical Decision Records fail instead of inventing an event', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(projectRoot, '.maestro/evidence/decision.md', 'decision evidence\n');
+  const invalid = JSON.parse(decisionRecord({
+    id: 'decision-invalid',
+    title: '缺少可靠时间',
+    decidedAt: '2026-09-04T02:00:00Z',
+  }));
+  delete invalid.decided_at;
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/long-term/decisions/decision-invalid.decision.json',
+    `${JSON.stringify(invalid)}\n`,
+  );
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /invalid Decision Record.*decided_at/);
+});
+
+test('adding an authoritative Decision Record makes the Activity index stale', async (t) => {
+  const projectRoot = await createProject(t);
+  await runActivity(projectRoot, ['build', '--now', '2026-09-10T00:00:00Z']);
+  await seedDecision(projectRoot, {
+    id: 'decision-after-build',
+    title: '索引构建后批准的新决定',
+    decidedAt: '2026-09-10T01:00:00Z',
+  });
+
+  const stale = await rejectedCommand(runActivity(projectRoot, ['check']));
+  assert.equal(stale.code, 1);
+  assert.match(stale.stderr, /missing or stale/);
+
+  const refreshed = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(refreshed.catalog_refreshed, true);
+  assert.equal(refreshed.events[0].event_type, 'decision_approved');
 });
 
 test('search filters by year, month, and from/to range', async (t) => {

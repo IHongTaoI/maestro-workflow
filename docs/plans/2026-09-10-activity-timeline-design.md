@@ -19,7 +19,7 @@ Long-term Memory 回答“项目现在知道什么”，不会保存完整工作
 不存在 Activity 事件日志或手工 `record` 接口。这样无需解决第二套权威数据的并发追加、迁移和
 一致性问题，也不会要求各生命周期调用点同时写两份状态。
 
-## 第一阶段：Task 完成事件
+## Task 完成事件
 
 当前权威格式中，只有 Task 能形成最小且可靠的自动闭环。Task 进入 `completed` 或 `archive`
 终态时，在同一次生命周期更新中写入一次 `completed_at`。目录构建器扫描活动及归档 Task，生成：
@@ -43,13 +43,29 @@ Long-term Memory 回答“项目现在知道什么”，不会保存完整工作
 - `source_refs` 每次从 Task 当前路径生成，Task 移入 archive 后会自动刷新；
 - 重复 Task ID、损坏 YAML、无效时间或越界引用必须使构建失败，不能静默忽略。
 
-Decision 暂不进入第一阶段，因为当前记录没有统一且明确的批准时间字段。等权威格式定义批准时间
-及投影规则后，再单独扩展事件类型；不能从更新时间推断。
+## Decision 里程碑事件
+
+Decision 使用独立的不可变权威记录：
+
+```text
+.maestro/memory/long-term/decisions/<decision-id>.decision.json
+```
+
+记录显式保存 `decided_at`、`outcome` 和 `importance`。Activity 只投影 `importance: milestone` 的
+`approved` 与 `superseded`，分别生成 `decision_approved` 和 `decision_superseded`。`routine` 与
+`rejected` 保留审计价值但不进入用户时间线。`source_refs` 指向 Decision Record 本身，证据再由
+Record 内的来源追溯。
+
+Decision 发布时严格验证记录内的证据引用可达；Activity 重建只复核其路径格式和项目边界，不要求
+历史证据在当前机器仍然存在。这样不可变的团队共享记录不会因本地 Task 归档或未同步而失效。
+
+旧 Decision 不要求迁移。只有直属目录、扩展名为 `.decision.json` 且通过 schema 校验的新记录才
+参与派生；不得从更新时间、文件 mtime 或 Git 时间推断 `decided_at`。
 
 ## 构建和失效判断
 
-构建器对所有 Task `task.yaml` 的相对路径和文件内容计算 SHA-256 `source_digest`。因此 Task 状态
-变化、内容修改或从活动目录移动到 archive 都会使旧 Index 失效。构建结果原子写入
+构建器对所有规范 Task 和 Decision 来源的相对路径及文件内容计算 SHA-256 `source_digest`。因此
+Task 状态变化、移入 archive，以及 Decision Record 新增或变更都会使旧 Index 失效。构建结果原子写入
 `.maestro/activity/index.json`；缺失或损坏时查询自动重建。
 
 ## 查询协议
@@ -70,4 +86,7 @@ activity_catalog.py --project-root <root> search --from 2026-09-01 --to 2026-09-
 3. Task 归档后事件不丢失，引用指向当前文件；
 4. Index 缺失、损坏或陈旧时可安全重建；
 5. 不生成 `events/*.jsonl`，Activity 不成为权威源；
-6. 月、年和任意日期范围查询有边界且结果数量受限。
+6. 里程碑级批准和取代 Decision 使用显式 `decided_at` 进入时间线；
+7. routine、rejected 和旧格式 Decision 不进入时间线，也不猜测时间；
+8. 历史证据缺失不阻塞重建，但不安全或越界的证据路径仍明确失败；
+9. 月、年和任意日期范围查询有边界且结果数量受限。

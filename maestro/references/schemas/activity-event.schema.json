@@ -25,7 +25,7 @@
       "format": "date-time"
     },
     "event_type": {
-      "const": "task_completed"
+      "enum": ["task_completed", "decision_approved", "decision_superseded"]
     },
     "title": {
       "type": "string",

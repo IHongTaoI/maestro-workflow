@@ -193,8 +193,9 @@ Long-term 集合。新 Long-term Memory 按 `entries/<entry-id>.md` 独立存储
 读取且不会静默迁移。`maestro/scripts/memory_catalog.py` 构建、检查、搜索、选择性读取，并提供显式
 迁移预检；它不替代正式 Memory，也不增加后台 Runtime。
 
-Activity Timeline 从带有可靠 `completed_at` 的 Task 权威记录派生，回答“某段时间完成了什么”。
-它只生成本地可重建的 `.maestro/activity/index.json`，不维护第二套事件日志。老周通过
+Activity Timeline 从带有可靠 `completed_at` 的 Task，以及带有 `decided_at` 的里程碑级不可变
+Decision Record 派生，回答“某段时间完成了什么、做过哪些关键决定”。它只生成本地可重建的
+`.maestro/activity/index.json`，不维护第二套事件日志。老周通过
 `maestro/scripts/activity_catalog.py search` 查询有限时间窗口，不把完整历史装入上下文。
 
 ## 手动行为检查
