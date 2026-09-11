@@ -210,6 +210,12 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
    证据，Activity 仍能从 Decision Record 重建。
 10. 规范 Decision 缺少 `decided_at`、文件名与 ID 不一致，或证据路径越界时，构建明确失败；新增或
     修改规范记录后，`check` 能识别缓存陈旧。
+11. 提升 Temporary 后，Task 元数据里的 `promoted_at` 让晋升事件自动出现在晋升生效时刻；
+    `--event-type temporary_promoted` 能单独筛出该事件，同一个 Task 的完成事件仍然独立存在。
+12. 缺少 `promoted_at` 的历史提升 Task，以及 `preparing` 状态的 Task，都不产生晋升事件；不得用
+    `promotion_transaction`、`created_at`、`updated_at`、mtime 或 Git 时间当作晋升时间。
+13. `promoted_at` 存在但 `source_temporary` 缺失或时间格式无效时，构建明确失败；Task 移入
+    `tasks/archive/` 后晋升事件的事件 ID 与发生时间不变，引用指向当前文件。
 
 ## 发布决定
 
