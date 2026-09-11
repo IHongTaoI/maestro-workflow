@@ -35,7 +35,6 @@
     "target_ids": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
-      "minItems": 1,
       "uniqueItems": true
     },
     "source_refs": {
@@ -47,6 +46,10 @@
     "superseded_by": { "type": "string", "minLength": 1 }
   },
   "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "rejected" } }, "required": ["outcome"] },
+      "else": { "properties": { "target_ids": { "type": "array", "minItems": 1 } } }
+    },
     {
       "if": { "properties": { "outcome": { "const": "superseded" } }, "required": ["outcome"] },
       "then": { "required": ["superseded_by"] },

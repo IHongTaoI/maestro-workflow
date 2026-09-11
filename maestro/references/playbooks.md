@@ -36,6 +36,19 @@ UPDATE → MERGE → CREATE → SKIP
 `.maestro/playbooks/candidates/`，将不可变评审记录放到 `.maestro/playbooks/decisions/`。
 被拒绝的候选仍保持可审计，以免没有新证据时反复提出同一个薄弱流程。
 
+### 不可变 Playbook 决策记录
+
+`playbooks/decisions/` 下的评审记录使用 [decision-record.schema.json](schemas/decision-record.schema.json)
+定义的不可变 Decision Record，文件名必须是 `<decision-id>.decision.json`，且与 `decision_id`
+一致。`target_ids` 指向受影响的 `playbook_id`；`outcome` 为 `approved`、`rejected` 或
+`superseded`，取代时还必须用 `superseded_by` 指向替代项。`decided_at` 是批准、拒绝或取代实际
+发生的时间，发布后不可修改；不得用 `updated_at`、文件 mtime 或 Git 时间代替。Activity 只投影
+`importance: milestone` 的 `approved` 与 `superseded`，`routine` 与 `rejected` 保留为审计记录。
+
+拒绝全新的 `CREATE` 或无目标的 `SKIP` 候选时，没有受影响的正式 Playbook，允许
+`outcome: rejected` 使用 `target_ids: []`，并通过 `source_refs` 引用被拒绝的候选记录。
+不得为满足目标列表而虚构 `playbook_id`；批准和取代仍必须包含至少一个目标 ID。
+
 Memory Worker 不能批准候选或写入正式 Playbook。第一版必须由用户明确批准后才能提升。重复
 成功可以增加证据，但不会赋予自动提升权限。获批动作使用可变状态写入协议，保留现有证据和
 决策历史，且不超出用户当前授权。

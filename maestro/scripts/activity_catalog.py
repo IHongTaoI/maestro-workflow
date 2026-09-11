@@ -2,10 +2,10 @@
 """Build, check, and search Maestro's derived Activity Timeline.
 
 Activity is reconstructed from authoritative project records. Supported sources are completed
-Tasks carrying ``completed_at``, Tasks promoted from Temporary Memory carrying ``promoted_at``, and
-immutable Decision Records carrying ``decided_at``.
-No event journal is created, file mtimes are never treated as event time, and records without a
-reliable timestamp are left out rather than guessed.
+Tasks carrying ``completed_at``, Tasks promoted from Temporary carrying ``promoted_at``, immutable Decision Records under the Long-term Memory decisions
+directory carrying ``decided_at``, and immutable Playbook Decision Records under the Playbook
+decisions directory carrying ``decided_at``. No event journal is created, file mtimes are never
+treated as event time, and records without a reliable timestamp are left out rather than guessed.
 """
 
 from __future__ import annotations
@@ -35,12 +35,15 @@ ACTIVITY_ROOT = Path(".maestro/activity")
 INDEX_PATH = ACTIVITY_ROOT / "index.json"
 TASKS_ROOT = Path(".maestro/tasks")
 DECISIONS_ROOT = Path(".maestro/memory/long-term/decisions")
+PLAYBOOK_DECISIONS_ROOT = Path(".maestro/playbooks/decisions")
 DECISION_SUFFIX = ".decision.json"
 EVENT_TYPES = {
     "task_completed",
     "temporary_promoted",
     "decision_approved",
     "decision_superseded",
+    "playbook_approved",
+    "playbook_superseded",
 }
 TASK_EVENT_STATUSES = {"completed", "archive"}
 # ``promoted_at`` is only written when the promotion transaction commits, so a ``preparing`` Task
@@ -130,23 +133,47 @@ def task_source_files(project_root: Path) -> list[Path]:
     return result
 
 
-def decision_source_files(project_root: Path) -> list[Path]:
-    root = project_root / DECISIONS_ROOT
-    if root.exists() and not root.is_dir():
-        raise CatalogError(f"Decision root must be a directory: {root}")
-    if not root.is_dir():
+def decision_record_source_files(
+    project_root: Path, root: Path, *, root_label: str, record_label: str
+) -> list[Path]:
+    directory = project_root / root
+    if directory.exists() and not directory.is_dir():
+        raise CatalogError(f"{root_label} root must be a directory: {directory}")
+    if not directory.is_dir():
         return []
     result: list[Path] = []
-    for path in sorted(root.glob(f"*{DECISION_SUFFIX}")):
+    for path in sorted(directory.glob(f"*{DECISION_SUFFIX}")):
         if path.is_symlink():
-            raise CatalogError(f"Decision Record must not be a symlink: {path}")
+            raise CatalogError(f"{record_label} must not be a symlink: {path}")
         project_relative(project_root, path)
         result.append(path)
     return result
 
 
+def decision_source_files(project_root: Path) -> list[Path]:
+    return decision_record_source_files(
+        project_root,
+        DECISIONS_ROOT,
+        root_label="Decision",
+        record_label="Decision Record",
+    )
+
+
+def playbook_decision_source_files(project_root: Path) -> list[Path]:
+    return decision_record_source_files(
+        project_root,
+        PLAYBOOK_DECISIONS_ROOT,
+        root_label="Playbook decision",
+        record_label="Playbook Decision Record",
+    )
+
+
 def activity_source_files(project_root: Path) -> list[Path]:
-    return task_source_files(project_root) + decision_source_files(project_root)
+    return (
+        task_source_files(project_root)
+        + decision_source_files(project_root)
+        + playbook_decision_source_files(project_root)
+    )
 
 
 def require_text(mapping: dict[str, Any], key: str, source: Path) -> str:
@@ -235,14 +262,23 @@ def derive_task_events(project_root: Path, sources: list[Path]) -> list[dict[str
     return events
 
 
-def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any]]:
+def derive_decision_record_events(
+    project_root: Path,
+    sources: list[Path],
+    *,
+    label: str,
+    approved_summary_prefix: str,
+    superseded_summary_prefix: str,
+    approved_type: str,
+    superseded_type: str,
+) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     seen_ids: dict[str, Path] = {}
     for path in sources:
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise CatalogError(f"cannot parse Decision Record {path}: {error}") from error
+            raise CatalogError(f"cannot parse {label} {path}: {error}") from error
         errors: list[Diagnostic] = []
         # Evidence refs were verified when the immutable record was published. Historical local
         # evidence may later move or be absent on another clone, so rebuild only rechecks that the
@@ -254,7 +290,7 @@ def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict
         )
         if errors:
             messages = "; ".join(f"{error.path}: {error.message}" for error in errors)
-            raise CatalogError(f"invalid Decision Record {path}: {messages}")
+            raise CatalogError(f"invalid {label} {path}: {messages}")
 
         decision_id = record["decision_id"]
         expected_name = f"{decision_id}{DECISION_SUFFIX}"
@@ -265,7 +301,7 @@ def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict
         previous = seen_ids.get(decision_id)
         if previous is not None:
             raise CatalogError(
-                f"duplicate Decision Record id '{decision_id}' in {previous} and {path}"
+                f"duplicate {label} id '{decision_id}' in {previous} and {path}"
             )
         seen_ids[decision_id] = path
 
@@ -273,9 +309,7 @@ def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict
         if outcome == "rejected" or record["importance"] != "milestone":
             continue
         decided_at = normalize_utc(record["decided_at"])
-        event_type = (
-            "decision_approved" if outcome == "approved" else "decision_superseded"
-        )
+        event_type = approved_type if outcome == "approved" else superseded_type
         title = record["title"].strip()
         reason = record["reason"].strip()
         event = {
@@ -284,9 +318,9 @@ def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict
             "event_type": event_type,
             "title": title,
             "summary": (
-                f"批准决策：{reason}"
+                f"{approved_summary_prefix}：{reason}"
                 if outcome == "approved"
-                else f"取代决策：{reason}"
+                else f"{superseded_summary_prefix}：{reason}"
             ),
             "source_refs": [project_relative(project_root, path)],
             "status": "completed",
@@ -294,6 +328,30 @@ def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict
         validate_event(project_root, event)
         events.append(event)
     return events
+
+
+def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any]]:
+    return derive_decision_record_events(
+        project_root,
+        sources,
+        label="Decision Record",
+        approved_summary_prefix="批准决策",
+        superseded_summary_prefix="取代决策",
+        approved_type="decision_approved",
+        superseded_type="decision_superseded",
+    )
+
+
+def derive_playbook_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any]]:
+    return derive_decision_record_events(
+        project_root,
+        sources,
+        label="Playbook Decision Record",
+        approved_summary_prefix="批准 Playbook",
+        superseded_summary_prefix="取代 Playbook",
+        approved_type="playbook_approved",
+        superseded_type="playbook_superseded",
+    )
 
 
 def source_digest(project_root: Path, source_files: Iterable[Path] | None = None) -> str:
@@ -314,10 +372,12 @@ def source_digest(project_root: Path, source_files: Iterable[Path] | None = None
 def derive_index(project_root: Path, *, now: datetime | None = None) -> dict[str, Any]:
     task_sources = task_source_files(project_root)
     decision_sources = decision_source_files(project_root)
-    sources = task_sources + decision_sources
+    playbook_sources = playbook_decision_source_files(project_root)
+    sources = task_sources + decision_sources + playbook_sources
     digest_before = source_digest(project_root, sources)
     events = derive_task_events(project_root, task_sources)
     events.extend(derive_decision_events(project_root, decision_sources))
+    events.extend(derive_playbook_events(project_root, playbook_sources))
     events.sort(key=lambda item: (item["occurred_at"], item["event_id"]))
     sources_after = activity_source_files(project_root)
     digest_after = source_digest(project_root, sources_after)

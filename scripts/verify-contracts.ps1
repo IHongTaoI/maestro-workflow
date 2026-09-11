@@ -323,6 +323,17 @@ try {
         "$fixtureRoot/decision-record-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
         "$fixtureRoot/decision-record-superseded-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-rejected-empty-targets-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-approved-empty-targets-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-superseded-empty-targets-invalid.json" 1
+    $activityEventSchema = "maestro/references/schemas/activity-event.schema.json"
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-playbook-approved-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-playbook-superseded-valid.json" 0
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-promoted-invalid.json" 1
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
@@ -756,6 +767,9 @@ try {
         @{ Path = "maestro/references/activity.md"; Text = '不要直接读取完整 `activity/index.json`' },
         @{ Path = "maestro/references/activity.md"; Text = '没有 `record` 操作' },
         @{ Path = "maestro/references/activity.md"; Text = '`decision_approved` 和 `decision_superseded`' },
+        @{ Path = "maestro/references/activity.md"; Text = '`playbook_approved` 和 `playbook_superseded`' },
+        @{ Path = "maestro/references/playbooks.md"; Text = '### 不可变 Playbook 决策记录' },
+        @{ Path = "maestro/references/storage.md"; Text = '`playbook_approved` / `playbook_superseded`' },
         @{ Path = "maestro/references/activity.md"; Text = '`temporary_promoted`' },
         @{ Path = "maestro/references/activity.md"; Text = '不产生晋升事件' },
         @{ Path = "maestro/references/activity.md"; Text = '`promotion_transaction` **不是**事件时间' },

@@ -29,7 +29,9 @@
         "task_completed",
         "temporary_promoted",
         "decision_approved",
-        "decision_superseded"
+        "decision_superseded",
+        "playbook_approved",
+        "playbook_superseded"
       ]
     },
     "title": {

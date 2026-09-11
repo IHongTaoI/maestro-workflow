@@ -219,6 +219,9 @@ python maestro/scripts/validate.py decision-record <staged-record.json> --projec
 只用于会影响项目方向、架构或用户可感知能力的关键决策；日常评审使用 `routine`。Activity 只投影
 `milestone` 的 `approved` 与 `superseded`，`rejected` 和 `routine` 仍保留为审计记录。
 
+通用 Decision Record 仅在 `outcome: rejected` 时允许 `target_ids: []`，用于没有受影响目标的
+候选拒绝记录；此时用 `source_refs` 引用候选。批准和取代仍要求至少一个目标 ID。
+
 旧 Decision 格式继续可读且无需迁移；没有规范文件和可靠 `decided_at` 的历史记录不会进入
 Activity。Decision Record 本身是评审权威，不依赖 Activity 存在。发布时必须严格验证其
 `source_refs` 可达；后续读取只检查路径格式、项目内边界和不可逃逸，不因本地 Task 已归档或另一台

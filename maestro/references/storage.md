@@ -174,9 +174,15 @@ revision 协议。先发布正式 Memory 改动，再原子重建目录。目录
 
 每个当前 Playbook 向 Experience Review 暴露稳定 `playbook_id`、规范 `file_path`、标题、触发
 条件、有序步骤、检查、active 状态、revision 元数据和可达 `source_refs`。每个通过校验的
-Playbook Candidate（包括 `SKIP`）都持久化在 `playbooks/candidates/`，直到
-`playbooks/decisions/` 下的不可变记录批准或拒绝。候选记录包含可达 `source_refs` 和
-`evidence_refs`；它们不是生效指导，且在用户明确批准前不能修改 Playbook。
+Playbook Candidate（包括 `SKIP`）都持久化在 `playbooks/candidates/`，直到 `playbooks/decisions/`
+下的不可变 Decision Record 批准或拒绝。该记录同样使用
+[decision-record.schema.json](schemas/decision-record.schema.json)，文件名必须是
+`<decision-id>.decision.json` 并与 `decision_id` 一致，`target_ids` 指向受影响的 `playbook_id`；
+`decided_at` 是批准、拒绝或取代实际发生的时间，不得用 `updated_at` 或文件时间推断。候选记录包含
+可达 `source_refs` 和 `evidence_refs`；它们不是生效指导，且在用户明确批准前不能修改 Playbook。
+
+拒绝没有正式目标的 Playbook 候选时，Decision Record 允许 `target_ids: []`，并通过
+`source_refs` 引用候选；批准和取代仍必须有目标，拒绝记录仍保留为审计。
 
 ## 配置
 
@@ -258,8 +264,9 @@ mtime 代替真实时间。已提交的提升会把 Task 实体化为 `active`�
 “Task 已完成”的可靠发生时间。为兼容旧项目，它不是 schema 必填字段；旧 Task 缺失时仍可读取，
 但不会出现在 Activity 中。不得使用 `updated_at` 或文件 mtime 猜测完成时间。
 
-Activity 还会从 `memory/long-term/decisions/` 直属的规范 `*.decision.json` 文件派生
-`decision_approved` 和 `decision_superseded`。只有 `importance: milestone` 的批准或取代记录进入
+Activity 还会从 `memory/long-term/decisions/` 与 `playbooks/decisions/` 直属的规范
+`*.decision.json` 文件分别派生 `decision_approved` / `decision_superseded` 与
+`playbook_approved` / `playbook_superseded`。只有 `importance: milestone` 的批准或取代记录进入
 时间线；`routine` 和 `rejected` 仅供审计。事件时间只取不可变的 `decided_at`，事件引用指向该
 Decision Record。
 

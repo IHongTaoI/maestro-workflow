@@ -84,6 +84,7 @@ function decisionRecord({
   decidedAt,
   reason = '已有证据支持该决定。',
   supersededBy,
+  targetIds = ['lt-example'],
 } = {}) {
   const record = {
     schema_version: 1,
@@ -95,7 +96,7 @@ function decisionRecord({
     decided_at: decidedAt,
     decided_by: 'old-zhou/test',
     reason,
-    target_ids: ['lt-example'],
+    target_ids: targetIds,
     source_refs: ['.maestro/evidence/decision.md'],
   };
   if (supersededBy !== undefined) record.superseded_by = supersededBy;
@@ -108,6 +109,15 @@ async function seedDecision(projectRoot, options, fileId = options.id) {
     projectRoot,
     `.maestro/memory/long-term/decisions/${fileId}.decision.json`,
     decisionRecord(options),
+  );
+}
+
+async function seedPlaybookDecision(projectRoot, options, fileId = options.id) {
+  await writeProjectFile(projectRoot, '.maestro/evidence/decision.md', 'decision evidence\n');
+  return writeProjectFile(
+    projectRoot,
+    `.maestro/playbooks/decisions/${fileId}.decision.json`,
+    decisionRecord({ targetIds: ['pb-20260829t000000z-a1b2'], ...options }),
   );
 }
 
@@ -477,6 +487,145 @@ test('adding an authoritative Decision Record makes the Activity index stale', a
   assert.equal(refreshed.events[0].event_type, 'decision_approved');
 });
 
+test('approved and superseded Playbook Decision Records become Activity events', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedPlaybookDecision(projectRoot, {
+    id: 'playbook-approve',
+    title: '证据优先的性能诊断',
+    decidedAt: '2026-09-08T10:00:00+08:00',
+  });
+  await seedPlaybookDecision(projectRoot, {
+    id: 'playbook-supersede',
+    title: '旧版诊断流程',
+    outcome: 'superseded',
+    decidedAt: '2026-09-09T03:00:00Z',
+    supersededBy: 'playbook-approve',
+  });
+  await seedPlaybookDecision(projectRoot, {
+    id: 'playbook-reject',
+    title: '证据不足的候选',
+    outcome: 'rejected',
+    decidedAt: '2026-09-10T03:00:00Z',
+  });
+  const routine = JSON.parse(decisionRecord({
+    id: 'playbook-routine',
+    title: '日常 Playbook 调整',
+    decidedAt: '2026-09-11T03:00:00Z',
+  }));
+  routine.importance = 'routine';
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/playbooks/decisions/playbook-routine.decision.json',
+    `${JSON.stringify(routine)}\n`,
+  );
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--month', '2026-09']));
+  assert.equal(result.total, 2);
+  assert.deepEqual(
+    result.events.map((event) => event.event_type),
+    ['playbook_approved', 'playbook_superseded'],
+  );
+  assert.equal(result.events[0].occurred_at, '2026-09-08T02:00:00Z');
+  assert.equal(result.events[0].summary, '批准 Playbook：已有证据支持该决定。');
+  assert.deepEqual(result.events[0].source_refs, [
+    '.maestro/playbooks/decisions/playbook-approve.decision.json',
+  ]);
+
+  const approved = parseJson(await runActivity(projectRoot, [
+    'search', '--year', '2026', '--event-type', 'playbook_approved',
+  ]));
+  assert.equal(approved.total, 1);
+  assert.equal(approved.events[0].title, '证据优先的性能诊断');
+
+  const memoryDecisions = parseJson(await runActivity(projectRoot, [
+    'search', '--year', '2026', '--event-type', 'decision_approved',
+  ]));
+  assert.equal(memoryDecisions.total, 0);
+});
+
+test('Playbook candidates and canonical Playbook files never become events', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/playbooks/performance-diagnosis.md',
+    [
+      '---',
+      'playbook_id: pb-20260829t000000z-a1b2',
+      'file_path: .maestro/playbooks/performance-diagnosis.md',
+      'title: 证据优先的性能诊断',
+      'status: active',
+      'revision: 3',
+      'updated_at: 2026-09-05T00:00:00Z',
+      'updated_by: old-zhou/test',
+      '---',
+      '',
+      '步骤。',
+      '',
+    ].join('\n'),
+  );
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/playbooks/candidates/pb-candidate.md',
+    '---\ncandidate_id: pb-candidate\nstatus: candidate\nupdated_at: 2026-09-06T00:00:00Z\n---\n\n候选。\n',
+  );
+
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 0);
+  assert.deepEqual(result.events, []);
+});
+
+test('a Playbook Decision Record filename must match decision_id', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedPlaybookDecision(projectRoot, {
+    id: 'playbook-real',
+    title: '文件名与 ID 不一致',
+    decidedAt: '2026-09-08T02:00:00Z',
+  }, 'playbook-mismatched');
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(
+    error.stderr,
+    /filename must match decision_id as 'playbook-real\.decision\.json'/,
+  );
+});
+
+test('invalid Playbook Decision Records fail instead of inventing events', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(projectRoot, '.maestro/evidence/decision.md', 'decision evidence\n');
+  const invalid = JSON.parse(decisionRecord({
+    id: 'playbook-invalid',
+    title: '缺少可靠时间',
+    decidedAt: '2026-09-08T02:00:00Z',
+  }));
+  delete invalid.decided_at;
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/playbooks/decisions/playbook-invalid.decision.json',
+    `${JSON.stringify(invalid)}\n`,
+  );
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /invalid Playbook Decision Record.*decided_at/);
+});
+
+test('unsafe Playbook evidence paths still block Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  const unsafe = JSON.parse(decisionRecord({
+    id: 'playbook-unsafe-ref',
+    title: '包含越界证据路径的评审记录',
+    decidedAt: '2026-09-08T02:00:00Z',
+  }));
+  unsafe.source_refs = ['../outside.md'];
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/playbooks/decisions/playbook-unsafe-ref.decision.json',
+    `${JSON.stringify(unsafe)}\n`,
+  );
+
+  const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(error.stderr, /invalid Playbook Decision Record.*must not contain.*\.\./);
+});
+
 test('search filters by year, month, and from/to range', async (t) => {
   const projectRoot = await createProject(t);
   await seedTask(projectRoot, { id: 'august', objective: '八月事件', completedAt: '2026-08-15T10:00:00Z' });
@@ -553,4 +702,39 @@ test('malformed Task YAML and duplicate Task IDs fail instead of being skipped',
   await seedTask(duplicateRoot, { id: 'same' }, '.maestro/tasks/archive');
   const duplicate = await rejectedCommand(runActivity(duplicateRoot, ['build']));
   assert.match(duplicate.stderr, /duplicate Task id 'same'/);
+});
+
+
+test('rejecting a new Playbook candidate preserves audit without blocking Activity rebuild', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedTask(projectRoot);
+  await runActivity(projectRoot, ['build']);
+  const candidatePath = '.maestro/playbooks/candidates/new.json';
+  await writeProjectFile(projectRoot, candidatePath, '{"candidate_id":"new","action":"CREATE"}\n');
+  const record = JSON.parse(decisionRecord({
+    id: 'reject-new', title: '拒绝全新流程', outcome: 'rejected',
+    decidedAt: '2026-09-08T02:00:00Z', targetIds: [],
+  }));
+  record.source_refs = [candidatePath];
+  await writeProjectFile(projectRoot, '.maestro/playbooks/decisions/reject-new.decision.json', JSON.stringify(record));
+  const stale = await rejectedCommand(runActivity(projectRoot, ['check']));
+  assert.match(stale.stderr, /stale/);
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.deepEqual(result.events.map((event) => event.event_type), ['task_completed']);
+  await rm(path.join(projectRoot, candidatePath));
+  await runActivity(projectRoot, ['build']);
+  await runActivity(projectRoot, ['check']);
+});
+
+test('approved and superseded Playbook records still require a target', async (t) => {
+  for (const outcome of ['approved', 'superseded']) {
+    const projectRoot = await createProject(t);
+    await seedPlaybookDecision(projectRoot, {
+      id: 'empty-target', title: '无目标记录', outcome,
+      decidedAt: '2026-09-08T02:00:00Z', targetIds: [],
+      ...(outcome === 'superseded' ? { supersededBy: 'replacement' } : {}),
+    });
+    const error = await rejectedCommand(runActivity(projectRoot, ['build']));
+    assert.match(error.stderr, /target_ids.*must contain at least 1/);
+  }
 });
