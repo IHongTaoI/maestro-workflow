@@ -186,6 +186,37 @@ Memory Worker 输出只是候选。提升前，老周或强模型评审者必须
 价值，并有可达 `source_refs` 支撑。在 `memory/long-term/decisions/` 记录批准或拒绝；保留被拒绝
 候选，避免反复评审同一薄弱声明。
 
+### 不可变 Decision Record
+
+新评审使用 `.maestro/memory/long-term/decisions/<decision-id>.decision.json` 作为不可变的通用决策
+记录，并使用 [decision-record.schema.json](schemas/decision-record.schema.json) 校验。文件名必须与
+`decision_id` 一致。示例：
+
+```json
+{
+  "schema_version": 1,
+  "record_type": "decision",
+  "decision_id": "decision-activity-timeline",
+  "title": "Activity 加入 Decision 时间线",
+  "outcome": "approved",
+  "importance": "milestone",
+  "decided_at": "2026-09-11T10:00:00Z",
+  "decided_by": "old-zhou/session-or-run-id",
+  "reason": "让用户能按时间回顾关键取舍。",
+  "target_ids": ["issue-54"],
+  "source_refs": [".maestro/tasks/20260911-decision-timeline/task.yaml"]
+}
+```
+
+`decided_at` 是批准、取代或拒绝实际发生的时间，发布后不可修改；不得用 `updated_at`、文件 mtime
+或 Git 时间代替。`superseded` 记录还必须通过 `superseded_by` 指向替代项。`importance: milestone`
+只用于会影响项目方向、架构或用户可感知能力的关键决策；日常评审使用 `routine`。Activity 只投影
+`milestone` 的 `approved` 与 `superseded`，`rejected` 和 `routine` 仍保留为审计记录。
+
+旧 Decision 格式继续可读且无需迁移；没有规范文件和可靠 `decided_at` 的历史记录不会进入
+Activity。Decision Record 本身是评审权威，不依赖 Activity 存在，其 `source_refs` 必须指向可达
+证据。
+
 ### 演进提案
 
 对每个提取出的 Long-term 候选，将其持久声明与索引条目比较，并在 `long_term_candidates` 中

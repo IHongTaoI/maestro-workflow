@@ -307,6 +307,15 @@ try {
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" "$fixtureRoot/task-valid.json" 0
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-completed-valid.json" 0
+    $decisionRecordSchema = "maestro/references/schemas/decision-record.schema.json"
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-approved-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-superseded-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $decisionRecordSchema "decision-record" `
+        "$fixtureRoot/decision-record-superseded-invalid.json" 1
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-promoted-invalid.json" 1
     $memoryFollowupSchema = "maestro/references/schemas/memory-followup.schema.json"
@@ -737,6 +746,9 @@ try {
         @{ Path = "maestro/references/activity.md"; Text = "不是新的权威状态源" },
         @{ Path = "maestro/references/activity.md"; Text = '不要直接读取完整 `activity/index.json`' },
         @{ Path = "maestro/references/activity.md"; Text = '没有 `record` 操作' },
+        @{ Path = "maestro/references/activity.md"; Text = '`decision_approved` 和 `decision_superseded`' },
+        @{ Path = "maestro/references/memory.md"; Text = '`importance: milestone`' },
+        @{ Path = "maestro/references/memory.md"; Text = '`decided_at` 是批准、取代或拒绝实际发生的时间' },
         @{ Path = "maestro/SKILL.md"; Text = "references/activity.md" },
         @{ Path = "README.md"; Text = "CLI 只负责安装、更新和诊断" },
         @{ Path = "README.md"; Text = "绝不调度 Worker" },

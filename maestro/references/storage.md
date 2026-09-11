@@ -44,7 +44,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
         pending/
         approved/
         rejected/
-      decisions/
+      decisions/<decision-id>.decision.json
       conflicts/
       migrations/<migration-id>/
   tasks/
@@ -85,7 +85,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
   - `memory/pending/`：尚未压缩或解析的 Memory Worker 原始输入；
   - `locks/` 和 `transactions/`：并发和文件系统锁标记；
   - `tasks/`：本地活动 Task 执行状态、Worker current-state 和临时选择。
-  - `activity/index.json`：从本地 Task 权威记录重建的派生时间线目录；
+  - `activity/index.json`：从本地 Task 和不可变 Decision 权威记录重建的派生时间线目录；
 
 - **团队共享 Memory（纳入 Git）：**
   - `memory/long-term/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
@@ -156,6 +156,11 @@ Memory Worker 提案（包括 `SKIP`）都持久化到 `memory/long-term/candida
 
 新批准的 `decision` 可以包含 [memory.md](memory.md) 定义的向后兼容 `decision_context`。更新和
 语义合并必须保留它。它解释理由和已记录的否定方案，但绝不授予权限或替代不可变评审记录。
+
+新评审以 `memory/long-term/decisions/<decision-id>.decision.json` 发布不可变 Decision Record。
+文件名必须与 `decision_id` 一致，并显式记录 `outcome`、`importance`、`decided_at`、评审者、理由、
+目标及可达来源。`superseded` 还必须记录 `superseded_by`。旧格式无需迁移；没有可靠 `decided_at`
+的历史记录不进入 Activity，也不得从更新时间或文件时间推断。
 
 Long-term 条目使用 [memory.md](memory.md) 定义的 fenced `maestro-memory-entry` JSON 表示，使
 确定性目录构建器拥有可寻址记录边界。旧聚合 `current.md` 保持可读，但新写入只进入 entry 文件；
@@ -236,6 +241,11 @@ promotion_transaction: 20260831T120000Z-p7q8r9
 `completed_at`，并在后续移动到 `tasks/archive/` 时保持不变。`completed_at` 是 Activity 中
 “Task 已完成”的可靠发生时间。为兼容旧项目，它不是 schema 必填字段；旧 Task 缺失时仍可读取，
 但不会出现在 Activity 中。不得使用 `updated_at` 或文件 mtime 猜测完成时间。
+
+Activity 还会从 `memory/long-term/decisions/` 直属的规范 `*.decision.json` 文件派生
+`decision_approved` 和 `decision_superseded`。只有 `importance: milestone` 的批准或取代记录进入
+时间线；`routine` 和 `rejected` 仅供审计。事件时间只取不可变的 `decided_at`，事件引用指向该
+Decision Record。
 
 ## Temporary 与 Task ID 命名
 

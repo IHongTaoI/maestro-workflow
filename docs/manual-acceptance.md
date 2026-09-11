@@ -191,7 +191,7 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
 
 ## Issue #54：Activity 派生时间线
 
-在可丢弃项目中准备活动与归档 Task，确认：
+在可丢弃项目中准备活动、归档 Task 和不可变 Decision Record，确认：
 
 1. 新 Task 以 `completed` 或 `archive` 状态写入显式 `completed_at` 后，不执行额外记录命令也能被
    月、年及日期范围查询找到；输出时间归一化为 UTC。
@@ -203,6 +203,11 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
 5. `.maestro/activity/` 下不产生 `events/*.jsonl`，也不存在手工 `record` 流程。
 6. 老周使用 `activity_catalog.py search` 查询受限窗口，不直接加载完整 Index；只在需要详情时读取
    少量 `source_refs`。
+7. 新建 `importance: milestone`、结果为 `approved` 或 `superseded` 的规范 Decision Record；查询
+   分别返回 `decision_approved` 和 `decision_superseded`，时间只来自 `decided_at`，引用指向该记录。
+8. `routine`、`rejected`、旧扩展名和嵌套 Decision 不进入时间线；不得迁移历史记录或猜测时间。
+9. 规范 Decision 缺少 `decided_at`、文件名与 ID 不一致或来源不可达时，构建明确失败；新增或修改
+   规范记录后，`check` 能识别缓存陈旧。
 
 ## 发布决定
 

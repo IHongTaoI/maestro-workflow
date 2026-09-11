@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Build, check, and search Maestro's derived Activity Timeline.
 
-Activity is reconstructed from authoritative project records. The first supported source is a
-completed Task carrying an explicit ``completed_at`` lifecycle timestamp. No event journal is
-created, file mtimes are never treated as event time, and records without a reliable timestamp are
-left out rather than guessed.
+Activity is reconstructed from authoritative project records. Supported sources are completed
+Tasks carrying ``completed_at`` and immutable Decision Records carrying ``decided_at``. No event
+journal is created, file mtimes are never treated as event time, and records without a reliable
+timestamp are left out rather than guessed.
 """
 
 from __future__ import annotations
@@ -26,13 +26,16 @@ from validate import (
     FileReferenceValidator,
     validate_activity_event,
     validate_activity_index,
+    validate_decision_record,
 )
 
 
 ACTIVITY_ROOT = Path(".maestro/activity")
 INDEX_PATH = ACTIVITY_ROOT / "index.json"
 TASKS_ROOT = Path(".maestro/tasks")
-EVENT_TYPES = {"task_completed"}
+DECISIONS_ROOT = Path(".maestro/memory/long-term/decisions")
+DECISION_SUFFIX = ".decision.json"
+EVENT_TYPES = {"task_completed", "decision_approved", "decision_superseded"}
 TASK_EVENT_STATUSES = {"completed", "archive"}
 MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 YEAR_PATTERN = re.compile(r"^\d{4}$")
@@ -101,6 +104,25 @@ def task_source_files(project_root: Path) -> list[Path]:
     return result
 
 
+def decision_source_files(project_root: Path) -> list[Path]:
+    root = project_root / DECISIONS_ROOT
+    if root.exists() and not root.is_dir():
+        raise CatalogError(f"Decision root must be a directory: {root}")
+    if not root.is_dir():
+        return []
+    result: list[Path] = []
+    for path in sorted(root.glob(f"*{DECISION_SUFFIX}")):
+        if path.is_symlink():
+            raise CatalogError(f"Decision Record must not be a symlink: {path}")
+        project_relative(project_root, path)
+        result.append(path)
+    return result
+
+
+def activity_source_files(project_root: Path) -> list[Path]:
+    return task_source_files(project_root) + decision_source_files(project_root)
+
+
 def require_text(mapping: dict[str, Any], key: str, source: Path) -> str:
     value = mapping.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -122,7 +144,7 @@ def validate_event(project_root: Path, event: dict[str, Any]) -> None:
         raise CatalogError(f"invalid derived Activity event: {messages}")
 
 
-def derive_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any]]:
+def derive_task_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     seen_task_ids: dict[str, Path] = {}
     for path in sources:
@@ -162,8 +184,62 @@ def derive_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any
     return events
 
 
+def derive_decision_events(project_root: Path, sources: list[Path]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    seen_ids: dict[str, Path] = {}
+    for path in sources:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise CatalogError(f"cannot parse Decision Record {path}: {error}") from error
+        errors: list[Diagnostic] = []
+        validate_decision_record(record, errors, FileReferenceValidator(project_root))
+        if errors:
+            messages = "; ".join(f"{error.path}: {error.message}" for error in errors)
+            raise CatalogError(f"invalid Decision Record {path}: {messages}")
+
+        decision_id = record["decision_id"]
+        expected_name = f"{decision_id}{DECISION_SUFFIX}"
+        if path.name != expected_name:
+            raise CatalogError(
+                f"{path}: filename must match decision_id as '{expected_name}'"
+            )
+        previous = seen_ids.get(decision_id)
+        if previous is not None:
+            raise CatalogError(
+                f"duplicate Decision Record id '{decision_id}' in {previous} and {path}"
+            )
+        seen_ids[decision_id] = path
+
+        outcome = record["outcome"]
+        if outcome == "rejected" or record["importance"] != "milestone":
+            continue
+        decided_at = normalize_utc(record["decided_at"])
+        event_type = (
+            "decision_approved" if outcome == "approved" else "decision_superseded"
+        )
+        title = record["title"].strip()
+        reason = record["reason"].strip()
+        event = {
+            "event_id": make_event_id(event_type, decision_id, decided_at),
+            "occurred_at": decided_at,
+            "event_type": event_type,
+            "title": title,
+            "summary": (
+                f"批准决策：{reason}"
+                if outcome == "approved"
+                else f"取代决策：{reason}"
+            ),
+            "source_refs": [project_relative(project_root, path)],
+            "status": "completed",
+        }
+        validate_event(project_root, event)
+        events.append(event)
+    return events
+
+
 def source_digest(project_root: Path, source_files: Iterable[Path] | None = None) -> str:
-    files = list(source_files) if source_files is not None else task_source_files(project_root)
+    files = list(source_files) if source_files is not None else activity_source_files(project_root)
     digest = hashlib.sha256()
     for path in sorted(files, key=lambda item: project_relative(project_root, item)):
         relative = project_relative(project_root, path)
@@ -178,13 +254,17 @@ def source_digest(project_root: Path, source_files: Iterable[Path] | None = None
 
 
 def derive_index(project_root: Path, *, now: datetime | None = None) -> dict[str, Any]:
-    sources = task_source_files(project_root)
+    task_sources = task_source_files(project_root)
+    decision_sources = decision_source_files(project_root)
+    sources = task_sources + decision_sources
     digest_before = source_digest(project_root, sources)
-    events = derive_events(project_root, sources)
-    sources_after = task_source_files(project_root)
+    events = derive_task_events(project_root, task_sources)
+    events.extend(derive_decision_events(project_root, decision_sources))
+    events.sort(key=lambda item: (item["occurred_at"], item["event_id"]))
+    sources_after = activity_source_files(project_root)
     digest_after = source_digest(project_root, sources_after)
     if digest_before != digest_after:
-        raise CatalogError("Task sources changed while Activity was being built; retry")
+        raise CatalogError("Activity sources changed while the index was being built; retry")
     index = {
         "schema_version": 1,
         "generated_at": utc_now(now),

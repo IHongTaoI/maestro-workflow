@@ -41,7 +41,7 @@ MEMORY_RECORD_TYPES = {
 MEMORY_STATUSES = {"active", "disputed", "superseded", "rejected", "archived"}
 MEMORY_KINDS = {"fact", "experience", "principle", "decision", "constraint", "other"}
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-ACTIVITY_EVENT_TYPES = {"task_completed"}
+ACTIVITY_EVENT_TYPES = {"task_completed", "decision_approved", "decision_superseded"}
 ACTIVITY_EVENT_ID_PATTERN = re.compile(r"^activity-[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -1082,6 +1082,78 @@ def validate_activity_event(
         add_error(errors, f"{path}.status", "must equal 'completed'")
 
 
+def validate_decision_record(
+    value: Any,
+    errors: list[Diagnostic],
+    file_reference: FileReferenceValidator,
+) -> None:
+    if not require_object(value, "$", errors):
+        return
+    required = {
+        "schema_version",
+        "record_type",
+        "decision_id",
+        "title",
+        "outcome",
+        "importance",
+        "decided_at",
+        "decided_by",
+        "reason",
+        "target_ids",
+        "source_refs",
+    }
+    allowed = required | {"superseded_by"}
+    check_object_shape(value, "$", errors, required=required, allowed=allowed)
+    if value.get("schema_version") != 1:
+        add_error(errors, "$.schema_version", "must equal 1")
+    if value.get("record_type") != "decision":
+        add_error(errors, "$.record_type", "must equal 'decision'")
+    if "decision_id" in value:
+        check_stable_id(value["decision_id"], "$.decision_id", errors)
+    for key in ("title", "decided_by", "reason"):
+        if key in value:
+            check_string(value[key], f"$.{key}", errors, min_length=1)
+    if "outcome" in value:
+        check_enum(
+            value["outcome"],
+            "$.outcome",
+            errors,
+            {"approved", "superseded", "rejected"},
+        )
+    if "importance" in value:
+        check_enum(
+            value["importance"], "$.importance", errors, {"milestone", "routine"}
+        )
+    if "decided_at" in value:
+        check_date_time(value["decided_at"], "$.decided_at", errors)
+    for key in ("target_ids", "source_refs"):
+        if key not in value:
+            continue
+        item_validator = (
+            file_reference
+            if key == "source_refs"
+            else lambda item, path, item_errors: check_string(
+                item, path, item_errors, min_length=1
+            )
+        )
+        if check_array(
+            value[key], f"$.{key}", errors, item_validator, min_items=1
+        ):
+            check_unique_strings(value[key], f"$.{key}", errors)
+    outcome = value.get("outcome")
+    if outcome == "superseded":
+        if "superseded_by" not in value:
+            add_error(
+                errors,
+                "$.superseded_by",
+                "is required when outcome is 'superseded'",
+            )
+        else:
+            check_string(value["superseded_by"], "$.superseded_by", errors, min_length=1)
+    elif "superseded_by" in value:
+        add_error(errors, "$.superseded_by", "is allowed only when outcome is 'superseded'")
+
+
 def validate_activity_index(
     value: Any,
     errors: list[Diagnostic],
@@ -2045,6 +2117,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "memory-merge-request",
             "memory-merge-response",
             "memory-followup",
+            "decision-record",
             "activity-event",
             "activity-index",
         ),
@@ -2138,6 +2211,8 @@ def main(argv: list[str] | None = None) -> int:
         validate_memory_merge_response(value, errors, file_reference)
     elif args.kind == "memory-followup":
         validate_memory_followup(value, errors, file_reference)
+    elif args.kind == "decision-record":
+        validate_decision_record(value, errors, file_reference)
     elif args.kind == "activity-event":
         validate_activity_event(value, "$", errors, file_reference)
     elif args.kind == "activity-index":
