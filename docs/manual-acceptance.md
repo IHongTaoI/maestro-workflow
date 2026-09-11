@@ -189,6 +189,21 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
 
 自动化测试只证明策略逻辑。以上真实宿主证据完成前，#56 保持开放。
 
+## Issue #54：Activity 派生时间线
+
+在可丢弃项目中准备活动与归档 Task，确认：
+
+1. 新 Task 以 `completed` 或 `archive` 状态写入显式 `completed_at` 后，不执行额外记录命令也能被
+   月、年及日期范围查询找到；输出时间归一化为 UTC。
+2. `active` Task 和缺少 `completed_at` 的旧完成 Task 不进入时间线；不得使用 `updated_at`、mtime
+   或 Git 时间补齐。
+3. Task 从活动目录移入 `tasks/archive/` 后，事件 ID 和发生时间不变，自动重建后的 `source_refs`
+   指向当前可达文件。
+4. 删除或损坏 `activity/index.json` 后可从 Task 重建；修改 Task 后 `check` 能识别缓存陈旧。
+5. `.maestro/activity/` 下不产生 `events/*.jsonl`，也不存在手工 `record` 流程。
+6. 老周使用 `activity_catalog.py search` 查询受限窗口，不直接加载完整 Index；只在需要详情时读取
+   少量 `source_refs`。
+
 ## 发布决定
 
 目标宿主中的受影响场景通过，且以下确定性检查全部通过后发布：

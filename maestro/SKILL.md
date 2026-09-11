@@ -25,6 +25,7 @@ description: 通过老周和按能力选择的项目或动态执行者协调软�
 | 开始、恢复、晋升、协调、委派或结束实质工作 | [coordination.md](references/coordination.md) |
 | 创建或修改 `.maestro/` 状态 | [storage.md](references/storage.md) |
 | 浏览、查询、压缩、恢复、归档或晋升项目 Memory | [memory.md](references/memory.md) |
+| 查询某段时间完成过什么或回顾项目活动 | [activity.md](references/activity.md) |
 | 解析、组合、生成、委派或恢复 Worker | [workers.md](references/workers.md) 和 [coordination.md](references/coordination.md) |
 | 记录或使用 Detailed Result、Current State 或 Handoff | [handoffs.md](references/handoffs.md) |
 | 使用或审查项目中的指定 Playbook | [playbooks.md](references/playbooks.md) |
@@ -57,6 +58,8 @@ description: 通过老周和按能力选择的项目或动态执行者协调软�
   正式执行，Long-term 保存经过审查且有来源的知识。
 - 先加载当前状态和有限的 Memory 候选，再按需读取详情。不要预加载全部历史 Memory，也不要
   把自动生成的目录索引当成权威状态。
+- Activity 只通过受限时间窗口查询派生目录；不要把完整 Activity Index 直接装入上下文，也不要
+  把 Activity 当成新的权威记录。
 - 摘要、Delegation Packet、Handoff、候选项等模型生成结构都不可信；写入或执行前必须验证。
   提案不等于批准，也不提供执行权限。
 - 在执行未经授权的破坏性、高风险、对外可见、涉及密钥或访问控制、或实质扩大范围的操作前，

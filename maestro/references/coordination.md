@@ -176,7 +176,8 @@ Long-term Memory
    Long-term 条目比较，将已执行的可复用流程与已索引 Playbooks 比较，然后为每个集合提出
    `UPDATE`、`MERGE`、`CREATE` 或 `SKIP`。
 2. 写入 `completion.md`，包含结果、验证、限制、待办工作和来源路径。
-3. 将 Task 标记为 completed，并移动到 `.maestro/tasks/archive/<task-id>/`。
+3. 在同一次生命周期更新中写入可靠的 `completed_at`、将 Task 标记为 completed，并移动到
+   `.maestro/tasks/archive/<task-id>/`；归档后保持 `completed_at` 不变，使 Activity 可从 Task 自动派生。
 4. 审核每项提案；只提升稳定、有来源的知识。所有 Playbook Candidate 都保持不生效，除非
    用户明确批准；之后按相关可变状态协议应用获批改动。
 5. 向用户返回简洁的交付摘要。

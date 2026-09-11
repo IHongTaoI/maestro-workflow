@@ -306,6 +306,8 @@ try {
         "$fixtureRoot/temporary-meta-valid.json" 0
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" "$fixtureRoot/task-valid.json" 0
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
+        "$fixtureRoot/task-completed-valid.json" 0
+    Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-promoted-invalid.json" 1
     $memoryFollowupSchema = "maestro/references/schemas/memory-followup.schema.json"
     Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-pending-valid.json" 0
@@ -731,6 +733,11 @@ try {
         @{ Path = "maestro/references/memory.md"; Text = '`long-term/entries/<entry_id>.md`' },
         @{ Path = "maestro/references/memory.md"; Text = "migrate-long-term" },
         @{ Path = "maestro/references/storage.md"; Text = "不同 entry 的独立 UPDATE 不共享 revision 或 lock" },
+        @{ Path = "maestro/references/storage.md"; Text = '`completed_at` 是 Activity' },
+        @{ Path = "maestro/references/activity.md"; Text = "不是新的权威状态源" },
+        @{ Path = "maestro/references/activity.md"; Text = '不要直接读取完整 `activity/index.json`' },
+        @{ Path = "maestro/references/activity.md"; Text = '没有 `record` 操作' },
+        @{ Path = "maestro/SKILL.md"; Text = "references/activity.md" },
         @{ Path = "README.md"; Text = "CLI 只负责安装、更新和诊断" },
         @{ Path = "README.md"; Text = "绝不调度 Worker" },
         @{ Path = "maestro/SKILL.md"; Text = "不负责编排工作" }
