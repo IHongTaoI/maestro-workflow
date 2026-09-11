@@ -22,11 +22,13 @@
     "revision": { "type": "integer", "minimum": 0 },
     "completed_at": { "type": "string", "format": "date-time" },
     "source_temporary": { "type": "string", "minLength": 1 },
-    "promotion_transaction": { "type": "string", "minLength": 1 }
+    "promotion_transaction": { "type": "string", "minLength": 1 },
+    "promoted_at": { "type": "string", "format": "date-time" }
   },
   "dependentRequired": {
     "source_temporary": ["promotion_transaction"],
-    "promotion_transaction": ["source_temporary"]
+    "promotion_transaction": ["source_temporary"],
+    "promoted_at": ["source_temporary"]
   },
   "additionalProperties": false
 }

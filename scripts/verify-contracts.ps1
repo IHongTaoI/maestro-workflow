@@ -325,6 +325,8 @@ try {
         "$fixtureRoot/decision-record-superseded-invalid.json" 1
     Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
         "$fixtureRoot/task-promoted-invalid.json" 1
+    Invoke-AjvCase "maestro/references/schemas/task.schema.json" `
+        "$fixtureRoot/task-promoted-at-missing-source-invalid.json" 1
     $memoryFollowupSchema = "maestro/references/schemas/memory-followup.schema.json"
     Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-pending-valid.json" 0
     Invoke-AjvCase $memoryFollowupSchema "$fixtureRoot/memory-followup-resolved-valid.json" 0
@@ -756,7 +758,10 @@ try {
         @{ Path = "maestro/references/activity.md"; Text = '`decision_approved` 和 `decision_superseded`' },
         @{ Path = "maestro/references/activity.md"; Text = '`temporary_promoted`' },
         @{ Path = "maestro/references/activity.md"; Text = '不产生晋升事件' },
-        @{ Path = "maestro/references/storage.md"; Text = '`promotion_transaction` 的格式为 `<yyyymmddThhmmssZ>-<suffix>`' },
+        @{ Path = "maestro/references/activity.md"; Text = '`promotion_transaction` **不是**事件时间' },
+        @{ Path = "maestro/references/storage.md"; Text = '`promotion_transaction` 是事务关联、恢复与审计标记，不是事件时间' },
+        @{ Path = "maestro/references/storage.md"; Text = '必须在同一次生命周期更新中写入一次 `promoted_at`' },
+        @{ Path = "maestro/references/storage.md"; Text = '`promoted_at` 是 Activity 中' },
         @{ Path = "maestro/references/memory.md"; Text = '`importance: milestone`' },
         @{ Path = "maestro/references/memory.md"; Text = '`decided_at` 是批准、取代或拒绝实际发生的时间' },
         @{ Path = "maestro/references/memory.md"; Text = '发布时必须严格验证其' },

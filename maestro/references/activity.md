@@ -23,15 +23,18 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 
 - 来源同样只包括 `.maestro/tasks/<task-id>/task.yaml` 和
   `.maestro/tasks/archive/<task-id>/task.yaml`；
-- Task 必须同时具备 `source_temporary` 和可解析的 `promotion_transaction` 提交标记；
-- `occurred_at` 只取提交标记 `<yyyymmddThhmmssZ>-<suffix>` 前缀里的 UTC 提交时刻，并归一化为
-  UTC；
+- Task 必须同时具备 `source_temporary` 和显式 `promoted_at`；
+- `occurred_at` 只取 `promoted_at`，并归一化为 UTC；
 - `status` 为 `preparing` 的 Task 尚未提交，不投影晋升事件；
 - `source_refs` 指向 Task 当前的 `task.yaml`。来源 Temporary 的规范 ID 记录在事件摘要里；
   Temporary 目录本身不是 Activity 来源，它已归档或已丢弃都不影响时间线。
 
-提交标记缺失、格式未知或无法解析为 UTC 时刻的历史记录不产生晋升事件，也绝不用 `created_at`、
-`updated_at`、Git 时间或文件 mtime 代替真实提交时间。同一个 Task 可以先产生晋升事件，之后再
+`promotion_transaction` **不是**事件时间，Activity 不解释它：该标记在事务打开时写入，早于晋升
+生效，只用于事务关联、恢复与审计。晋升真正生效的边界是原子发布 `committed.yaml`，`promoted_at`
+记录的才是这个登记时刻。
+
+没有 `promoted_at` 的历史提升 Task 不产生晋升事件，也绝不用 `promotion_transaction`、
+`created_at`、`updated_at`、Git 时间或文件 mtime 代替。同一个 Task 可以先产生晋升事件，之后再
 产生完成事件，两者互不替代。
 
 `decision_approved` 和 `decision_superseded`：
@@ -50,13 +53,14 @@ mtime 猜测事件时间。
 ## 写入规则
 
 Activity 没有 `record` 操作，也不维护 `events/*.jsonl`。完成新 Task 时，在 Task 生命周期更新中
-写入并保留 `completed_at`；提升 Temporary 时，由提升事务写入的 `source_temporary` 与
-`promotion_transaction` 本身就是晋升事件的权威记录，不需要额外记录步骤；作出新的重要决策时，
-发布带 `decided_at` 的不可变 Decision Record。
+写入并保留 `completed_at`；提升 Temporary 时，由提升事务在提交时写入并保留 `promoted_at`，
+并保留 `source_temporary` 与 `promotion_transaction`；作出新的重要决策时，发布带 `decided_at`
+的不可变 Decision Record。
 Activity 只负责读取和派生。规范来源损坏、重复 ID、文件名不匹配或时间格式无效时，构建必须
-明确失败，不能静默跳过有问题的权威记录。提交标记形状正确但编码了不可能的时刻，同样属于损坏
-记录并明确失败；形状不符合文档格式的旧标记则保持原样、不投影。Decision 的证据路径格式无效或
-逃逸项目边界时同样失败，但发布后单纯缺少历史证据文件不会阻塞重建。
+明确失败，不能静默跳过有问题的权威记录。`promoted_at` 存在但 `source_temporary` 缺失、或时间
+格式无效时，同样属于损坏记录并明确失败；缺少 `promoted_at` 的旧提升记录则保持原样、不投影。
+Decision 的证据路径格式无效或逃逸项目边界时同样失败，但发布后单纯缺少历史证据文件不会阻塞
+重建。
 
 ## 查询协议
 

@@ -27,8 +27,8 @@
 2. 获取来源和目标状态锁，按 [storage.md](storage.md) 准备事务包。快照保存每个修改前的值，
    并暂存每个完整替换文件。
 3. 准备期间，目标 Task 由事务持有且不可运行。暂存包含 `source_temporary`、
-   `promotion_transaction`、相关 Temporary 事实和可达来源文件的 Task 元数据，最终状态为
-   `active`。保留原始来源路径和修订版本。
+   `promotion_transaction`、紧贴提交前写入的 `promoted_at`、相关 Temporary 事实和可达来源
+   文件的 Task 元数据，最终状态为 `active`。保留原始来源路径和修订版本。
 4. 暂存来源 Temporary 的 `archive` 生命周期状态。所有暂存文件均验证并持久化后，以原子方式
    发布 `committed.yaml`。这一标记使 Task 在逻辑上变为 active、将来源 Temporary 排除在活动
    路由之外，并使其 Session 绑定失效。

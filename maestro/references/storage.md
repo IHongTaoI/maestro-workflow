@@ -235,19 +235,23 @@ updated_by: old-zhou/session-or-run-id
 revision: 1
 source_temporary: 20260831-登录流程梳理
 promotion_transaction: 20260831T120000Z-p7q8r9
+promoted_at: 2026-08-31T12:00:15Z
 ```
 
 `source_temporary` 仅在 Task 由 Temporary Memory 提升时存在。根据明确执行请求直接创建的 Task
 省略它。提升后的 Task 还记录 `promotion_transaction`，其事务提交标记控制 Task 初始可见性。
 使用 [task.schema.json](schemas/task.schema.json) 校验解析后的 Task 元数据。
 
-`promotion_transaction` 的格式为 `<yyyymmddThhmmssZ>-<suffix>`：前缀是事务打开时写入的 UTC
-时刻，后缀是与该事务对应的稳定区分符。这个提交标记时刻是 Activity 中“Temporary 晋升为 Task”
-的可靠发生时间。只有同时具备 `source_temporary` 和可解析提交标记的 Task 才产生晋升事件。
+`promotion_transaction` 是事务关联、恢复与审计标记，不是事件时间。它在事务打开时写入，因此
+早于晋升生效；晋升真正生效的逻辑可见性边界是原子发布 `committed.yaml`。该标记的形状由产生
+它的事务决定，Activity 不解释其中任何部分。
 
-提交标记无法解析为 UTC 时刻的历史记录保持原样，不产生晋升事件，也绝不用 `created_at`、
-`updated_at` 或文件 mtime 代替真实时间。已提交的提升会把 Task 实体化为 `active`，所以
-`preparing` 状态不投影晋升事件。
+提升事务提交时，必须在同一次生命周期更新中写入一次 `promoted_at`，并在后续移动到
+`tasks/archive/` 时保持不变。`promoted_at` 是 Activity 中“Temporary 晋升为 Task”的可靠发生
+时间，记录晋升生效的登记时刻。为兼容旧项目，它不是 schema 必填字段；旧提升 Task 缺失时仍可
+读取，但不产生晋升事件，也绝不用 `promotion_transaction`、`created_at`、`updated_at` 或文件
+mtime 代替真实时间。已提交的提升会把 Task 实体化为 `active`，所以 `preparing` 状态不投影
+晋升事件。
 
 新 Task 进入 `completed` 或 `archive` 终态时，必须在同一次生命周期更新中写入一次
 `completed_at`，并在后续移动到 `tasks/archive/` 时保持不变。`completed_at` 是 Activity 中

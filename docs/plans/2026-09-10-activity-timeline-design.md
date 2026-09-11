@@ -45,12 +45,13 @@ Long-term Memory 回答“项目现在知道什么”，不会保存完整工作
 
 ## Temporary 晋升事件
 
-提升事务的提交标记本身就是可靠时间来源，因此晋升事件不需要新增字段，也不要求旧项目迁移：
+晋升生效的边界是提升事务原子发布 `committed.yaml`，因此事件时间由提交时写入的显式 `promoted_at`
+承载；`promotion_transaction` 在事务打开时写入，早于晋升生效，只用于关联、恢复与审计：
 
 ```json
 {
   "event_id": "activity-20260831-<stable-hash>",
-  "occurred_at": "2026-08-31T12:00:00Z",
+  "occurred_at": "2026-08-31T12:00:15Z",
   "event_type": "temporary_promoted",
   "title": "优化登录流程",
   "summary": "由 Temporary 20260831-登录流程梳理 晋升为 Task：优化登录流程",
@@ -59,16 +60,15 @@ Long-term Memory 回答“项目现在知道什么”，不会保存完整工作
 }
 ```
 
-- 只有同时具备 `source_temporary` 和 `promotion_transaction` 的 Task 参与派生；
-- `occurred_at` 只取提交标记 `<yyyymmddThhmmssZ>-<suffix>` 前缀里的 UTC 提交时刻，并归一化为
-  UTC；
-- 提交标记缺失或格式未知时保持兼容但不进入时间线；`created_at`、`updated_at`、文件 mtime 和
-  Git 时间都不能替代真实提交时间；
-- 提交标记形状正确却编码了不可能的时刻时，按损坏的规范记录明确失败；
+- 只有同时具备 `source_temporary` 和显式 `promoted_at` 的 Task 参与派生；
+- `occurred_at` 只取 `promoted_at`，并归一化为 UTC；
+- 没有 `promoted_at` 的历史提升 Task 保持兼容但不进入时间线；`promotion_transaction`、
+  `created_at`、`updated_at`、文件 mtime 和 Git 时间都不能替代晋升生效时间；
+- `promoted_at` 存在但 `source_temporary` 缺失或不是合法时间时，按损坏的规范记录明确失败；
 - `preparing` 状态的 Task 尚未提交，不投影晋升事件；
 - 来源 Temporary 目录不是 Activity 来源：它已归档或已丢弃都不影响时间线，规范 ID 记录在事件
   摘要里；
-- `event_id` 由事件类型、Task ID 和提交时刻确定性生成，Task 移入 archive 后保持不变。
+- `event_id` 由事件类型、Task ID 和晋升生效时刻确定性生成，Task 移入 archive 后保持不变。
 
 ## Decision 里程碑事件
 
@@ -117,6 +117,7 @@ activity_catalog.py --project-root <root> search --from 2026-09-01 --to 2026-09-
 7. routine、rejected 和旧格式 Decision 不进入时间线，也不猜测时间；
 8. 历史证据缺失不阻塞重建，但不安全或越界的证据路径仍明确失败；
 9. 月、年和任意日期范围查询有边界且结果数量受限；
-10. 提升后的 Task 使用提交标记里的 UTC 时刻进入时间线，无需额外记录命令；
-11. 提交标记缺失或格式未知时不投影晋升事件，也不猜测时间；
+10. 提升后的 Task 使用提交时写入的显式 `promoted_at` 进入时间线，无需额外记录命令；
+11. 没有 `promoted_at` 的历史提升 Task 不投影晋升事件，也不猜测时间，`promotion_transaction`
+    不被解释为事件时间；
 12. `preparing` 状态的 Task 不投影晋升事件；同一个 Task 的晋升事件与完成事件互不替代。
