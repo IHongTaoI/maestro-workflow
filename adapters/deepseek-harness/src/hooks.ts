@@ -16,11 +16,140 @@
  * @module @maestro-ai/dsh-adapter/hooks
  */
 
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { StateFileSystem } from './storage'
 import type { AutoCheckpointConfig } from './types'
+
+/**
+ * Load bounded Runtime Context summary from `.maestro/memory/index.json`.
+ * If no active Task, Temporary, or follow-up exist, returns null.
+ */
+export async function loadBoundedRuntimeContext(
+  projectRoot: string,
+  fs?: StateFileSystem,
+): Promise<string | null> {
+  try {
+    let content: string | undefined
+    if (fs) {
+      try {
+        const target = await fs.resolve(path.join(projectRoot, '.maestro/memory/index.json'))
+        const stat = await fs.stat(target)
+        if (stat?.type === 'file' || stat?.size !== undefined) {
+          content = await fs.readText(target)
+        }
+      } catch {
+        // Fallback to node:fs
+      }
+    }
+    if (!content) {
+      try {
+        content = await readFile(path.join(projectRoot, '.maestro/memory/index.json'), 'utf8')
+      } catch {
+        return null
+      }
+    }
+    if (!content) return null
+    const index = JSON.parse(content)
+    if (!index || typeof index !== 'object' || !Array.isArray(index.entries)) return null
+
+    const visible = index.entries.filter((e: any) => e && typeof e === 'object' && e.status === 'active')
+    const tasks = visible.filter((e: any) => e.record_type === 'task')
+    const temporaries = visible.filter((e: any) => e.record_type === 'temporary')
+    const followups = Array.isArray(index.pending_followups)
+      ? index.pending_followups.filter((f: any) => f && typeof f === 'object' && f.status !== 'completed' && f.status !== 'cancelled')
+      : []
+
+    if (tasks.length === 0 && temporaries.length === 0 && followups.length === 0) {
+      return null
+    }
+
+    const limit = 3
+    const lines: string[] = [
+      '# Memory Overview (Runtime Context)',
+      '',
+      '当前检测到项目存在活动工作：',
+      '',
+      `## Active Tasks (${tasks.length})`,
+    ]
+    if (tasks.length > 0) {
+      for (const t of tasks.slice(0, limit)) {
+        lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
+      }
+      if (tasks.length > limit) {
+        lines.push(`  *(另外 ${tasks.length - limit} 项活动任务已省略，详情请使用 recent / show)*`)
+      }
+    } else {
+      lines.push('- *(无活动任务)*')
+    }
+    lines.push('')
+
+    lines.push(`## Active Temporary Memory (${temporaries.length})`)
+    if (temporaries.length > 0) {
+      for (const t of temporaries.slice(0, limit)) {
+        lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
+      }
+      if (temporaries.length > limit) {
+        lines.push(`  *(另外 ${temporaries.length - limit} 项活动探索已省略，详情请使用 recent / show)*`)
+      }
+    } else {
+      lines.push('- *(无活动探索)*')
+    }
+    lines.push('')
+
+    if (followups.length > 0) {
+      lines.push(`## Pending Follow-ups (${followups.length})`)
+      for (const f of followups.slice(0, limit)) {
+        lines.push(`- \`${String(f.followup_id || '').slice(0, 80)}\`: ${String(f.title || f.followup_id || '').slice(0, 120)}`)
+      }
+      if (followups.length > limit) {
+        lines.push(`  *(另外 ${followups.length - limit} 项待跟进已省略，详情请使用 show)*`)
+      }
+      lines.push('')
+    }
+
+    const longTermCount = visible.filter((e: any) => e.record_type === 'long-term-entry').length
+    lines.push(`## Long-term Memory (${longTermCount} 项已索引)`)
+    lines.push('')
+    lines.push('> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。')
+
+    return lines.join('\n')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Inject bounded Runtime Context into an agent session on startup if active work exists.
+ * Returns true if context was injected, false otherwise.
+ */
+export async function injectSessionRuntimeContext(
+  payload: SessionStartPayload,
+  projectRoot: string,
+  fs?: StateFileSystem,
+): Promise<boolean> {
+  const runtimeContext = await loadBoundedRuntimeContext(projectRoot, fs)
+  if (!runtimeContext) return false
+  payload.agent.steer(createUserMessage({
+    content: [{
+      type: 'text',
+      text: runtimeContext,
+    }],
+    source: {
+      kind: 'plugin',
+      plugin: 'maestro-runtime-context',
+      form: 'notice',
+      summary: '当前项目存在活动工作，已注入运行时上下文。',
+    },
+  }))
+  return true
+}
+
+
 
 const AUTO_SOURCE = 'maestro-auto-checkpoint'
 const DEFAULT_PRESSURE_THRESHOLD = 0.72

@@ -931,3 +931,49 @@ status: active
   assert.match(err.stderr, /memory catalog error/);
 });
 
+test('overview strictly bounds model runtime context and supports --full and --limit', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+
+  // Add 4 active tasks
+  for (let i = 1; i <= 4; i++) {
+    await writeProjectFile(projectRoot, `.maestro/tasks/task-batch-${i}/task.yaml`, `id: task-batch-${i}
+objective: Task batch item ${i}
+status: active
+created_at: 2026-09-03T10:0${i}:00Z
+updated_at: 2026-09-03T10:0${i}:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+  }
+
+  // 1. Default JSON bounds to 3 entries and reports total count and more_tasks
+  const jsonOutput = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json'])).stdout);
+  assert.equal(jsonOutput.active_task_count, 5); // task-cache + 4 batch tasks
+  assert.equal(jsonOutput.active_tasks.length, 3);
+  assert.equal(jsonOutput.more_tasks, 2);
+  assert.equal(jsonOutput.bounded_limit, 3);
+
+  // 2. Custom --limit 2 bounds to 2 entries
+  const limitJson = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json', '--limit', '2'])).stdout);
+  assert.equal(limitJson.active_tasks.length, 2);
+  assert.equal(limitJson.more_tasks, 3);
+
+  // 3. Limit validation errors out for < 1 or > 5
+  const errLow = await rejectedCommand(runCatalog(projectRoot, ['overview', '--limit', '0']));
+  assert.equal(errLow.code, 2);
+  assert.match(errLow.stderr, /--limit must be between 1 and 5/);
+  const errHigh = await rejectedCommand(runCatalog(projectRoot, ['overview', '--limit', '6']));
+  assert.equal(errHigh.code, 2);
+  assert.match(errHigh.stderr, /--limit must be between 1 and 5/);
+
+  // 4. Default text format includes truncation notice
+  const textOutput = (await runCatalog(projectRoot, ['overview'])).stdout;
+  assert.match(textOutput, /另外 2 项活动任务已省略/);
+
+  // 5. --full flag prints full un-truncated manifest
+  const fullOutput = (await runCatalog(projectRoot, ['overview', '--full'])).stdout;
+  assert.match(fullOutput, /task-batch-1/);
+  assert.match(fullOutput, /task-batch-4/);
+  assert.doesNotMatch(fullOutput, /已省略/);
+});
+

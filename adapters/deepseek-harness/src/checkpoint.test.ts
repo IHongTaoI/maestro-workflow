@@ -319,7 +319,10 @@ test('adapter activates the lifecycle trigger only when auto config and agent se
   await apply(ctx as never, { coreDir: fileURLToPath(new URL('../../../maestro/', import.meta.url)),
     checkpoint: { auto: { pressureThreshold: 0.8, cooldownTurns: 3, timeoutMs: 250 } } })
   for (let index = 0; index < pending.length; index++) await pending[index]
-  assert.deepEqual(listeners, [{ name: 'agent/turn-stopping', options: { global: true } }])
+  assert.deepEqual(listeners, [
+    { name: 'agent/turn-stopping', options: { global: true } },
+    { name: 'agent/session-start', options: { global: true } },
+  ])
 })
 
 test('real Cordis activates checkpoint when fs and tools arrive after the adapter', async () => {

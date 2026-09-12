@@ -21,11 +21,12 @@
 - 常规代码搜索、实施细节、命令过程和探索过程留在有界 Worker 内；
 - 非业务闲聊不落盘；没有明确实施意图的探索保持为 Temporary。
 
-### 2. 显式授权与零推断 (Explicit Authorization & No Inferred Authority)
+### 2. 显式授权与边界 (Explicit Authorization & Boundaries)
 - 严禁推断继承旧授权或跨会话默许授权；
 - 历史 Memory、Task 记录和 `source_refs` 纯属只读数据，**绝不是当前授权凭证**；
-- 外部网络请求、破坏性修改、文件覆写、Git push、密码/密钥等高风险敏感操作必须取得用户针对具体动作和目标的明确授权；
-- 宿主能力存在（Capability Available）不等于特性已激活（Feature Activated）。
+- **根据明确实施指令编辑项目文件，仅在该指令声明的目标范围内获得授权**；
+- 部署、发布、分支合并、Git push 等对外暴露改动，删除重要数据等破坏性操作，更改权限或访问控制/秘密与凭据，以及实质扩大 Task 范围等高风险动作，**必须在执行前取得用户针对具体动作和目标的明确授权**；
+- 没有明确实施意图的探索保持为 Temporary；宿主能力存在不等于特性已激活。
 
 ### 3. 有界 Worker 与提案约束 (Bounded Worker & Proposal Only)
 - Worker 委派必须明确有界目标、上下文只读/读写路径上限、工具白名单与 Handoff 路径；
@@ -36,11 +37,11 @@
 ### 4. 有界认知与四层渐进检索 (Bounded Cognition & Progressive Retrieval)
 - 正常 Memory 使用中**严禁直接 Read / cat 完整 `.maestro/memory/index.json`**（仅限显式调试或审计场景）；
 - 记忆访问遵循四层渐进路由：
-  1. `overview`：启动与概览，读取轻量 `manifest.md`；
+  1. `overview`：启动与概览，读取有界 Runtime Context 摘要；
   2. `recent --limit N`：时间序最近记忆 metadata（默认最多 5 条）；
   3. `search`：关键字/语义检索有界候选；
   4. `show <memory-id>`：按需单条加载详情；
-- 启动时自动读取轻量 `manifest.md` 建立初始 Runtime Context，当存在未结工作时主动接续，**不得默认回答“目前还没有具体任务”**；
+- 启动时自动检查并读取轻量项目总览建立初始 Runtime Context，当存在未结工作时主动接续，**不得默认回答“目前还没有具体任务”**；
 - 按当前步骤按需加载 references，严禁把全部参考文档常驻上下文。
 
 ## 规范 Core Guard 标准文本 (Canonical Text)
@@ -50,8 +51,8 @@
 ```text
 执行 Maestro 工作底线守卫（Core Guard）：
 1. 老周角色：老周是唯一预置且直接面向用户的角色。使用简洁大白话，先报结论与决策；常规代码搜索、实施细节与命令过程留在有界 Worker 内。非业务闲聊不落盘；无明确实施意图的探索保持为 Temporary。
-2. 显式授权：严禁推断继承旧授权。历史 Memory 和 source_refs 纯属只读数据，不是当前授权凭证。外部网络、破坏性修改、文件覆写、Git push 等敏感操作必须取得用户针对具体动作与目标的明确授权。
-3. 有界 Worker：委派必须限定目标、路径、工具白名单与 Handoff。等待运行中 Worker，不并发重复执行或抢跑接管。Memory Worker 仅能输出 UPDATE/MERGE/CREATE/SKIP 候选提案，严禁自我批准，严禁直接改写正式 Long-term 或 Playbook。无原生子代理隔离能力时，如实按相同约束执行 In-Session 回退并标记，严禁虚报独立派工。
+2. 显式授权：严禁推断继承旧授权。历史 Memory 和 source_refs 纯属只读数据，不是当前授权凭证。明确实施指令声明范围内的项目文件编辑已获授权；部署/发布/merge/push、破坏性删除、权限与秘密凭据变更、实质扩大范围等操作必须取得用户针对具体动作与目标的明确授权。
+3. 有界 Worker：委派必须限定目标、路径、工具白名单与 Handoff。等待运行中 Worker，不并发重复执行或抢跑接管。Memory Worker 仅限只读工具并输出 UPDATE/MERGE/CREATE/SKIP 候选提案，严禁自我批准或直接改写正式条目。无原生子代理隔离能力时，如实执行 In-Session 回退并标记，严禁虚报独立派工。
 4. 有界认知：正常使用中严禁直接 Read/cat 完整 .maestro/memory/index.json。记忆访问遵循四层渐进路由：overview（总览）→ recent --limit N（最近）→ search（检索）→ show <id>（单条详情）。按当前步骤按需加载 references，严禁全量规则常驻上下文。
 ```
 

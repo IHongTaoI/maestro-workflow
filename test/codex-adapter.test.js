@@ -247,3 +247,43 @@ test('local installer preserves invalid marketplace contents and refuses an occu
   await assert.rejects(installLocal({ homeDir }), { code: 'EEXIST' });
   assert.equal(await readFile(path.join(homeDir, '.agents/plugins/.maestro-codex-install.lock'), 'utf8'), 'another installer');
 });
+
+test('Codex injects bounded live Runtime Context when active Task, Temporary, or follow-up exist', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  const indexPayload = {
+    schema_version: 1,
+    entries: [
+      { memory_id: 'task-cache', title: 'Implement caching layer', record_type: 'task', status: 'active', path: '.maestro/tasks/task-cache/task.yaml' },
+      { memory_id: 'task-auth', title: 'OAuth integration', record_type: 'task', status: 'active', path: '.maestro/tasks/task-auth/task.yaml' },
+      { memory_id: 'task-ci', title: 'Setup CI pipelines', record_type: 'task', status: 'active', path: '.maestro/tasks/task-ci/task.yaml' },
+      { memory_id: 'task-db', title: 'DB migration', record_type: 'task', status: 'active', path: '.maestro/tasks/task-db/task.yaml' },
+      { memory_id: 'temp-investigate', title: 'Investigate leak', record_type: 'temporary', status: 'active', path: '.maestro/memory/temporary/active/temp-investigate/meta.yaml' },
+      { memory_id: 'lt-api-boundary', title: 'API boundary rules', record_type: 'long-term-entry', status: 'active', path: '.maestro/memory/long-term/entries/lt-api-boundary.md' },
+    ],
+    pending_followups: [
+      { followup_id: 'followup-review', title: 'Review memory invariants', status: 'pending' },
+    ],
+  };
+
+  await put(root, '.maestro/memory/index.json', JSON.stringify(indexPayload));
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  const context = result.hookSpecificOutput.additionalContext;
+
+  // Asserts bounded runtime context injection
+  assert.match(context, /# Memory Overview \(Runtime Context\)/);
+  assert.match(context, /当前检测到项目存在活动工作/);
+  assert.match(context, /## Active Tasks \(4\)/);
+  assert.match(context, /task-cache/);
+  assert.match(context, /task-auth/);
+  assert.match(context, /task-ci/);
+  assert.match(context, /另外 1 项活动任务已省略/);
+  assert.match(context, /## Active Temporary Memory \(1\)/);
+  assert.match(context, /temp-investigate/);
+  assert.match(context, /## Pending Follow-ups \(1\)/);
+  assert.match(context, /followup-review/);
+  assert.match(context, /## Long-term Memory \(1 项已索引\)/);
+});
+

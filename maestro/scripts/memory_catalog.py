@@ -1097,9 +1097,11 @@ def catalog_overview_summary(
     project_root: Path,
     index: dict[str, Any],
     refreshed: bool,
+    *,
+    limit: int = 3,
 ) -> dict[str, Any]:
     visible = [entry for entry in index["entries"] if entry["status"] == "active"]
-    temporaries = [
+    all_temporaries = [
         {
             "memory_id": entry["memory_id"],
             "title": entry["title"],
@@ -1110,7 +1112,7 @@ def catalog_overview_summary(
         for entry in visible
         if entry["record_type"] == "temporary"
     ]
-    tasks = [
+    all_tasks = [
         {
             "memory_id": entry["memory_id"],
             "title": entry["title"],
@@ -1120,9 +1122,14 @@ def catalog_overview_summary(
         for entry in visible
         if entry["record_type"] == "task"
     ]
-    long_term_count = sum(entry["record_type"] == "long-term-entry" for entry in visible)
+    long_term_entries = [entry for entry in visible if entry["record_type"] == "long-term-entry"]
+    long_term_count = len(long_term_entries)
+    long_term_samples = [
+        {"memory_id": entry["memory_id"], "title": entry["title"]}
+        for entry in long_term_entries[:limit]
+    ]
     worker_state_count = sum(entry["record_type"] == "worker-state" for entry in visible)
-    followups = [
+    all_followups = [
         {
             "followup_id": item["followup_id"],
             "title": item["title"],
@@ -1132,19 +1139,87 @@ def catalog_overview_summary(
         }
         for item in index.get("pending_followups", [])
     ]
-    has_active_work = bool(temporaries or tasks or followups)
+    has_active_work = bool(all_temporaries or all_tasks or all_followups)
+
+    bounded_temporaries = all_temporaries[:limit]
+    bounded_tasks = all_tasks[:limit]
+    bounded_followups = all_followups[:limit]
+
     return {
         "catalog_refreshed": refreshed,
         "has_active_work": has_active_work,
-        "active_temporary_count": len(temporaries),
-        "active_temporaries": temporaries,
-        "active_task_count": len(tasks),
-        "active_tasks": tasks,
+        "active_temporary_count": len(all_temporaries),
+        "active_temporaries": bounded_temporaries,
+        "more_temporaries": max(0, len(all_temporaries) - limit),
+        "active_task_count": len(all_tasks),
+        "active_tasks": bounded_tasks,
+        "more_tasks": max(0, len(all_tasks) - limit),
         "long_term_count": long_term_count,
+        "long_term_samples": long_term_samples,
+        "more_long_term": max(0, long_term_count - limit),
         "worker_state_count": worker_state_count,
-        "pending_followup_count": len(followups),
-        "pending_followups": followups,
+        "pending_followup_count": len(all_followups),
+        "pending_followups": bounded_followups,
+        "more_followups": max(0, len(all_followups) - limit),
+        "bounded_limit": limit,
     }
+
+
+def bounded_runtime_context_text(summary: dict[str, Any]) -> str:
+    lines = ["# Memory Overview (Runtime Context)", ""]
+    if summary["has_active_work"]:
+        lines.append("当前检测到项目存在活动工作：")
+    else:
+        lines.append("当前项目暂无活动任务或临时探索，系统处于就绪状态。")
+    lines.append("")
+
+    t_count = summary["active_task_count"]
+    lines.append(f"## Active Tasks ({t_count})")
+    if summary["active_tasks"]:
+        for t in summary["active_tasks"]:
+            lines.append(f"- `{t['memory_id']}`: {t['title']}")
+        if summary.get("more_tasks", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_tasks']} 项活动任务已省略，详情请使用 recent / show)*")
+    else:
+        lines.append("- *(无活动任务)*")
+    lines.append("")
+
+    temp_count = summary["active_temporary_count"]
+    lines.append(f"## Active Temporary Memory ({temp_count})")
+    if summary["active_temporaries"]:
+        for t in summary["active_temporaries"]:
+            lines.append(f"- `{t['memory_id']}`: {t['title']}")
+        if summary.get("more_temporaries", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_temporaries']} 项活动探索已省略，详情请使用 recent / show)*")
+    else:
+        lines.append("- *(无活动探索)*")
+    lines.append("")
+
+    f_count = summary["pending_followup_count"]
+    if f_count > 0:
+        lines.append(f"## Pending Follow-ups ({f_count})")
+        for f in summary["pending_followups"]:
+            lines.append(f"- `{f['followup_id']}`: {f['title']}")
+        if summary.get("more_followups", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_followups']} 项待跟进已省略，详情请使用 show)*")
+        lines.append("")
+
+    lt_count = summary["long_term_count"]
+    lines.append(f"## Long-term Memory ({lt_count} 项已索引)")
+    if summary.get("long_term_samples"):
+        for lt in summary["long_term_samples"]:
+            lines.append(f"- `{lt['memory_id']}`: {lt['title']}")
+        if summary.get("more_long_term", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_long_term']} 条长期记忆已省略，详情请使用 recent / search / show)*")
+    else:
+        lines.append("- *(暂无已索引长期记忆)*")
+    lines.append("")
+
+    w_count = summary["worker_state_count"]
+    lines.append(f"## Worker States: {w_count} current Worker state(s)")
+    lines.append("")
+    lines.append("> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。")
+    return "\n".join(lines).strip()
 
 
 def detail_for_entry(project_root: Path, entry: dict[str, Any]) -> dict[str, Any]:
@@ -1439,6 +1514,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
     overview = subparsers.add_parser("overview", parents=[common])
     overview.add_argument("--format", choices=("text", "json"), default="text")
+    overview.add_argument("--limit", type=int, default=3, help="Max entries per section for bounded runtime context (1-5, default 3)")
+    overview.add_argument("--full", action="store_true", help="Print full un-truncated manifest.md instead of bounded summary")
     overview.add_argument("--no-refresh", action="store_true")
 
     recent = subparsers.add_parser("recent", parents=[common])
@@ -1498,15 +1575,20 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh, now=reference_time)
         if args.command == "overview":
+            if args.limit < 1 or args.limit > 5:
+                raise CatalogError("--limit must be between 1 and 5")
+            summary = catalog_overview_summary(project_root, index, refreshed, limit=args.limit)
             if args.format == "json":
-                summary = catalog_overview_summary(project_root, index, refreshed)
                 print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
                 return 0
-            manifest_path = project_root / MANIFEST_PATH
-            if manifest_path.is_file():
-                print(manifest_path.read_text(encoding="utf-8").strip())
-            else:
-                print(manifest_text(index).strip())
+            if getattr(args, "full", False):
+                manifest_path = project_root / MANIFEST_PATH
+                if manifest_path.is_file():
+                    print(manifest_path.read_text(encoding="utf-8").strip())
+                else:
+                    print(manifest_text(index).strip())
+                return 0
+            print(bounded_runtime_context_text(summary))
             return 0
         if args.command == "recent":
             if args.limit < 1 or args.limit > 5:

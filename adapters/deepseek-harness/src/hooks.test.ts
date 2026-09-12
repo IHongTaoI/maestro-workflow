@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { AutoCheckpointCoordinator, registerLifecycleHooks } from './hooks'
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import {
+  AutoCheckpointCoordinator,
+  registerLifecycleHooks,
+  loadBoundedRuntimeContext,
+  injectSessionRuntimeContext,
+} from './hooks'
 import type { LifecycleHandlers, TurnStopPayload } from './hooks'
 
 interface ListenerRecord {
@@ -205,3 +213,79 @@ test('automatic checkpoint rejects unsafe trigger configuration', () => {
   assert.equal(new AutoCheckpointCoordinator().evaluateAndTrigger({ agent: f.agent, turn: 1,
     signal: controller.signal }), 'cancelled')
 })
+
+test('loadBoundedRuntimeContext returns null when no active work exists', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-empty-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  // No index file
+  assert.equal(await loadBoundedRuntimeContext(tmp), null)
+
+  // Empty entries
+  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
+  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
+    schema_version: 1,
+    entries: [],
+    pending_followups: [],
+  }))
+  assert.equal(await loadBoundedRuntimeContext(tmp), null)
+})
+
+test('loadBoundedRuntimeContext returns bounded runtime context when active work exists', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-active-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
+  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
+    schema_version: 1,
+    entries: [
+      { memory_id: 'task-1', title: 'Task 1', record_type: 'task', status: 'active' },
+      { memory_id: 'task-2', title: 'Task 2', record_type: 'task', status: 'active' },
+      { memory_id: 'task-3', title: 'Task 3', record_type: 'task', status: 'active' },
+      { memory_id: 'task-4', title: 'Task 4', record_type: 'task', status: 'active' },
+      { memory_id: 'temp-1', title: 'Temporary 1', record_type: 'temporary', status: 'active' },
+      { memory_id: 'lt-1', title: 'Long-term 1', record_type: 'long-term-entry', status: 'active' },
+    ],
+    pending_followups: [
+      { followup_id: 'f-1', title: 'Follow-up 1', status: 'pending' },
+    ],
+  }))
+
+  const result = await loadBoundedRuntimeContext(tmp)
+  assert.ok(result)
+  assert.match(result, /# Memory Overview \(Runtime Context\)/)
+  assert.match(result, /## Active Tasks \(4\)/)
+  assert.match(result, /task-1/)
+  assert.match(result, /task-3/)
+  assert.match(result, /另外 1 项活动任务已省略/)
+  assert.match(result, /## Active Temporary Memory \(1\)/)
+  assert.match(result, /temp-1/)
+  assert.match(result, /## Pending Follow-ups \(1\)/)
+  assert.match(result, /f-1/)
+  assert.match(result, /## Long-term Memory \(1 项已索引\)/)
+})
+
+test('injectSessionRuntimeContext steers agent with bounded runtime context on session start', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-steer-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
+  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
+    schema_version: 1,
+    entries: [
+      { memory_id: 'task-active', title: 'Work in progress', record_type: 'task', status: 'active' },
+    ],
+    pending_followups: [],
+  }))
+
+  const f = autoFixture()
+  const injected = await injectSessionRuntimeContext({ agent: f.agent }, tmp)
+  assert.equal(injected, true)
+  assert.equal(f.steered.length, 1)
+  const steeredMsg = f.steered[0]
+  assert.equal(steeredMsg.source?.kind, 'plugin')
+  assert.equal(steeredMsg.source?.plugin, 'maestro-runtime-context')
+  assert.match(steeredMsg.content[0].text, /task-active/)
+  assert.match(steeredMsg.content[0].text, /Work in progress/)
+})
+

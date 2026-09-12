@@ -33,7 +33,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { ToolRuntime } from '@deepseek-ai/dsh-tools'
 import { checkpointTool } from './checkpoint-tool'
-import { AutoCheckpointCoordinator, registerLifecycleHooks } from './hooks'
+import { AutoCheckpointCoordinator, registerLifecycleHooks, injectSessionRuntimeContext } from './hooks'
 import { assertSkills, detectCapabilities, planActivation } from './detect'
 import { loadCoreSkill, registerCoreSkill, resolveCoreDir } from './skill'
 import { MaestroStateStore } from './storage'
@@ -106,31 +106,6 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
         const disposeCheckpoint = tools.register(checkpointTool(fs, validator, checkpoint))
         ctx.effect(() => disposeCheckpoint, 'maestro-adapter: checkpoint tool')
         ctx.logger.info('maestro-adapter: checkpoint tool registered (snapshot mode; live durability not verified)')
-        if (autoCheckpoint !== undefined) {
-          const coordinator = new AutoCheckpointCoordinator(autoCheckpoint)
-          const pressureUnavailable = new WeakSet<object>()
-          ctx.inject(['agents'], (ctx) => {
-            registerLifecycleHooks(ctx, {
-              onTurnStopping: (payload) => {
-                const decision = coordinator.evaluateAndTrigger(payload)
-                if (decision === 'triggered') {
-                  ctx.logger.info('maestro-adapter: automatic checkpoint step requested by context pressure')
-                } else if (decision === 'pressure-unknown' && !pressureUnavailable.has(payload.agent)) {
-                  pressureUnavailable.add(payload.agent)
-                  ctx.logger.warn(
-                    'maestro-adapter: automatic checkpoint pressure trigger unavailable for this session; ' +
-                    'DSH projection and provider prompt-usage fallback were both unavailable',
-                  )
-                }
-              },
-            }, { timeoutMs: autoCheckpoint.timeoutMs })
-            ctx.logger.info(
-              `maestro-adapter: automatic checkpoint pressure trigger activated ` +
-              `(threshold=${coordinator.threshold}, cooldownTurns=${coordinator.cooldownTurns}; ` +
-              'turn-stopping fallback, not pre-compaction)',
-            )
-          })
-        }
       })
     } else if (checkpoint) {
       ctx.logger.warn('maestro-adapter: checkpoint not activated; tools or schemas unavailable')
@@ -139,8 +114,42 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
   if (checkpoint && !activation.storage) {
     ctx.logger.info('maestro-adapter: checkpoint waiting for filesystem service')
   }
-  if (autoCheckpoint !== undefined && !capabilities.agents) {
-    ctx.logger.info('maestro-adapter: automatic checkpoint trigger waiting for agent service')
+
+  const projectRoot = (checkpoint && checkpoint.projectRoot) ? checkpoint.projectRoot : process.cwd()
+
+  // Lifecycle hooks: agent registry provides session-start Runtime Context and optional turn-stopping checkpoint fallback
+  ctx.inject(['agents'], (ctx) => {
+    const coordinator = autoCheckpoint !== undefined ? new AutoCheckpointCoordinator(autoCheckpoint) : undefined
+    const pressureUnavailable = new WeakSet<object>()
+    registerLifecycleHooks(ctx, {
+      onSessionStart: async (payload) => {
+        const fs = ctx.get('fs') as FileSystem | undefined
+        const injected = await injectSessionRuntimeContext(payload, projectRoot, fs as never)
+        if (injected) {
+          ctx.logger.info('maestro-adapter: injected bounded runtime context into session')
+        }
+      },
+      onTurnStopping: coordinator ? (payload) => {
+        const decision = coordinator.evaluateAndTrigger(payload)
+        if (decision === 'triggered') {
+          ctx.logger.info('maestro-adapter: automatic checkpoint step requested by context pressure')
+        } else if (decision === 'pressure-unknown' && !pressureUnavailable.has(payload.agent)) {
+          pressureUnavailable.add(payload.agent)
+          ctx.logger.warn(
+            'maestro-adapter: automatic checkpoint pressure trigger unavailable for this session; ' +
+            'DSH projection and provider prompt-usage fallback were both unavailable',
+          )
+        }
+      } : undefined,
+    }, { timeoutMs: autoCheckpoint?.timeoutMs })
+    ctx.logger.info(
+      'maestro-adapter: lifecycle hooks registered (session-start runtime context; ' +
+      (coordinator ? `turn-stopping fallback threshold=${coordinator.threshold})` : 'turn-stopping disabled)'),
+    )
+  })
+
+  if (!capabilities.agents) {
+    ctx.logger.info('maestro-adapter: lifecycle hooks waiting for agent service')
   }
 
   ctx.logger.info(

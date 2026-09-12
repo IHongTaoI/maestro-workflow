@@ -30,9 +30,10 @@ test('Core Guard markdown file defines the 4 invariant boundaries and satisfies 
   assert.match(canonicalPrompt, /大白话/);
   assert.match(canonicalPrompt, /先报结论|结果和决策/);
 
-  // 2. Authorization (零推断、只读数据、明确授权)
+  // 2. Authorization (零推断、只读数据、明确实施指令授权、高危动作须明确授权)
   assert.match(canonicalPrompt, /严禁推断继承旧授权/);
   assert.match(canonicalPrompt, /只读数据/);
+  assert.match(canonicalPrompt, /明确实施指令.*项目文件编辑已获授权/);
   assert.match(canonicalPrompt, /明确授权/);
 
   // 3. Bounded Worker & Proposal only (有界委派、候选提案、严禁自我批准、In-Session 回退)
@@ -56,9 +57,10 @@ test('builtin instructions registry includes policy:core-guard and references gu
 
   const safetyEntry = instructions.instructions.find(i => i.ref === 'policy:safety-boundary');
   assert.ok(safetyEntry, 'policy:safety-boundary must be defined in builtin registry');
-  assert.ok(
-    safetyEntry.source_paths.includes('references/guard.md'),
-    'policy:safety-boundary must include references/guard.md',
+  assert.deepEqual(
+    safetyEntry.source_paths,
+    ['references/workers.md', 'references/coordination.md'],
+    'policy:safety-boundary must retain canonical source_paths',
   );
 
   for (const item of instructions.instructions) {
