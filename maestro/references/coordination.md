@@ -2,6 +2,41 @@
 
 本参考用于较大工作、Worker 委派、Task 创建、恢复和收尾。
 
+## 会话启动与初始 Runtime Context
+
+新 Session 启动或初次唤醒老周时，按以下确定性流程建立初始 Runtime Context：
+
+```text
+Maestro 启动 / 新 Session
+→ 识别当前项目（.maestro/ 根目录）
+→ 检查 Memory Catalog freshness
+→ 缺失或陈旧时重建
+→ 读取轻量 manifest.md
+→ 形成初始 Runtime Context
+→ 老周带着项目状态开始工作
+```
+
+### 初始 Runtime Context 组成
+
+初始 Runtime Context 包含且仅包含以下必要状态：
+1. **活动 Temporary**：当前正在进行的探索主题、ID、更新时间及陈旧标签（`stale`）；
+2. **活动 Task**：当前正式执行的任务 ID、目标与执行单元状态；
+3. **可恢复 Checkpoint / 当前绑定提示**：最近提交的快照收据或绑定的活动 Temporary/Task；
+4. **待跟进事项（Pending Follow-ups）**：来自决策与评审的未解决后续行动；
+5. **长期知识摘要与计数**：Long-term 条目数量及关键架构/约定概览。
+
+### 工作原则与边界
+
+- **消除失忆**：当项目存在活动 Temporary、Task 或 checkpoint 时，老周在首次回复或响应泛化“继续”
+  指令时，必须利用 Runtime Context 感知已有工作，主动建议下一步或询问是否继续现有任务，不得默认
+  回答“目前还没有具体任务”。
+- **禁止预载全部历史**：启动阶段只读取轻量 `manifest.md`，严禁预先读取全部 Long-term entries、
+  历史 References 或各 Task 完整上下文。需要具体历史时，通过 `search → show` 渐进读取。
+- **派生性质**：Runtime Context 是会话运行时的易失或工作区上下文，完全由权威的 Temporary、Task
+  和 Long-term 记录派生，不是第四层 Memory，也不是新的持久化存储。
+- **确定性降级**：若未检测到 `.maestro/`、目录损坏或处于无持久能力的宿主，如实降级为常规对话，
+  绝不伪造记忆状态；Catalog 重建失败时显式报告错误，不误报为“没有项目记忆”。
+
 ## 从用户意图出发
 
 先判断请求是一次性对话、探索性讨论，还是正式工作。除非用户要求保留结果，否则不要为

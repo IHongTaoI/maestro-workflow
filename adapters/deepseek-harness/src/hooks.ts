@@ -16,11 +16,428 @@
  * @module @maestro-ai/dsh-adapter/hooks
  */
 
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { existsSync, readdirSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { StateFileSystem } from './storage'
 import type { AutoCheckpointConfig } from './types'
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+
+interface RecoverableCheckpointInfo {
+  status?: 'committed' | 'pending'
+  scope: string
+  binding: string
+  revision?: number
+  proposed_revision?: number
+  request_id: string
+}
+
+async function findRecoverableCheckpointDsh(
+  projectRoot: string,
+): Promise<RecoverableCheckpointInfo | null> {
+  const candidates: Array<RecoverableCheckpointInfo & { mtime: number }> = []
+
+  const scanTargetCheckpoints = async (
+    scope: string,
+    binding: string,
+    chkDir: string,
+    receipt: { request_id: string; revision: number } | null,
+    receiptMtime: number,
+  ) => {
+    const committedMap = new Map<string, { revision: number; mtime: number }>()
+    if (receipt) {
+      committedMap.set(receipt.request_id, { revision: receipt.revision, mtime: receiptMtime })
+    }
+    try {
+      const files = await readdir(chkDir)
+      for (const f of files) {
+        if (f.endsWith('.committed.json')) {
+          const reqId = f.slice(0, -'.committed.json'.length)
+          try {
+            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'))
+            const st = await stat(path.join(chkDir, f))
+            const rev = data && typeof data === 'object' && data.revision !== undefined ? Number(data.revision) : 1
+            committedMap.set(reqId, { revision: rev, mtime: st.mtimeMs })
+          } catch {}
+        }
+      }
+      for (const f of files) {
+        if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue
+        const reqId = f.slice(0, -'.json'.length)
+        try {
+          const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'))
+          if (data && typeof data === 'object' && data.request_id) {
+            const st = await stat(path.join(chkDir, f))
+            const targetScope = data.kind || scope
+            const targetBinding = data.target_id || binding
+            if (committedMap.has(reqId)) {
+              const comm = committedMap.get(reqId)!
+              candidates.push({
+                status: 'committed',
+                scope: targetScope,
+                binding: targetBinding,
+                revision: comm.revision,
+                request_id: reqId,
+                mtime: Math.max(st.mtimeMs, comm.mtime),
+              })
+            } else {
+              const propRev = Number(data.base_revision || 0) + 1
+              candidates.push({
+                status: 'pending',
+                scope: targetScope,
+                binding: targetBinding,
+                proposed_revision: propRev,
+                revision: propRev,
+                request_id: reqId,
+                mtime: st.mtimeMs,
+              })
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+
+    for (const [reqId, comm] of committedMap.entries()) {
+      if (!candidates.some(c => c.request_id === reqId)) {
+        candidates.push({
+          status: 'committed',
+          scope,
+          binding,
+          revision: comm.revision,
+          request_id: reqId,
+          mtime: comm.mtime,
+        })
+      }
+    }
+  }
+
+  // 1. Task checkpoints: .maestro/tasks/*/references/checkpoints/*.json and progress.md
+  try {
+    const tasksDir = path.join(projectRoot, '.maestro/tasks')
+    const taskEntries = await readdir(tasksDir)
+    for (const t of taskEntries) {
+      if (t === 'archive' || t.startsWith('.')) continue
+      const tDir = path.join(tasksDir, t)
+      let receipt: { request_id: string; revision: number } | null = null
+      let receiptMtime = 0
+      try {
+        const text = await readFile(path.join(tDir, 'progress.md'), 'utf8')
+        const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text)
+        const revMatch = /revision:\s*(\d+)/.exec(text)
+        if (reqMatch && revMatch) {
+          const st = await stat(path.join(tDir, 'progress.md'))
+          receipt = { request_id: reqMatch[1], revision: Number(revMatch[1]) }
+          receiptMtime = st.mtimeMs
+        }
+      } catch {}
+      await scanTargetCheckpoints('task', t, path.join(tDir, 'references/checkpoints'), receipt, receiptMtime)
+    }
+  } catch {}
+
+  // 2. Temporary checkpoints: .maestro/memory/temporary/active/*/references/checkpoints/*.json and current.md
+  try {
+    const tempDir = path.join(projectRoot, '.maestro/memory/temporary/active')
+    const tempEntries = await readdir(tempDir)
+    for (const t of tempEntries) {
+      if (t.startsWith('.')) continue
+      const tDir = path.join(tempDir, t)
+      let receipt: { request_id: string; revision: number } | null = null
+      let receiptMtime = 0
+      try {
+        const text = await readFile(path.join(tDir, 'current.md'), 'utf8')
+        const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text)
+        const revMatch = /revision:\s*(\d+)/.exec(text)
+        if (reqMatch && revMatch) {
+          const st = await stat(path.join(tDir, 'current.md'))
+          receipt = { request_id: reqMatch[1], revision: Number(revMatch[1]) }
+          receiptMtime = st.mtimeMs
+        }
+      } catch {}
+      await scanTargetCheckpoints('temporary', t, path.join(tDir, 'references/checkpoints'), receipt, receiptMtime)
+    }
+  } catch {}
+
+  // 3. Project checkpoints: .maestro/checkpoints/*.json
+  await scanTargetCheckpoints('session', 'session', path.join(projectRoot, '.maestro/checkpoints'), null, 0)
+
+  if (candidates.length === 0) return null
+
+  // Deduplicate and prioritize committed over pending
+  const seenReq = new Set<string>()
+  const deduped: Array<RecoverableCheckpointInfo & { mtime: number }> = []
+  candidates.sort((a, b) => {
+    const statusA = a.status === 'committed' ? 0 : 1
+    const statusB = b.status === 'committed' ? 0 : 1
+    if (statusA !== statusB) return statusA - statusB
+    return b.mtime - a.mtime || (b.revision || 0) - (a.revision || 0) || a.binding.localeCompare(b.binding) || a.request_id.localeCompare(b.request_id)
+  })
+  for (const c of candidates) {
+    if (!seenReq.has(c.request_id)) {
+      seenReq.add(c.request_id)
+      deduped.push(c)
+    }
+  }
+  return deduped.length > 0 ? deduped[0] : null
+}
+
+function formatBoundedRuntimeContextDsh(options: {
+  tasks?: any[]
+  temporaries?: any[]
+  followups?: any[]
+  longTermCount?: number
+  checkpoint?: RecoverableCheckpointInfo | null
+  degradedWarning?: string | null
+  limit?: number
+}): string {
+  const { tasks = [], temporaries = [], followups = [], longTermCount = 0, checkpoint = null, degradedWarning = null, limit = 3 } = options
+  const lines: string[] = [
+    '# Memory Overview (Runtime Context)',
+    '',
+    '当前检测到项目存在活动工作：',
+    '',
+  ]
+
+  if (degradedWarning) {
+    lines.push(`> 警告：${degradedWarning}`, '')
+  }
+
+  if (checkpoint) {
+    const status = checkpoint.status || 'committed'
+    lines.push(
+      '## Recoverable Checkpoint',
+      'Recoverable checkpoint: yes',
+      `status: ${status}`,
+      `scope: ${checkpoint.scope}`,
+      `binding: ${checkpoint.binding}`,
+      status === 'pending'
+        ? `proposed_revision: ${checkpoint.proposed_revision || checkpoint.revision}`
+        : `revision: ${checkpoint.revision}`,
+      '',
+    )
+  }
+
+  lines.push(`## Active Tasks (${tasks.length})`)
+  if (tasks.length > 0) {
+    for (const t of tasks.slice(0, limit)) {
+      lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
+    }
+    if (tasks.length > limit) {
+      lines.push(`  *(另外 ${tasks.length - limit} 项活动任务已省略，详情请使用 recent / show)*`)
+    }
+  } else {
+    lines.push('- *(无活动任务)*')
+  }
+  lines.push('')
+
+  lines.push(`## Active Temporary Memory (${temporaries.length})`)
+  if (temporaries.length > 0) {
+    for (const t of temporaries.slice(0, limit)) {
+      lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
+    }
+    if (temporaries.length > limit) {
+      lines.push(`  *(另外 ${temporaries.length - limit} 项活动探索已省略，详情请使用 recent / show)*`)
+    }
+  } else {
+    lines.push('- *(无活动探索)*')
+  }
+  lines.push('')
+
+  if (followups.length > 0) {
+    lines.push(`## Pending Follow-ups (${followups.length})`)
+    for (const f of followups.slice(0, limit)) {
+      lines.push(`- \`${String(f.followup_id || '').slice(0, 80)}\`: ${String(f.title || f.followup_id || '').slice(0, 120)}`)
+    }
+    if (followups.length > limit) {
+      lines.push(`  *(另外 ${followups.length - limit} 项待跟进已省略，详情请使用 show)*`)
+    }
+    lines.push('')
+  }
+
+  lines.push(`## Long-term Memory (${longTermCount} 项已索引)`)
+  lines.push('')
+  lines.push('> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。')
+
+  return lines.join('\n')
+}
+
+/**
+ * Detect whether projectRoot has any authoritative source files for memory/tasks/checkpoints.
+ * Derived files like .maestro/memory/index.json or manifest.md are NOT authoritative sources.
+ */
+export function hasAuthoritativeSourcesDsh(projectRoot: string): boolean {
+  try {
+    const tasksDir = path.join(projectRoot, '.maestro/tasks')
+    if (existsSync(tasksDir)) {
+      const taskEntries = readdirSync(tasksDir)
+      for (const t of taskEntries) {
+        if (t === 'archive' || t.startsWith('.')) continue
+        const tDir = path.join(tasksDir, t)
+        if (existsSync(path.join(tDir, 'task.yaml')) || existsSync(path.join(tDir, 'progress.md'))) return true
+        const chkDir = path.join(tDir, 'references/checkpoints')
+        if (existsSync(chkDir)) {
+          const chkFiles = readdirSync(chkDir)
+          if (chkFiles.some(f => f.endsWith('.json') && !f.includes('.failed-'))) return true
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const tempDir = path.join(projectRoot, '.maestro/memory/temporary/active')
+    if (existsSync(tempDir)) {
+      const tempEntries = readdirSync(tempDir)
+      for (const t of tempEntries) {
+        if (t.startsWith('.')) continue
+        const tDir = path.join(tempDir, t)
+        if (existsSync(path.join(tDir, 'meta.yaml')) || existsSync(path.join(tDir, 'current.md'))) return true
+        const chkDir = path.join(tDir, 'references/checkpoints')
+        if (existsSync(chkDir)) {
+          const chkFiles = readdirSync(chkDir)
+          if (chkFiles.some(f => f.endsWith('.json') && !f.includes('.failed-'))) return true
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const ltDir = path.join(projectRoot, '.maestro/memory/long-term/entries')
+    if (existsSync(ltDir)) {
+      const ltEntries = readdirSync(ltDir)
+      if (ltEntries.some(e => e.endsWith('.md'))) return true
+    }
+  } catch {}
+
+  try {
+    if (existsSync(path.join(projectRoot, '.maestro/memory/long-term/current.md'))) return true
+    if (existsSync(path.join(projectRoot, '.maestro/memory/legacy/memory.md'))) return true
+  } catch {}
+
+  try {
+    const fuDir = path.join(projectRoot, '.maestro/memory/followups/pending')
+    if (existsSync(fuDir)) {
+      const fuEntries = readdirSync(fuDir)
+      if (fuEntries.some(e => e.endsWith('.yaml') || e.endsWith('.yml'))) return true
+    }
+  } catch {}
+
+  try {
+    const chkDir = path.join(projectRoot, '.maestro/checkpoints')
+    if (existsSync(chkDir)) {
+      const chkEntries = readdirSync(chkDir)
+      if (chkEntries.some(e => e.endsWith('.json') && !e.includes('.failed-'))) return true
+    }
+  } catch {}
+
+  return false
+}
+
+/**
+ * Load bounded Runtime Context summary from `.maestro/memory/index.json`.
+ * If no active Task, Temporary, follow-up, or recoverable checkpoint exist, returns null.
+ */
+export async function loadBoundedRuntimeContext(
+  projectRoot: string,
+  fs?: StateFileSystem,
+): Promise<string | null> {
+  try {
+    if (!hasAuthoritativeSourcesDsh(projectRoot)) {
+      return null
+    }
+
+    // Always attempt Python memory_catalog.py overview --limit 3 on physical projectRoot, even if fs is provided
+    if (path.isAbsolute(projectRoot)) {
+      const candidateScripts = [
+        path.resolve(currentDir, 'core/scripts/memory_catalog.py'),
+        path.resolve(currentDir, '../lib/core/scripts/memory_catalog.py'),
+        path.resolve(currentDir, '../../../maestro/scripts/memory_catalog.py'),
+        path.join(projectRoot, 'maestro/scripts/memory_catalog.py'),
+        path.join(projectRoot, '.agents/skills/maestro/scripts/memory_catalog.py'),
+        path.join(projectRoot, '.maestro/scripts/memory_catalog.py'),
+      ]
+      let scriptPath: string | null = null
+      for (const p of candidateScripts) {
+        if (existsSync(p)) {
+          scriptPath = p
+          break
+        }
+      }
+
+      if (scriptPath && process.env.MAESTRO_FORCE_PYTHON_FAIL !== '1') {
+        try {
+          const pyCandidates = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python']
+          for (const python of pyCandidates) {
+            try {
+              const res = spawnSync(python, [scriptPath, '--project-root', projectRoot, 'overview', '--limit', '3'], {
+                encoding: 'utf8',
+                timeout: 5000,
+                windowsHide: true,
+                env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+              })
+              if (res.status === 0 && typeof res.stdout === 'string') {
+                const out = res.stdout.trim()
+                if (out.includes('当前检测到项目存在活动工作：')) {
+                  return out
+                }
+                if (out.includes('当前项目暂无活动任务或临时探索')) {
+                  return null
+                }
+              }
+            } catch {
+              // Try next candidate
+            }
+          }
+        } catch {
+          // Fall through to degraded fallback
+        }
+      }
+    }
+
+    // 2. Degradation fallback: refresh failed or freshness unknown
+    // Do NOT consume unverified or stale index.json! Output degraded warning while preserving authoritative checkpoint.
+    const checkpoint = await findRecoverableCheckpointDsh(projectRoot)
+    return formatBoundedRuntimeContextDsh({
+      checkpoint,
+      degradedWarning: '检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败。请运行 `python maestro/scripts/memory_catalog.py build` 重建索引。',
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Inject bounded Runtime Context into an agent session on startup if active work exists.
+ * Returns true if context was injected, false otherwise.
+ */
+export async function injectSessionRuntimeContext(
+  payload: SessionStartPayload,
+  projectRoot: string,
+  fs?: StateFileSystem,
+): Promise<boolean> {
+  const runtimeContext = await loadBoundedRuntimeContext(projectRoot, fs)
+  if (!runtimeContext) return false
+  payload.agent.steer(createUserMessage({
+    content: [{
+      type: 'text',
+      text: runtimeContext,
+    }],
+    source: {
+      kind: 'plugin',
+      plugin: 'maestro-runtime-context',
+      form: 'notice',
+      summary: '当前项目存在活动工作，已注入运行时上下文。',
+    },
+  }))
+  return true
+}
+
+
 
 const AUTO_SOURCE = 'maestro-auto-checkpoint'
 const DEFAULT_PRESSURE_THRESHOLD = 0.72
@@ -34,10 +451,17 @@ export interface TurnStopPayload {
   signal: AbortSignal
 }
 
+/** Payload of dsh's `agent/session-start` event (see dsh-agent runtime-types). */
+export interface SessionStartPayload {
+  agent: Agent
+}
+
 /** Callbacks the adapter can invoke at deterministic lifecycle boundaries. */
 export interface LifecycleHandlers {
   /** Invoked when a turn is about to close. */
   onTurnStopping?: (payload: TurnStopPayload) => void | Promise<void>
+  /** Invoked when a session starts. */
+  onSessionStart?: (payload: SessionStartPayload) => void | Promise<void>
 }
 
 export interface LifecycleHookOptions {
@@ -262,31 +686,52 @@ export class AutoCheckpointCoordinator {
 export function registerLifecycleHooks(ctx: Context, handlers: LifecycleHandlers,
   options: LifecycleHookOptions = {}): void {
   const onTurnStopping = handlers.onTurnStopping
-  if (onTurnStopping === undefined) return
-  const timeoutMs = boundedInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, 50, 5_000,
-    'checkpoint.auto.timeoutMs')
-  ctx.on(
-    'agent/turn-stopping',
-    function (payload) {
-      const timeout = new AbortController()
-      const signal = AbortSignal.any([payload.signal, timeout.signal])
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const deadline = new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          timeout.abort(new Error('lifecycle hook timeout'))
-          ctx.logger.warn(`maestro-adapter: onTurnStopping listener timed out after ${timeoutMs}ms`)
-          resolve()
-        }, timeoutMs)
-      })
-      const handled = Promise.resolve()
-        .then(() => onTurnStopping({ ...payload, signal }))
-        .catch((error: unknown) => {
-          ctx.logger.warn(`maestro-adapter: onTurnStopping listener failed: ${String(error)}`)
+  if (onTurnStopping !== undefined) {
+    const timeoutMs = boundedInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, 50, 5_000,
+      'checkpoint.auto.timeoutMs')
+    ctx.on(
+      'agent/turn-stopping',
+      function (payload) {
+        const timeout = new AbortController()
+        const signal = AbortSignal.any([payload.signal, timeout.signal])
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const deadline = new Promise<void>((resolve) => {
+          timer = setTimeout(() => {
+            timeout.abort(new Error('lifecycle hook timeout'))
+            ctx.logger.warn(`maestro-adapter: onTurnStopping listener timed out after ${timeoutMs}ms`)
+            resolve()
+          }, timeoutMs)
         })
-      return Promise.race([handled, deadline]).finally(() => {
-        if (timer !== undefined) clearTimeout(timer)
-      })
-    },
-    { global: true },
-  )
+        const handled = Promise.resolve()
+          .then(() => onTurnStopping({ ...payload, signal }))
+          .catch((error: unknown) => {
+            ctx.logger.warn(`maestro-adapter: onTurnStopping listener failed: ${String(error)}`)
+          })
+        return Promise.race([handled, deadline]).finally(() => {
+          if (timer !== undefined) clearTimeout(timer)
+        })
+      },
+      { global: true },
+    )
+  }
+
+  const onSessionStart = handlers.onSessionStart
+  if (onSessionStart !== undefined) {
+    ctx.on(
+      'agent/session-start',
+      function (payload) {
+        try {
+          const handled = onSessionStart(payload)
+          if (handled instanceof Promise) {
+            handled.catch((error: unknown) => {
+              ctx.logger.warn(`maestro-adapter: onSessionStart listener failed: ${String(error)}`)
+            })
+          }
+        } catch (error: unknown) {
+          ctx.logger.warn(`maestro-adapter: onSessionStart listener failed: ${String(error)}`)
+        }
+      },
+      { global: true },
+    )
+  }
 }

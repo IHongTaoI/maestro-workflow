@@ -194,6 +194,37 @@ Core 声明指令、上下文、工具和权限协议，但不选择 subagent AP
 隔离的 subagent，老周可以在当前 Agent 上下文直接执行 Packet，但不得把该回退描述为独立
 Worker 运行。
 
+### Memory Worker 原生宿主映射与回退边界
+
+Memory Worker 是在持久边界（委派完成、Session Handoff、Temporary 转 Task、Task 完成或归档）
+触发的专用能力型 Worker，负责整理 memory 与有界 Experience Review。
+
+1. **有界输入 Payload**：
+   - 严格使用 [memory-worker-request.schema.json](schemas/memory-worker-request.schema.json)
+     校验输入；
+   - 包含明确的 `source_files`、当前 Long-term 镜像 `current_memory`、当前 Playbook 镜像
+     `current_playbooks` 及 `memory_hints`；不把无关的全部历史 Memory 注入输入。
+2. **工具白名单（Strictly Read-only）**：
+   - 仅限只读工具（如读取指定源文件、查看特定已索引条目）；
+   - **严禁提供任何写工具、破坏性操作工具、命令执行工具或外部网络工具**。
+3. **权限边界与提案约束**：
+   - `autonomous` 权限严格限定为只读提取、语义比对并输出候选提案；
+   - **严禁自我批准或直接修改正式 Long-term Memory 或 Playbooks**；
+   - 输出必须符合 [memory-worker-response.schema.json](schemas/memory-worker-response.schema.json)，
+     动作仅限 `UPDATE`、`MERGE`、`CREATE`、`SKIP` 提案，必须经老周/强模型评审者或用户确认后才能提升。
+4. **宿主原生映射规则**：
+   - **Codex 映射**：宿主提供原生 subagent（如可用时的 `spawn_agent`）时，映射为原生独立 subagent；
+     工具侧使用小写 snake_case 标识，面向用户使用简洁的中文名称（如“记忆整理员”或“经验审查员”）；
+     仅注入只读工具白名单和带边界的请求 Payload。
+   - **DeepSeek Harness 等宿主映射**：若宿主仅提供生命周期 hooks 或文件/状态能力而缺乏独立 subagent 隔离运行时，
+     必须如实报告原生 Memory Worker 为 `unsupported`，不得虚报隔离能力。
+5. **In-Session Fallback 回退协议**：
+   - 当宿主不支持可强制隔离的原生 subagent 时，老周（当前 Agent）在当前会话直接执行有界压缩；
+   - **回退执行必须遵守完全相同的输入约束、只读工具约束、候选提案与禁止自我批准约束**；
+   - 执行回执或 Handoff 中必须如实标记 `execution: in-session-fallback`，**绝不得虚报为独立 Worker 运行**；
+   - 校验失败时重试一次；若两次仍失败，以 `.invalid.json` 保存于预期工件旁，原始请求存入 `memory/pending/`，
+     并继续主业务，严禁阻塞核心链路。
+
 ## 注册表变更与失败
 
 项目注册表是可变 Maestro 状态。按 [storage.md](storage.md) 中的 revision、独占锁、陈旧写入和

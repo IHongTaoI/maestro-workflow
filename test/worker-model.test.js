@@ -57,6 +57,7 @@ test('active Core guidance is Chinese and has no legacy Role compatibility contr
     'maestro/SKILL.md',
     'maestro/references/contract.md',
     'maestro/references/coordination.md',
+    'maestro/references/guard.md',
     'maestro/references/handoffs.md',
     'maestro/references/memory.md',
     'maestro/references/playbooks.md',

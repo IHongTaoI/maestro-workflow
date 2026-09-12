@@ -33,16 +33,18 @@ const skills = {
     return () => {}
   },
 }
-await module.apply({
-  skills,
-  get(name) {
-    return name === 'skills' ? skills : undefined
-  },
-  effect() {},
-  // This plain-Skill fixture never publishes optional filesystem/tools services.
-  inject(dependencies) { assert.deepEqual(dependencies, ['fs']) },
-  logger: { info() {}, warn() {} },
-})
+  const injectedDeps = []
+  await module.apply({
+    skills,
+    get(name) {
+      return name === 'skills' ? skills : undefined
+    },
+    effect() {},
+    // This plain-Skill fixture never publishes optional filesystem/tools/agents services.
+    inject(dependencies) { injectedDeps.push(dependencies) },
+    logger: { info() {}, warn() {} },
+  })
+  assert.deepEqual(injectedDeps, [['fs'], ['agents']])
 assert.equal(registeredSkill.name, 'maestro')
 assert.equal(registeredSkill.resourceBase.kind, 'directory')
 assert.equal(registeredSkill.resourceBase.path, path.join(adapterRoot, 'lib', 'core'))

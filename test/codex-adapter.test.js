@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -247,3 +247,259 @@ test('local installer preserves invalid marketplace contents and refuses an occu
   await assert.rejects(installLocal({ homeDir }), { code: 'EEXIST' });
   assert.equal(await readFile(path.join(homeDir, '.agents/plugins/.maestro-codex-install.lock'), 'utf8'), 'another installer');
 });
+
+test('Codex injects bounded live Runtime Context when active Task, Temporary, or follow-up exist', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  await put(root, '.maestro/evidence/rules.md', '# Rules\nSome rules.\n');
+  await put(root, '.maestro/tasks/task-cache/task.yaml', 'id: task-cache\nobjective: Implement caching layer\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-auth/task.yaml', 'id: task-auth\nobjective: OAuth integration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-ci/task.yaml', 'id: task-ci\nobjective: Setup CI pipelines\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-db/task.yaml', 'id: task-db\nobjective: DB migration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/memory/temporary/active/temp-investigate/meta.yaml', 'id: temp-investigate\ntopic: Investigate leak\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/memory/long-term/entries/lt-api-boundary.md', `---
+revision: 1
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+---
+
+# Entry
+
+\`\`\`maestro-memory-entry
+{"entry_id":"lt-api-boundary","title":"API boundary rules","memory_kind":"experience","content":"Boundary rules","source_refs":[".maestro/evidence/rules.md"],"status":"active"}
+\`\`\`
+`);
+  await put(root, '.maestro/memory/followups/pending/followup-review.yaml', 'followup_id: followup-review\ntitle: Review memory invariants\nstatus: pending\ncreated_at: 2026-09-12T10:00:00Z\nsource_refs:\n  - .maestro/evidence/rules.md\n');
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  const context = result.hookSpecificOutput.additionalContext;
+
+  // Asserts bounded runtime context injection
+  assert.match(context, /# Memory Overview \(Runtime Context\)/);
+  assert.match(context, /当前检测到项目存在活动工作/);
+  assert.match(context, /## Active Tasks \(4\)/);
+  assert.match(context, /task-cache/);
+  assert.match(context, /task-auth/);
+  assert.match(context, /task-ci/);
+  assert.match(context, /另外 1 项活动任务已省略/);
+  assert.match(context, /## Active Temporary Memory \(1\)/);
+  assert.match(context, /temp-investigate/);
+  assert.match(context, /## Pending Follow-ups \(1\)/);
+  assert.match(context, /followup-review/);
+  assert.match(context, /## Long-term Memory \(1 项已索引\)/);
+});
+
+test('Codex SessionStart does not inject runtime context when index.json exists without any authoritative sources', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // Orphaned index.json without authoritative sources on disk
+  const indexPayload = {
+    schema_version: 1,
+    entries: [
+      { memory_id: 'task-orphaned', title: 'Orphaned task', record_type: 'task', status: 'active', path: '.maestro/tasks/task-orphaned/task.yaml' },
+    ],
+    pending_followups: [],
+  };
+  await put(root, '.maestro/memory/index.json', JSON.stringify(indexPayload));
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /# Memory Overview/);
+});
+
+test('Codex SessionStart rebuilds missing index when authoritative sources exist and injects live context', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // Authoritative task on disk, but NO .maestro/memory/index.json
+  await put(root, '.maestro/tasks/task-live/task.yaml', `id: task-live
+objective: Live active task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  const context = result.hookSpecificOutput.additionalContext;
+
+  // Asserts runtime context is injected with rebuilt task
+  assert.match(context, /# Memory Overview \(Runtime Context\)/);
+  assert.match(context, /当前检测到项目存在活动工作/);
+  assert.match(context, /## Active Tasks \(1\)/);
+  assert.match(context, /task-live/);
+
+  // Asserts index.json was indeed rebuilt on disk
+  const indexPath = path.join(root, '.maestro/memory/index.json');
+  assert.ok(await readFile(indexPath, 'utf8'));
+});
+
+test('Codex SessionStart refreshes stale index when authoritative sources changed and injects new state', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // Authoritative new task on disk
+  await put(root, '.maestro/tasks/task-updated/task.yaml', `id: task-updated
+objective: Freshly updated task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+
+  // Stale index containing only an obsolete task
+  const staleIndex = {
+    schema_version: 1,
+    generated_at: '2026-09-01T00:00:00Z',
+    source_digest: 'obsolete-hash',
+    entries: [
+      { memory_id: 'task-obsolete', title: 'Obsolete task', record_type: 'task', status: 'active', path: '.maestro/tasks/task-obsolete/task.yaml' },
+    ],
+    pending_followups: [],
+  };
+  await put(root, '.maestro/memory/index.json', JSON.stringify(staleIndex));
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  const context = result.hookSpecificOutput.additionalContext;
+
+  // Asserts new task is injected, and obsolete task from stale index is NOT injected
+  assert.match(context, /task-updated/);
+  assert.doesNotMatch(context, /task-obsolete/);
+
+  // Asserts index.json was refreshed on disk
+  const refreshedIndex = JSON.parse(await readFile(path.join(root, '.maestro/memory/index.json'), 'utf8'));
+  assert.ok(refreshedIndex.entries.some(e => e.memory_id === 'task-updated'));
+  assert.ok(!refreshedIndex.entries.some(e => e.memory_id === 'task-obsolete'));
+});
+
+test('Codex SessionStart injects recoverable checkpoint runtime context when no active tasks or temporaries exist', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // No active tasks or temporaries, but a recoverable checkpoint exists
+  const checkpointPayload = {
+    schema_version: 1,
+    request_id: 'req-chk-99',
+    project: 'test-project',
+    kind: 'task',
+    target_id: 'task-suspended',
+    session_id: 'session-prev',
+    base_revision: 3,
+    base_hash: 'a'.repeat(64),
+    input_hash: 'b'.repeat(64),
+    source_hash: 'c'.repeat(64),
+    proposal: 'proposal body',
+    proposal_hash: 'd'.repeat(64),
+    snapshot: {
+      objective: 'Suspended task objective',
+      confirmed: ['step 1 done'],
+      rejected: [],
+      in_progress: ['step 2 in progress'],
+      next: ['step 3 next'],
+      open_questions: [],
+      source_refs: ['.maestro/tasks/task-suspended/progress.md'],
+    },
+  };
+  await put(
+    root,
+    '.maestro/tasks/task-suspended/references/checkpoints/req-chk-99.json',
+    JSON.stringify(checkpointPayload, null, 2),
+  );
+
+  // 1. Pending request: outputs status: pending and proposed_revision: 4
+  const pendingResult = await recoveryContext(event(root));
+  assert.ok(pendingResult);
+  const pendingContext = pendingResult.hookSpecificOutput.additionalContext;
+
+  assert.match(pendingContext, /# Memory Overview \(Runtime Context\)/);
+  assert.match(pendingContext, /当前检测到项目存在活动工作/);
+  assert.match(pendingContext, /## Recoverable Checkpoint/);
+  assert.match(pendingContext, /Recoverable checkpoint: yes/);
+  assert.match(pendingContext, /status: pending/);
+  assert.match(pendingContext, /scope: task/);
+  assert.match(pendingContext, /binding: task-suspended/);
+  assert.match(pendingContext, /proposed_revision: 4/);
+
+  // 2. Committed checkpoint observation: outputs status: committed and revision: 4
+  await put(
+    root,
+    '.maestro/tasks/task-suspended/references/checkpoints/req-chk-99.committed.json',
+    JSON.stringify({ request_id: 'req-chk-99', revision: 4 }),
+  );
+
+  const committedResult = await recoveryContext(event(root));
+  assert.ok(committedResult);
+  const committedContext = committedResult.hookSpecificOutput.additionalContext;
+
+  assert.match(committedContext, /## Recoverable Checkpoint/);
+  assert.match(committedContext, /Recoverable checkpoint: yes/);
+  assert.match(committedContext, /status: committed/);
+  assert.match(committedContext, /scope: task/);
+  assert.match(committedContext, /binding: task-suspended/);
+  assert.match(committedContext, /revision: 4/);
+});
+
+test('Codex SessionStart does not consume stale index when refresh/rebuild fails and outputs degraded warning', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // Authoritative task on disk
+  await put(root, '.maestro/tasks/task-current/task.yaml', `id: task-current
+objective: Real current task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+
+  // Stale index containing obsolete task
+  await put(root, '.maestro/memory/index.json', JSON.stringify({
+    schema_version: 1,
+    generated_at: '2026-09-01T00:00:00Z',
+    source_digest: 'obsolete',
+    entries: [
+      { memory_id: 'task-stale', title: 'Stale task that must not be consumed', record_type: 'task', status: 'active' },
+    ],
+    pending_followups: [],
+  }));
+
+  // Authoritative committed checkpoint exists
+  await put(
+    root,
+    '.maestro/tasks/task-current/references/checkpoints/req-deg-1.committed.json',
+    JSON.stringify({ request_id: 'req-deg-1', revision: 1 }),
+  );
+
+  // Force Python overview/rebuild to fail
+  process.env.MAESTRO_FORCE_PYTHON_FAIL = '1';
+  t.after(() => { delete process.env.MAESTRO_FORCE_PYTHON_FAIL; });
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  const context = result.hookSpecificOutput.additionalContext;
+
+  // Stale task from index.json MUST NOT be consumed
+  assert.doesNotMatch(context, /task-stale/);
+  assert.doesNotMatch(context, /Stale task that must not be consumed/);
+
+  // Explicit degraded warning MUST be output
+  assert.match(context, /警告：检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败/);
+
+  // Authoritative checkpoint MUST still be presented
+  assert.match(context, /## Recoverable Checkpoint/);
+  assert.match(context, /Recoverable checkpoint: yes/);
+  assert.match(context, /status: committed/);
+  assert.match(context, /binding: task-current/);
+  assert.match(context, /revision: 1/);
+});
+
+
+

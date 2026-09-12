@@ -302,6 +302,22 @@ checkpoint 区段并推进 revision。完整请求保存在目标 references/che
 进程被强制终止后若留下 held 锁，必须先由已有存储恢复流程核验 owner 已失活；工具不按过期时间
 抢锁。测试验证的是机制和真实 ToolRuntime 管线，完整 DSH 模型提供方/磁盘后端的人工验收仍待完成。
 
+## Core Guard 与 Memory Worker 宿主映射
+
+### Core Guard 协议
+在长 Session、Turn Guard 或会话恢复时，避免重新注入完整的 `SKILL.md`（数千 tokens）和 references。
+适配器导出 `CANONICAL_CORE_GUARD_PROMPT`、`CORE_GUARD_MAX_CHARS`（1200 字符，约 250~300 tokens）以及校验辅助
+`validateCoreGuardText`。Core Guard 固化老周角色、显式授权、有界 Worker 提案约束和四层渐进检索四大不可逾越底线。
+
+### Memory Worker 映射状态
+当前 DSH preview 版仅通过 `ctx.agents` 提供生命周期钩子，未暴露原生可隔离的 subagent 运行时。
+因此本适配器如实将原生 Memory Worker 标记为 `unsupported`。当需要执行经验审查与记忆合并时，
+遵循 Core 的 **In-Session Fallback** 协议：
+- 由当前 Agent 在当前会话中执行有界压缩；
+- 严格遵循只读工具白名单、`memory-worker-request.schema.json` 有界输入与 `memory-worker-response.schema.json` 候选提案约束；
+- 候选仅限 `UPDATE`、`MERGE`、`CREATE`、`SKIP`，严禁自我批准或直接改写正式条目；
+- 在执行记录中明确标记 `execution: in-session-fallback`，严禁虚构独立派工。
+
 ## 测试命令
 
 ```sh

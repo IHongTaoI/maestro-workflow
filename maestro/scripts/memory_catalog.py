@@ -22,6 +22,13 @@ from validate import (
     validate_memory_index,
 )
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 INDEX_PATH = Path(".maestro/memory/index.json")
 MANIFEST_PATH = Path(".maestro/memory/manifest.md")
@@ -1031,6 +1038,384 @@ def search_index(
     return candidates[:limit]
 
 
+def parse_iso_timestamp(raw: str | None) -> datetime | None:
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        return None
+    return dt.astimezone(timezone.utc)
+
+
+def bound_recent_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    bounded: dict[str, Any] = {
+        "memory_id": entry["memory_id"],
+        "layer": entry["layer"],
+        "record_type": entry["record_type"],
+        "title": entry["title"],
+        "summary": entry["summary"],
+        "status": entry.get("status", "active"),
+        "path": entry["path"],
+        "locator": entry["locator"],
+        "updated_at": entry.get("updated_at"),
+    }
+    if entry.get("memory_kind") is not None:
+        bounded["memory_kind"] = entry["memory_kind"]
+    if entry.get("stale") is not None:
+        bounded["stale"] = entry["stale"]
+    return bounded
+
+
+def recent_entries(
+    index: dict[str, Any],
+    *,
+    layer: str | None = None,
+    include_inactive: bool = False,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    timed: list[dict[str, Any]] = []
+    untimed: list[dict[str, Any]] = []
+    for entry in index["entries"]:
+        if not include_inactive and entry.get("status") not in ACTIVE_STATUSES:
+            continue
+        if layer and entry.get("layer") != layer:
+            continue
+        dt = parse_iso_timestamp(entry.get("updated_at"))
+        if dt is not None:
+            timed.append(entry)
+        else:
+            untimed.append(entry)
+
+    # Sort timed: primary updated_at descending, tie-breaker memory_id ascending
+    timed.sort(key=lambda item: item["memory_id"])
+    timed.sort(key=lambda item: parse_iso_timestamp(item.get("updated_at")), reverse=True)
+
+    # Sort untimed: degraded deterministic order, memory_id ascending
+    untimed.sort(key=lambda item: item["memory_id"])
+
+    ordered = timed + untimed
+    return [bound_recent_entry(entry) for entry in ordered[:limit]]
+
+
+def extract_checkpoint_receipt(text: str) -> dict[str, Any] | None:
+    if "checkpoint_receipt" not in text:
+        return None
+    req_match = re.search(r"request_id:\s*['\"]?([a-z0-9][a-z0-9_-]*)['\"]?", text, re.IGNORECASE)
+    rev_match = re.search(r"revision:\s*(\d+)", text)
+    if req_match and rev_match:
+        return {
+            "request_id": req_match.group(1),
+            "revision": int(rev_match.group(1)),
+        }
+    return None
+
+
+def parse_checkpoint_file(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and "request_id" in data:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def find_recoverable_checkpoint(project_root: Path) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+
+    def scan_checkpoints_for_target(
+        scope: str,
+        binding: str,
+        chk_dir: Path,
+        receipt: dict[str, Any] | None = None,
+        receipt_mtime: float = 0.0,
+    ) -> None:
+        committed_map: dict[str, tuple[int, float]] = {}
+        if receipt:
+            committed_map[receipt["request_id"]] = (receipt["revision"], receipt_mtime)
+
+        if chk_dir.is_dir():
+            for f in chk_dir.iterdir():
+                if not f.is_file():
+                    continue
+                if f.name.endswith(".committed.json"):
+                    req_id = f.name[:-len(".committed.json")]
+                    data = parse_checkpoint_file(f)
+                    rev = data.get("revision") if data else None
+                    mtime = f.stat().st_mtime
+                    if req_id not in committed_map or mtime > committed_map[req_id][1]:
+                        committed_map[req_id] = (rev if rev is not None else 1, mtime)
+
+            for f in chk_dir.iterdir():
+                if not f.is_file() or not f.name.endswith(".json"):
+                    continue
+                if ".committed." in f.name or ".failed-" in f.name:
+                    continue
+                rec = parse_checkpoint_file(f)
+                if not rec:
+                    continue
+                req_id = rec.get("request_id", f.stem)
+                target_binding = rec.get("target_id", binding)
+                target_scope = rec.get("kind", scope)
+                mtime = f.stat().st_mtime
+
+                if req_id in committed_map:
+                    rev, c_mtime = committed_map[req_id]
+                    candidates.append({
+                        "status": "committed",
+                        "scope": target_scope,
+                        "binding": target_binding,
+                        "revision": rev,
+                        "request_id": req_id,
+                        "mtime": max(mtime, c_mtime),
+                    })
+                else:
+                    prop_rev = rec.get("base_revision", 0) + 1
+                    candidates.append({
+                        "status": "pending",
+                        "scope": target_scope,
+                        "binding": target_binding,
+                        "proposed_revision": prop_rev,
+                        "revision": prop_rev,
+                        "request_id": req_id,
+                        "mtime": mtime,
+                    })
+
+        for req_id, (rev, c_mtime) in committed_map.items():
+            if not any(c["request_id"] == req_id for c in candidates):
+                candidates.append({
+                    "status": "committed",
+                    "scope": scope,
+                    "binding": binding,
+                    "revision": rev,
+                    "request_id": req_id,
+                    "mtime": c_mtime,
+                })
+
+    # 1. Tasks
+    tasks_root = project_root / ".maestro/tasks"
+    if tasks_root.is_dir():
+        for task_dir in tasks_root.iterdir():
+            if not task_dir.is_dir() or task_dir.name == "archive":
+                continue
+            progress_path = task_dir / "progress.md"
+            receipt = None
+            receipt_mtime = 0.0
+            if progress_path.is_file():
+                try:
+                    receipt = extract_checkpoint_receipt(progress_path.read_text(encoding="utf-8"))
+                    receipt_mtime = progress_path.stat().st_mtime
+                except Exception:
+                    pass
+            chk_dir = task_dir / "references/checkpoints"
+            scan_checkpoints_for_target("task", task_dir.name, chk_dir, receipt, receipt_mtime)
+
+    # 2. Temporaries
+    temp_root = project_root / ".maestro/memory/temporary/active"
+    if temp_root.is_dir():
+        for temp_dir in temp_root.iterdir():
+            if not temp_dir.is_dir():
+                continue
+            current_path = temp_dir / "current.md"
+            receipt = None
+            receipt_mtime = 0.0
+            if current_path.is_file():
+                try:
+                    receipt = extract_checkpoint_receipt(current_path.read_text(encoding="utf-8"))
+                    receipt_mtime = current_path.stat().st_mtime
+                except Exception:
+                    pass
+            chk_dir = temp_dir / "references/checkpoints"
+            scan_checkpoints_for_target("temporary", temp_dir.name, chk_dir, receipt, receipt_mtime)
+
+    # 3. Project/Session checkpoints
+    proj_chk = project_root / ".maestro/checkpoints"
+    scan_checkpoints_for_target("session", "session", proj_chk)
+
+    if not candidates:
+        return None
+
+    # Deduplicate candidates with the same request_id, keeping highest status / newest mtime
+    seen_req: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    # Sort first: committed first, mtime descending, revision descending
+    candidates.sort(
+        key=lambda c: (
+            0 if c["status"] == "committed" else 1,
+            -c["mtime"],
+            -c.get("revision", 0),
+            c["binding"],
+            c["request_id"],
+        )
+    )
+    for c in candidates:
+        if c["request_id"] not in seen_req:
+            seen_req.add(c["request_id"])
+            deduped.append(c)
+
+    if not deduped:
+        return None
+
+    top = deduped[0]
+    return {
+        "available": True,
+        "status": top["status"],
+        "scope": top["scope"],
+        "binding": top["binding"],
+        "revision": top.get("revision"),
+        "proposed_revision": top.get("proposed_revision"),
+        "request_id": top["request_id"],
+    }
+
+
+def catalog_overview_summary(
+    project_root: Path,
+    index: dict[str, Any],
+    refreshed: bool,
+    *,
+    limit: int = 3,
+) -> dict[str, Any]:
+    visible = [entry for entry in index["entries"] if entry["status"] == "active"]
+    all_temporaries = [
+        {
+            "memory_id": entry["memory_id"],
+            "title": entry["title"],
+            "summary": entry["summary"],
+            "updated_at": entry.get("updated_at"),
+            "stale": entry.get("stale"),
+        }
+        for entry in visible
+        if entry["record_type"] == "temporary"
+    ]
+    all_tasks = [
+        {
+            "memory_id": entry["memory_id"],
+            "title": entry["title"],
+            "summary": entry["summary"],
+            "updated_at": entry.get("updated_at"),
+        }
+        for entry in visible
+        if entry["record_type"] == "task"
+    ]
+    long_term_entries = [entry for entry in visible if entry["record_type"] == "long-term-entry"]
+    long_term_count = len(long_term_entries)
+    long_term_samples = [
+        {"memory_id": entry["memory_id"], "title": entry["title"]}
+        for entry in long_term_entries[:limit]
+    ]
+    worker_state_count = sum(entry["record_type"] == "worker-state" for entry in visible)
+    all_followups = [
+        {
+            "followup_id": item["followup_id"],
+            "title": item["title"],
+            "status": item["status"],
+            "created_at": item.get("created_at"),
+            "source_refs": item.get("source_refs", []),
+        }
+        for item in index.get("pending_followups", [])
+    ]
+    recoverable_checkpoint = find_recoverable_checkpoint(project_root)
+    has_active_work = bool(all_temporaries or all_tasks or all_followups or recoverable_checkpoint)
+
+    bounded_temporaries = all_temporaries[:limit]
+    bounded_tasks = all_tasks[:limit]
+    bounded_followups = all_followups[:limit]
+
+    return {
+        "catalog_refreshed": refreshed,
+        "has_active_work": has_active_work,
+        "recoverable_checkpoint": recoverable_checkpoint,
+        "active_temporary_count": len(all_temporaries),
+        "active_temporaries": bounded_temporaries,
+        "more_temporaries": max(0, len(all_temporaries) - limit),
+        "active_task_count": len(all_tasks),
+        "active_tasks": bounded_tasks,
+        "more_tasks": max(0, len(all_tasks) - limit),
+        "long_term_count": long_term_count,
+        "long_term_samples": long_term_samples,
+        "more_long_term": max(0, long_term_count - limit),
+        "worker_state_count": worker_state_count,
+        "pending_followup_count": len(all_followups),
+        "pending_followups": bounded_followups,
+        "more_followups": max(0, len(all_followups) - limit),
+        "bounded_limit": limit,
+    }
+
+
+def bounded_runtime_context_text(summary: dict[str, Any]) -> str:
+    lines = ["# Memory Overview (Runtime Context)", ""]
+    if summary["has_active_work"]:
+        lines.append("当前检测到项目存在活动工作：")
+    else:
+        lines.append("当前项目暂无活动任务或临时探索，系统处于就绪状态。")
+    lines.append("")
+
+    chk = summary.get("recoverable_checkpoint")
+    if chk and chk.get("available"):
+        lines.append("## Recoverable Checkpoint")
+        lines.append("Recoverable checkpoint: yes")
+        status = chk.get("status", "committed")
+        lines.append(f"status: {status}")
+        lines.append(f"scope: {chk.get('scope')}")
+        lines.append(f"binding: {chk.get('binding')}")
+        if status == "pending":
+            lines.append(f"proposed_revision: {chk.get('proposed_revision') or chk.get('revision')}")
+        else:
+            lines.append(f"revision: {chk.get('revision')}")
+        lines.append("")
+
+    t_count = summary["active_task_count"]
+    lines.append(f"## Active Tasks ({t_count})")
+    if summary["active_tasks"]:
+        for t in summary["active_tasks"]:
+            lines.append(f"- `{t['memory_id']}`: {t['title']}")
+        if summary.get("more_tasks", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_tasks']} 项活动任务已省略，详情请使用 recent / show)*")
+    else:
+        lines.append("- *(无活动任务)*")
+    lines.append("")
+
+    temp_count = summary["active_temporary_count"]
+    lines.append(f"## Active Temporary Memory ({temp_count})")
+    if summary["active_temporaries"]:
+        for t in summary["active_temporaries"]:
+            lines.append(f"- `{t['memory_id']}`: {t['title']}")
+        if summary.get("more_temporaries", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_temporaries']} 项活动探索已省略，详情请使用 recent / show)*")
+    else:
+        lines.append("- *(无活动探索)*")
+    lines.append("")
+
+    f_count = summary["pending_followup_count"]
+    if f_count > 0:
+        lines.append(f"## Pending Follow-ups ({f_count})")
+        for f in summary["pending_followups"]:
+            lines.append(f"- `{f['followup_id']}`: {f['title']}")
+        if summary.get("more_followups", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_followups']} 项待跟进已省略，详情请使用 show)*")
+        lines.append("")
+
+    lt_count = summary["long_term_count"]
+    lines.append(f"## Long-term Memory ({lt_count} 项已索引)")
+    if summary.get("long_term_samples"):
+        for lt in summary["long_term_samples"]:
+            lines.append(f"- `{lt['memory_id']}`: {lt['title']}")
+        if summary.get("more_long_term", 0) > 0:
+            lines.append(f"  *(另外 {summary['more_long_term']} 条长期记忆已省略，详情请使用 recent / search / show)*")
+    else:
+        lines.append("- *(暂无已索引长期记忆)*")
+    lines.append("")
+
+    w_count = summary["worker_state_count"]
+    lines.append(f"## Worker States: {w_count} current Worker state(s)")
+    lines.append("")
+    lines.append("> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。")
+    return "\n".join(lines).strip()
+
+
 def detail_for_entry(project_root: Path, entry: dict[str, Any]) -> dict[str, Any]:
     path = project_root / Path(entry["path"])
     record_type = entry["record_type"]
@@ -1321,6 +1706,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     search.add_argument("--limit", type=int, default=5)
     search.add_argument("--no-refresh", action="store_true")
 
+    overview = subparsers.add_parser("overview", parents=[common])
+    overview.add_argument("--format", choices=("text", "json"), default="text")
+    overview.add_argument("--limit", type=int, default=3, help="Max entries per section for bounded runtime context (1-5, default 3)")
+    overview.add_argument("--full", action="store_true", help="Print full un-truncated manifest.md instead of bounded summary")
+    overview.add_argument("--no-refresh", action="store_true")
+
+    recent = subparsers.add_parser("recent", parents=[common])
+    recent.add_argument("--limit", type=int, default=5)
+    recent.add_argument("--layer", choices=("temporary", "task", "long-term"))
+    recent.add_argument("--include-inactive", action="store_true")
+    recent.add_argument("--no-refresh", action="store_true")
+
     show = subparsers.add_parser("show", parents=[common])
     show.add_argument("memory_id")
     show.add_argument("--include-inactive", action="store_true")
@@ -1371,6 +1768,48 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh, now=reference_time)
+        if args.command == "overview":
+            if args.limit < 1 or args.limit > 5:
+                raise CatalogError("--limit must be between 1 and 5")
+            summary = catalog_overview_summary(project_root, index, refreshed, limit=args.limit)
+            if args.format == "json":
+                print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+                return 0
+            if getattr(args, "full", False):
+                manifest_path = project_root / MANIFEST_PATH
+                if manifest_path.is_file():
+                    print(manifest_path.read_text(encoding="utf-8").strip())
+                else:
+                    print(manifest_text(index).strip())
+                return 0
+            print(bounded_runtime_context_text(summary))
+            return 0
+        if args.command == "recent":
+            if args.limit < 1 or args.limit > 5:
+                raise CatalogError("--limit must be between 1 and 5")
+            entries = recent_entries(
+                index,
+                layer=args.layer,
+                include_inactive=args.include_inactive,
+                limit=args.limit,
+            )
+            payload: dict[str, Any] = {
+                "catalog_refreshed": refreshed,
+                "command": "recent",
+                "entries": entries,
+                "limit": args.limit,
+            }
+            if args.layer:
+                payload["layer"] = args.layer
+            print(
+                json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
         if args.command == "search":
             if args.limit < 1 or args.limit > 5:
                 raise CatalogError("--limit must be between 1 and 5")
