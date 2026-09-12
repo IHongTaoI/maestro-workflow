@@ -422,7 +422,6 @@ def require_checkpoint_hash(value: Any, key: str, source: Path) -> str:
 
 def derive_checkpoint_events(project_root: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
-    seen_requests: dict[str, Path] = {}
     legacy_keys = {"request_id", "record_hash", "proposal_hash", "revision"}
     versioned_keys = legacy_keys | {"completion", "committed_at"}
     for kind, target_id, root in checkpoint_target_roots(project_root):
@@ -461,12 +460,6 @@ def derive_checkpoint_events(project_root: Path) -> list[dict[str, Any]]:
             expected_name = f"{request_id}.committed.json"
             if observation_path.name != expected_name:
                 raise CatalogError(f"{observation_path}: filename must match request_id as '{expected_name}'")
-            previous = seen_requests.get(request_id)
-            if previous is not None:
-                raise CatalogError(
-                    f"duplicate checkpoint request_id '{request_id}' in {previous} and {observation_path}"
-                )
-            seen_requests[request_id] = observation_path
             request_path = directory / f"{request_id}.json"
             if not request_path.is_file() or request_path.is_symlink():
                 raise CatalogError(f"{observation_path}: recovery request record is missing or unsafe")

@@ -84,8 +84,8 @@ artifact。它以相邻的 `<request_id>.json` 请求记录作为绑定依据。
 ```
 
 稳定事件身份由 `checkpoint_recovered`、目标种类、目标 ID、`request_id` 和归一化后的
-`committed_at` 生成。`request_id` 已受全项目复用检查约束，其他成分仍保留为防御性命名空间，
-避免未来请求 ID 作用域改变时发生碰撞。`committed_at` 可保存毫秒，但 Activity 沿用现有
+`committed_at` 生成。`request_id` 的复用检查只在同一目标内生效，因此目标种类和目标 ID 是
+稳定身份的必要组成，允许不同目标安全使用相同 request ID。`committed_at` 可保存毫秒，但 Activity 沿用现有
 `normalize_utc` 规则，截断为 UTC 秒精度；事件 ID 与 `occurred_at` 都使用这个截断后的值，避免
 JavaScript 与 Python 各自处理精度。重复查询、重复 `retry` 和 Activity 重建得到同一个事件 ID。
 

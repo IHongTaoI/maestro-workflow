@@ -190,6 +190,15 @@ test('save and legacy checkpoint observations are omitted without guessing recov
   assert.equal(result.total, 0);
 });
 
+test('the same checkpoint request id on different targets produces distinct events', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedCheckpointObservation(projectRoot, { targetId: 'checkpoint-a', requestId: 'shared_request' });
+  await seedCheckpointObservation(projectRoot, { targetId: 'checkpoint-b', requestId: 'shared_request' });
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 2);
+  assert.notEqual(result.events[0].event_id, result.events[1].event_id);
+});
+
 test('recovery observations require an intact adjacent request and invalidate the Activity cache', async (t) => {
   const projectRoot = await createProject(t);
   const seeded = await seedCheckpointObservation(projectRoot, { kind: 'temporary', targetId: 'temp-recovery' });
