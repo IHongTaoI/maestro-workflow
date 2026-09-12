@@ -101,6 +101,7 @@ export class CheckpointWriter {
   private backup?: string
   private backupKey?: string
   private recovery: 'none' | 'project' | 'secondary' = 'none'
+  private failureStage: 'validation' | 'secondary_write' | 'project_request' | 'canonical_write' | 'observation_write' = 'validation'
   private lastRecord?: RecordData
 
   constructor(private readonly fs: CheckpointFs, private readonly validator: MaestroSchemaValidator,
@@ -280,6 +281,7 @@ export class CheckpointWriter {
     // Secondary write-ahead copy contains source, target binding AND exact proposal.
     if (this.backup) {
       try {
+        this.failureStage = 'secondary_write'
         await this.secondary(kind, target_id, request_id, json(record))
         this.recovery = 'secondary'
       } catch (error) {
@@ -288,6 +290,7 @@ export class CheckpointWriter {
         if (!this.config.optionalRecovery || (error as { code?: string }).code !== 'FS_SANDBOX_DENIED') throw error
       }
     }
+    this.failureStage = 'project_request'
     await this.immutable(this.recordPath(kind, target_id, request_id), json(record))
     if (this.recovery === 'none') this.recovery = 'project'
     return this.commit(record)
@@ -329,6 +332,7 @@ export class CheckpointWriter {
       this.signal.throwIfAborted()
       await this.active(r.kind, r.target_id)
       // Restore the project request first when retrying from secondary storage.
+      this.failureStage = 'project_request'
       await this.immutable(this.recordPath(r.kind, r.target_id, r.request_id), json(r))
       const state = await this.store.readSnapshot(t.state)
       requireThat(state, 'state_not_found')
@@ -356,9 +360,11 @@ export class CheckpointWriter {
         }
         this.signal.throwIfAborted()
         await this.sources(r.snapshot)
+        this.failureStage = 'canonical_write'
         await this.store.writeGuarded(state, r.proposal)
       }
       requireThat(hash((await this.store.readSnapshot(t.state))?.content ?? '') === r.proposal_hash, 'commit_unconfirmed')
+      this.failureStage = 'observation_write'
       await this.immutable(this.observationPath(r), this.observation(r))
       return { status: 'committed', request_id: r.request_id, revision: r.base_revision + 1,
         catalog_refresh_required: true }
@@ -375,7 +381,7 @@ export class CheckpointWriter {
       : this.signal.aborted ? 'cancelled' : code === 'FS_STALE_VERSION' ? 'conflict'
         : code === 'FS_SANDBOX_DENIED' ? 'filesystem_permission_denied'
         : error instanceof Error && error.message.includes('lock contention') ? 'lock_contention'
-          : 'storage_or_validation_error', recovery: this.recovery,
+          : 'storage_or_validation_error', recovery: this.recovery, failure_stage: this.failureStage,
     has_recoverable_record: this.recovery !== 'none' }
   }
 
