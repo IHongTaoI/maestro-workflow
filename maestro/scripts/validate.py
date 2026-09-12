@@ -48,6 +48,7 @@ ACTIVITY_EVENT_TYPES = {
     "decision_superseded",
     "playbook_approved",
     "playbook_superseded",
+    "checkpoint_recovered",
 }
 ACTIVITY_EVENT_ID_PATTERN = re.compile(r"^activity-[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -1092,6 +1093,43 @@ def validate_activity_event(
         add_error(errors, f"{path}.status", "must equal 'completed'")
 
 
+def validate_checkpoint_observation(value: Any, errors: list[Diagnostic]) -> None:
+    if not require_object(value, "$", errors):
+        return
+    legacy = {"request_id", "record_hash", "proposal_hash", "revision"}
+    versioned = legacy | {"completion", "committed_at"}
+    keys = set(value)
+    if keys not in (legacy, versioned):
+        missing = sorted(legacy - keys)
+        unexpected = sorted(keys - versioned)
+        for key in missing:
+            add_error(errors, f"$.{key}", "is required")
+        for key in unexpected:
+            add_error(errors, f"$.{key}", "is not allowed")
+        if ("completion" in keys) != ("committed_at" in keys):
+            add_error(errors, "$", "completion and committed_at must appear together")
+    if "request_id" in value:
+        if check_string(value["request_id"], "$.request_id", errors, min_length=1):
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", value["request_id"]):
+                add_error(errors, "$.request_id", "must be a valid checkpoint request id")
+    for key in ("record_hash", "proposal_hash"):
+        if key in value:
+            if check_string(value[key], f"$.{key}", errors, min_length=64):
+                if not SHA256_PATTERN.fullmatch(value[key]):
+                    add_error(errors, f"$.{key}", "must be a lowercase SHA-256 hash")
+    if "revision" in value:
+        if (
+            not isinstance(value["revision"], int)
+            or isinstance(value["revision"], bool)
+            or value["revision"] < 1
+        ):
+            add_error(errors, "$.revision", "must be an integer greater than or equal to 1")
+    if "completion" in value:
+        check_enum(value["completion"], "$.completion", errors, {"save", "recovery"})
+    if "committed_at" in value:
+        check_date_time(value["committed_at"], "$.committed_at", errors)
+
+
 def validate_decision_record(
     value: Any,
     errors: list[Diagnostic],
@@ -2131,6 +2169,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "decision-record",
             "activity-event",
             "activity-index",
+            "checkpoint-observation",
         ),
     )
     parser.add_argument("file", type=Path)
@@ -2228,6 +2267,8 @@ def main(argv: list[str] | None = None) -> int:
         validate_activity_event(value, "$", errors, file_reference)
     elif args.kind == "activity-index":
         validate_activity_index(value, errors, file_reference)
+    elif args.kind == "checkpoint-observation":
+        validate_checkpoint_observation(value, errors)
 
     emit_result(args, errors, output_file=output_file)
     return 1 if errors else 0

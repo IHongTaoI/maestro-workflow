@@ -31,7 +31,8 @@
         "decision_approved",
         "decision_superseded",
         "playbook_approved",
-        "playbook_superseded"
+        "playbook_superseded",
+        "checkpoint_recovered"
       ]
     },
     "title": {

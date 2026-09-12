@@ -1,0 +1,8 @@
+{
+  "request_id": "checkpoint_recovery_1",
+  "record_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "proposal_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "revision": 8,
+  "completion": "recovery",
+  "committed_at": "2026-09-12T11:28:04.506Z"
+}

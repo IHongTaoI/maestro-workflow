@@ -27,6 +27,7 @@ from validate import (
     FileReferenceValidator,
     validate_activity_event,
     validate_activity_index,
+    validate_checkpoint_observation,
     validate_decision_record,
 )
 
@@ -36,6 +37,7 @@ INDEX_PATH = ACTIVITY_ROOT / "index.json"
 TASKS_ROOT = Path(".maestro/tasks")
 DECISIONS_ROOT = Path(".maestro/memory/long-term/decisions")
 PLAYBOOK_DECISIONS_ROOT = Path(".maestro/playbooks/decisions")
+TEMPORARY_ROOT = Path(".maestro/memory/temporary")
 DECISION_SUFFIX = ".decision.json"
 EVENT_TYPES = {
     "task_completed",
@@ -44,6 +46,7 @@ EVENT_TYPES = {
     "decision_superseded",
     "playbook_approved",
     "playbook_superseded",
+    "checkpoint_recovered",
 }
 TASK_EVENT_STATUSES = {"completed", "archive"}
 # ``promoted_at`` is only written when the promotion transaction commits, so a ``preparing`` Task
@@ -168,11 +171,57 @@ def playbook_decision_source_files(project_root: Path) -> list[Path]:
     )
 
 
+def temporary_metadata_files(project_root: Path) -> list[Path]:
+    result: list[Path] = []
+    for lifecycle in ("active", "archive"):
+        root = project_root / TEMPORARY_ROOT / lifecycle
+        if root.exists() and not root.is_dir():
+            raise CatalogError(f"Temporary {lifecycle} root must be a directory: {root}")
+        if not root.is_dir():
+            continue
+        for path in sorted(root.glob("*/meta.yaml")):
+            if path.is_symlink():
+                raise CatalogError(f"Temporary metadata must not be a symlink: {path}")
+            project_relative(project_root, path)
+            result.append(path)
+    return result
+
+
+def checkpoint_target_roots(project_root: Path) -> list[tuple[str, str, Path]]:
+    result: list[tuple[str, str, Path]] = []
+    for metadata in task_source_files(project_root):
+        task = parse_simple_yaml(metadata)
+        result.append(("task", require_text(task, "id", metadata), metadata.parent))
+    for metadata in temporary_metadata_files(project_root):
+        temporary = parse_simple_yaml(metadata)
+        result.append(("temporary", require_text(temporary, "id", metadata), metadata.parent))
+    return result
+
+
+def checkpoint_source_files(project_root: Path) -> list[Path]:
+    result: list[Path] = []
+    for _kind, _target_id, root in checkpoint_target_roots(project_root):
+        directory = root / "references" / "checkpoints"
+        if directory.exists() and not directory.is_dir():
+            raise CatalogError(f"Checkpoint record root must be a directory: {directory}")
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("*.json")):
+            if ".failed-" in path.name:
+                continue
+            if path.is_symlink():
+                raise CatalogError(f"Checkpoint record must not be a symlink: {path}")
+            project_relative(project_root, path)
+            result.append(path)
+    return result
+
+
 def activity_source_files(project_root: Path) -> list[Path]:
     return (
         task_source_files(project_root)
         + decision_source_files(project_root)
         + playbook_decision_source_files(project_root)
+        + checkpoint_source_files(project_root)
     )
 
 
@@ -354,6 +403,108 @@ def derive_playbook_events(project_root: Path, sources: list[Path]) -> list[dict
     )
 
 
+def read_json_object(path: Path, label: str) -> tuple[dict[str, Any], str]:
+    try:
+        content = path.read_text(encoding="utf-8")
+        value = json.loads(content)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CatalogError(f"cannot parse {label} {path}: {error}") from error
+    if not isinstance(value, dict):
+        raise CatalogError(f"invalid {label} {path}: must be an object")
+    return value, content
+
+
+def require_checkpoint_hash(value: Any, key: str, source: Path) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise CatalogError(f"{source}: '{key}' must be a lowercase SHA-256 hash")
+    return value
+
+
+def derive_checkpoint_events(project_root: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    seen_requests: dict[str, Path] = {}
+    legacy_keys = {"request_id", "record_hash", "proposal_hash", "revision"}
+    versioned_keys = legacy_keys | {"completion", "committed_at"}
+    for kind, target_id, root in checkpoint_target_roots(project_root):
+        directory = root / "references" / "checkpoints"
+        if not directory.is_dir():
+            continue
+        for observation_path in sorted(directory.glob("*.committed.json")):
+            if observation_path.is_symlink():
+                raise CatalogError(f"Checkpoint observation must not be a symlink: {observation_path}")
+            observation, _ = read_json_object(observation_path, "Checkpoint observation")
+            observation_errors: list[Diagnostic] = []
+            validate_checkpoint_observation(observation, observation_errors)
+            if observation_errors:
+                messages = "; ".join(
+                    f"{error.path}: {error.message}" for error in observation_errors
+                )
+                raise CatalogError(
+                    f"invalid Checkpoint observation {observation_path}: {messages}"
+                )
+            keys = set(observation)
+            if keys == legacy_keys:
+                continue
+            if keys != versioned_keys:
+                raise CatalogError(f"invalid Checkpoint observation {observation_path}: invalid fields")
+            completion = observation.get("completion")
+            if completion not in {"save", "recovery"}:
+                raise CatalogError(f"{observation_path}: 'completion' must be save or recovery")
+            committed_at = observation.get("committed_at")
+            if not isinstance(committed_at, str) or not committed_at.strip():
+                raise CatalogError(f"{observation_path}: 'committed_at' must be a timestamp")
+            normalized_time = normalize_utc(committed_at)
+            if completion == "save":
+                continue
+
+            request_id = require_text(observation, "request_id", observation_path)
+            expected_name = f"{request_id}.committed.json"
+            if observation_path.name != expected_name:
+                raise CatalogError(f"{observation_path}: filename must match request_id as '{expected_name}'")
+            previous = seen_requests.get(request_id)
+            if previous is not None:
+                raise CatalogError(
+                    f"duplicate checkpoint request_id '{request_id}' in {previous} and {observation_path}"
+                )
+            seen_requests[request_id] = observation_path
+            request_path = directory / f"{request_id}.json"
+            if not request_path.is_file() or request_path.is_symlink():
+                raise CatalogError(f"{observation_path}: recovery request record is missing or unsafe")
+            request, request_content = read_json_object(request_path, "Checkpoint request")
+            if request.get("request_id") != request_id or request.get("kind") != kind \
+                    or request.get("target_id") != target_id:
+                raise CatalogError(f"{request_path}: checkpoint request binding mismatch")
+            base_revision = request.get("base_revision")
+            revision = observation.get("revision")
+            if not isinstance(base_revision, int) or isinstance(base_revision, bool) \
+                    or not isinstance(revision, int) or isinstance(revision, bool) \
+                    or revision != base_revision + 1:
+                raise CatalogError(f"{observation_path}: checkpoint revision mismatch")
+            record_hash = require_checkpoint_hash(observation.get("record_hash"), "record_hash", observation_path)
+            proposal_hash = require_checkpoint_hash(observation.get("proposal_hash"), "proposal_hash", observation_path)
+            if record_hash != hashlib.sha256(request_content.encode("utf-8")).hexdigest() \
+                    or proposal_hash != request.get("proposal_hash"):
+                raise CatalogError(f"{observation_path}: checkpoint observation hash mismatch")
+            snapshot = request.get("snapshot")
+            if not isinstance(snapshot, dict):
+                raise CatalogError(f"{request_path}: 'snapshot' must be an object")
+            objective = require_text(snapshot, "objective", request_path)
+            source_ref = project_relative(project_root, observation_path)
+            source_id = f"{kind}\n{target_id}\n{request_id}"
+            event = {
+                "event_id": make_event_id("checkpoint_recovered", source_id, normalized_time),
+                "occurred_at": normalized_time,
+                "event_type": "checkpoint_recovered",
+                "title": f"恢复 checkpoint：{objective}",
+                "summary": f"恢复 {kind.title()} {target_id} 到 revision {revision}",
+                "source_refs": [source_ref],
+                "status": "completed",
+            }
+            validate_event(project_root, event)
+            events.append(event)
+    return events
+
+
 def source_digest(project_root: Path, source_files: Iterable[Path] | None = None) -> str:
     files = list(source_files) if source_files is not None else activity_source_files(project_root)
     digest = hashlib.sha256()
@@ -373,11 +524,13 @@ def derive_index(project_root: Path, *, now: datetime | None = None) -> dict[str
     task_sources = task_source_files(project_root)
     decision_sources = decision_source_files(project_root)
     playbook_sources = playbook_decision_source_files(project_root)
-    sources = task_sources + decision_sources + playbook_sources
+    checkpoint_sources = checkpoint_source_files(project_root)
+    sources = task_sources + decision_sources + playbook_sources + checkpoint_sources
     digest_before = source_digest(project_root, sources)
     events = derive_task_events(project_root, task_sources)
     events.extend(derive_decision_events(project_root, decision_sources))
     events.extend(derive_playbook_events(project_root, playbook_sources))
+    events.extend(derive_checkpoint_events(project_root))
     events.sort(key=lambda item: (item["occurred_at"], item["event_id"]))
     sources_after = activity_source_files(project_root)
     digest_after = source_digest(project_root, sources_after)
