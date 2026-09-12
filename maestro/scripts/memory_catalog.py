@@ -1126,109 +1126,147 @@ def parse_checkpoint_file(path: Path) -> dict[str, Any] | None:
 def find_recoverable_checkpoint(project_root: Path) -> dict[str, Any] | None:
     candidates: list[dict[str, Any]] = []
 
-    # 1. Task checkpoints: .maestro/tasks/*/references/checkpoints/*.json and progress.md
+    def scan_checkpoints_for_target(
+        scope: str,
+        binding: str,
+        chk_dir: Path,
+        receipt: dict[str, Any] | None = None,
+        receipt_mtime: float = 0.0,
+    ) -> None:
+        committed_map: dict[str, tuple[int, float]] = {}
+        if receipt:
+            committed_map[receipt["request_id"]] = (receipt["revision"], receipt_mtime)
+
+        if chk_dir.is_dir():
+            for f in chk_dir.iterdir():
+                if not f.is_file():
+                    continue
+                if f.name.endswith(".committed.json"):
+                    req_id = f.name[:-len(".committed.json")]
+                    data = parse_checkpoint_file(f)
+                    rev = data.get("revision") if data else None
+                    mtime = f.stat().st_mtime
+                    if req_id not in committed_map or mtime > committed_map[req_id][1]:
+                        committed_map[req_id] = (rev if rev is not None else 1, mtime)
+
+            for f in chk_dir.iterdir():
+                if not f.is_file() or not f.name.endswith(".json"):
+                    continue
+                if ".committed." in f.name or ".failed-" in f.name:
+                    continue
+                rec = parse_checkpoint_file(f)
+                if not rec:
+                    continue
+                req_id = rec.get("request_id", f.stem)
+                target_binding = rec.get("target_id", binding)
+                target_scope = rec.get("kind", scope)
+                mtime = f.stat().st_mtime
+
+                if req_id in committed_map:
+                    rev, c_mtime = committed_map[req_id]
+                    candidates.append({
+                        "status": "committed",
+                        "scope": target_scope,
+                        "binding": target_binding,
+                        "revision": rev,
+                        "request_id": req_id,
+                        "mtime": max(mtime, c_mtime),
+                    })
+                else:
+                    prop_rev = rec.get("base_revision", 0) + 1
+                    candidates.append({
+                        "status": "pending",
+                        "scope": target_scope,
+                        "binding": target_binding,
+                        "proposed_revision": prop_rev,
+                        "revision": prop_rev,
+                        "request_id": req_id,
+                        "mtime": mtime,
+                    })
+
+        # Also add any receipt that didn't have a matching .json in chk_dir
+        if receipt and not any(c["request_id"] == receipt["request_id"] for c in candidates):
+            candidates.append({
+                "status": "committed",
+                "scope": scope,
+                "binding": binding,
+                "revision": receipt["revision"],
+                "request_id": receipt["request_id"],
+                "mtime": receipt_mtime,
+            })
+
+    # 1. Tasks
     tasks_root = project_root / ".maestro/tasks"
     if tasks_root.is_dir():
         for task_dir in tasks_root.iterdir():
             if not task_dir.is_dir() or task_dir.name == "archive":
                 continue
             progress_path = task_dir / "progress.md"
+            receipt = None
+            receipt_mtime = 0.0
             if progress_path.is_file():
                 try:
                     receipt = extract_checkpoint_receipt(progress_path.read_text(encoding="utf-8"))
-                    if receipt:
-                        candidates.append({
-                            "scope": "task",
-                            "binding": task_dir.name,
-                            "revision": receipt["revision"],
-                            "request_id": receipt["request_id"],
-                            "mtime": progress_path.stat().st_mtime,
-                        })
+                    receipt_mtime = progress_path.stat().st_mtime
                 except Exception:
                     pass
             chk_dir = task_dir / "references/checkpoints"
-            if chk_dir.is_dir():
-                for chk_file in chk_dir.iterdir():
-                    if not chk_file.is_file() or not chk_file.name.endswith(".json"):
-                        continue
-                    if ".committed." in chk_file.name or ".failed-" in chk_file.name:
-                        continue
-                    rec = parse_checkpoint_file(chk_file)
-                    if rec:
-                        candidates.append({
-                            "scope": rec.get("kind", "task"),
-                            "binding": rec.get("target_id", task_dir.name),
-                            "revision": rec.get("base_revision", 0) + 1,
-                            "request_id": rec.get("request_id", chk_file.stem),
-                            "mtime": chk_file.stat().st_mtime,
-                        })
+            scan_checkpoints_for_target("task", task_dir.name, chk_dir, receipt, receipt_mtime)
 
-    # 2. Temporary checkpoints: .maestro/memory/temporary/active/*/references/checkpoints/*.json and current.md
+    # 2. Temporaries
     temp_root = project_root / ".maestro/memory/temporary/active"
     if temp_root.is_dir():
         for temp_dir in temp_root.iterdir():
             if not temp_dir.is_dir():
                 continue
             current_path = temp_dir / "current.md"
+            receipt = None
+            receipt_mtime = 0.0
             if current_path.is_file():
                 try:
                     receipt = extract_checkpoint_receipt(current_path.read_text(encoding="utf-8"))
-                    if receipt:
-                        candidates.append({
-                            "scope": "temporary",
-                            "binding": temp_dir.name,
-                            "revision": receipt["revision"],
-                            "request_id": receipt["request_id"],
-                            "mtime": current_path.stat().st_mtime,
-                        })
+                    receipt_mtime = current_path.stat().st_mtime
                 except Exception:
                     pass
             chk_dir = temp_dir / "references/checkpoints"
-            if chk_dir.is_dir():
-                for chk_file in chk_dir.iterdir():
-                    if not chk_file.is_file() or not chk_file.name.endswith(".json"):
-                        continue
-                    if ".committed." in chk_file.name or ".failed-" in chk_file.name:
-                        continue
-                    rec = parse_checkpoint_file(chk_file)
-                    if rec:
-                        candidates.append({
-                            "scope": rec.get("kind", "temporary"),
-                            "binding": rec.get("target_id", temp_dir.name),
-                            "revision": rec.get("base_revision", 0) + 1,
-                            "request_id": rec.get("request_id", chk_file.stem),
-                            "mtime": chk_file.stat().st_mtime,
-                        })
+            scan_checkpoints_for_target("temporary", temp_dir.name, chk_dir, receipt, receipt_mtime)
 
-    # 3. Project/Session checkpoints: .maestro/checkpoints/*.json
+    # 3. Project/Session checkpoints
     proj_chk = project_root / ".maestro/checkpoints"
-    if proj_chk.is_dir():
-        for chk_file in proj_chk.iterdir():
-            if not chk_file.is_file() or not chk_file.name.endswith(".json"):
-                continue
-            if ".committed." in chk_file.name or ".failed-" in chk_file.name:
-                continue
-            rec = parse_checkpoint_file(chk_file)
-            if rec:
-                candidates.append({
-                    "scope": rec.get("kind", "session"),
-                    "binding": rec.get("target_id", "session"),
-                    "revision": rec.get("base_revision", 0) + 1,
-                    "request_id": rec.get("request_id", chk_file.stem),
-                    "mtime": chk_file.stat().st_mtime,
-                })
+    scan_checkpoints_for_target("session", "session", proj_chk)
 
     if not candidates:
         return None
 
-    # Deduplicate and sort: mtime descending, revision descending, binding ascending, request_id ascending
-    candidates.sort(key=lambda c: (-c["mtime"], -c["revision"], c["binding"], c["request_id"]))
-    top = candidates[0]
+    # Deduplicate candidates with the same request_id, keeping highest status / newest mtime
+    seen_req: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    # Sort first: committed first, mtime descending, revision descending
+    candidates.sort(
+        key=lambda c: (
+            0 if c["status"] == "committed" else 1,
+            -c["mtime"],
+            -c.get("revision", 0),
+            c["binding"],
+            c["request_id"],
+        )
+    )
+    for c in candidates:
+        if c["request_id"] not in seen_req:
+            seen_req.add(c["request_id"])
+            deduped.append(c)
+
+    if not deduped:
+        return None
+
+    top = deduped[0]
     return {
         "available": True,
+        "status": top["status"],
         "scope": top["scope"],
         "binding": top["binding"],
-        "revision": top["revision"],
+        "revision": top.get("revision"),
+        "proposed_revision": top.get("proposed_revision"),
         "request_id": top["request_id"],
     }
 
@@ -1319,9 +1357,14 @@ def bounded_runtime_context_text(summary: dict[str, Any]) -> str:
     if chk and chk.get("available"):
         lines.append("## Recoverable Checkpoint")
         lines.append("Recoverable checkpoint: yes")
+        status = chk.get("status", "committed")
+        lines.append(f"status: {status}")
         lines.append(f"scope: {chk.get('scope')}")
         lines.append(f"binding: {chk.get('binding')}")
-        lines.append(f"revision: {chk.get('revision')}")
+        if status == "pending":
+            lines.append(f"proposed_revision: {chk.get('proposed_revision') or chk.get('revision')}")
+        else:
+            lines.append(f"revision: {chk.get('revision')}")
         lines.append("")
 
     t_count = summary["active_task_count"]

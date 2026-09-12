@@ -57,121 +57,161 @@ async function hasAuthoritativeSources(root) {
     if (entries.some(e => e.endsWith('.md'))) return true;
   } catch {}
   try {
-    const chkDir = path.join(root, '.maestro/checkpoints');
-    const entries = await readdir(chkDir);
-    if (entries.some(e => e.endsWith('.json') && !e.includes('.committed.') && !e.includes('.failed-'))) return true;
+    if (await exists(path.join(root, '.maestro/memory/long-term/current.md'))) return true;
   } catch {}
   try {
-    if (await exists(path.join(root, '.maestro/memory/index.json'))) return true;
+    if (await exists(path.join(root, '.maestro/memory/legacy/memory.md'))) return true;
   } catch {}
+  try {
+    const fuDir = path.join(root, '.maestro/memory/followups/pending');
+    const entries = await readdir(fuDir);
+    if (entries.some(e => e.endsWith('.yaml') || e.endsWith('.yml'))) return true;
+  } catch {}
+  try {
+    const chkDir = path.join(root, '.maestro/checkpoints');
+    const entries = await readdir(chkDir);
+    if (entries.some(e => e.endsWith('.json') && !e.includes('.failed-'))) return true;
+  } catch {}
+  // NOTE: .maestro/memory/index.json is a DERIVED artifact and must NEVER be treated as an authoritative source!
   return false;
 }
 
 async function findRecoverableCheckpoint(root) {
   const candidates = [];
-  // 1. Task checkpoints: .maestro/tasks/*/references/checkpoints/*.json and progress.md
+
+  const scanTargetCheckpoints = async (scope, binding, chkDir, receipt, receiptMtime) => {
+    const committedMap = new Map();
+    if (receipt) {
+      committedMap.set(receipt.request_id, { revision: receipt.revision, mtime: receiptMtime });
+    }
+    try {
+      const files = await readdir(chkDir);
+      for (const f of files) {
+        if (f.endsWith('.committed.json')) {
+          const reqId = f.slice(0, -'.committed.json'.length);
+          try {
+            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
+            const st = await stat(path.join(chkDir, f));
+            const rev = data && typeof data === 'object' && data.revision !== undefined ? Number(data.revision) : 1;
+            committedMap.set(reqId, { revision: rev, mtime: st.mtimeMs });
+          } catch {}
+        }
+      }
+      for (const f of files) {
+        if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
+        const reqId = f.slice(0, -'.json'.length);
+        try {
+          const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
+          if (data && typeof data === 'object' && data.request_id) {
+            const st = await stat(path.join(chkDir, f));
+            const targetScope = data.kind || scope;
+            const targetBinding = data.target_id || binding;
+            if (committedMap.has(reqId)) {
+              const comm = committedMap.get(reqId);
+              candidates.push({
+                status: 'committed',
+                scope: targetScope,
+                binding: targetBinding,
+                revision: comm.revision,
+                request_id: reqId,
+                mtime: Math.max(st.mtimeMs, comm.mtime),
+              });
+            } else {
+              const propRev = Number(data.base_revision || 0) + 1;
+              candidates.push({
+                status: 'pending',
+                scope: targetScope,
+                binding: targetBinding,
+                proposed_revision: propRev,
+                revision: propRev,
+                request_id: reqId,
+                mtime: st.mtimeMs,
+              });
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+
+    if (receipt && !candidates.some(c => c.request_id === receipt.request_id)) {
+      candidates.push({
+        status: 'committed',
+        scope,
+        binding,
+        revision: receipt.revision,
+        request_id: receipt.request_id,
+        mtime: receiptMtime,
+      });
+    }
+  };
+
+  // 1. Task checkpoints
   try {
     const tasksDir = path.join(root, '.maestro/tasks');
     const taskEntries = await readdir(tasksDir);
     for (const t of taskEntries) {
       if (t === 'archive' || t.startsWith('.')) continue;
       const tDir = path.join(tasksDir, t);
+      let receipt = null;
+      let receiptMtime = 0;
       try {
         const text = await readFile(path.join(tDir, 'progress.md'), 'utf8');
         const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text);
         const revMatch = /revision:\s*(\d+)/.exec(text);
         if (reqMatch && revMatch) {
           const st = await stat(path.join(tDir, 'progress.md'));
-          candidates.push({ scope: 'task', binding: t, revision: Number(revMatch[1]), request_id: reqMatch[1], mtime: st.mtimeMs });
+          receipt = { request_id: reqMatch[1], revision: Number(revMatch[1]) };
+          receiptMtime = st.mtimeMs;
         }
       } catch {}
-      try {
-        const chkDir = path.join(tDir, 'references/checkpoints');
-        const files = await readdir(chkDir);
-        for (const f of files) {
-          if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
-          try {
-            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
-            if (data && typeof data === 'object' && data.request_id) {
-              const st = await stat(path.join(chkDir, f));
-              candidates.push({
-                scope: data.kind || 'task',
-                binding: data.target_id || t,
-                revision: Number(data.base_revision || 0) + 1,
-                request_id: data.request_id,
-                mtime: st.mtimeMs,
-              });
-            }
-          } catch {}
-        }
-      } catch {}
+      await scanTargetCheckpoints('task', t, path.join(tDir, 'references/checkpoints'), receipt, receiptMtime);
     }
   } catch {}
 
-  // 2. Temporary checkpoints: .maestro/memory/temporary/active/*/references/checkpoints/*.json and current.md
+  // 2. Temporary checkpoints
   try {
     const tempDir = path.join(root, '.maestro/memory/temporary/active');
     const tempEntries = await readdir(tempDir);
     for (const t of tempEntries) {
       if (t.startsWith('.')) continue;
       const tDir = path.join(tempDir, t);
+      let receipt = null;
+      let receiptMtime = 0;
       try {
         const text = await readFile(path.join(tDir, 'current.md'), 'utf8');
         const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text);
         const revMatch = /revision:\s*(\d+)/.exec(text);
         if (reqMatch && revMatch) {
           const st = await stat(path.join(tDir, 'current.md'));
-          candidates.push({ scope: 'temporary', binding: t, revision: Number(revMatch[1]), request_id: reqMatch[1], mtime: st.mtimeMs });
+          receipt = { request_id: reqMatch[1], revision: Number(revMatch[1]) };
+          receiptMtime = st.mtimeMs;
         }
       } catch {}
-      try {
-        const chkDir = path.join(tDir, 'references/checkpoints');
-        const files = await readdir(chkDir);
-        for (const f of files) {
-          if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
-          try {
-            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
-            if (data && typeof data === 'object' && data.request_id) {
-              const st = await stat(path.join(chkDir, f));
-              candidates.push({
-                scope: data.kind || 'temporary',
-                binding: data.target_id || t,
-                revision: Number(data.base_revision || 0) + 1,
-                request_id: data.request_id,
-                mtime: st.mtimeMs,
-              });
-            }
-          } catch {}
-        }
-      } catch {}
+      await scanTargetCheckpoints('temporary', t, path.join(tDir, 'references/checkpoints'), receipt, receiptMtime);
     }
   } catch {}
 
   // 3. Project checkpoints: .maestro/checkpoints/*.json
-  try {
-    const chkDir = path.join(root, '.maestro/checkpoints');
-    const files = await readdir(chkDir);
-    for (const f of files) {
-      if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
-      try {
-        const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
-        if (data && typeof data === 'object' && data.request_id) {
-          const st = await stat(path.join(chkDir, f));
-          candidates.push({
-            scope: data.kind || 'session',
-            binding: data.target_id || 'session',
-            revision: Number(data.base_revision || 0) + 1,
-            request_id: data.request_id,
-            mtime: st.mtimeMs,
-          });
-        }
-      } catch {}
-    }
-  } catch {}
+  await scanTargetCheckpoints('session', 'session', path.join(root, '.maestro/checkpoints'), null, 0);
 
   if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.mtime - a.mtime || b.revision - a.revision || a.binding.localeCompare(b.binding) || a.request_id.localeCompare(b.request_id));
-  return candidates[0];
+
+  // Deduplicate and prioritize committed over pending
+  const seenReq = new Set();
+  const deduped = [];
+  candidates.sort((a, b) => {
+    const statusA = a.status === 'committed' ? 0 : 1;
+    const statusB = b.status === 'committed' ? 0 : 1;
+    if (statusA !== statusB) return statusA - statusB;
+    return b.mtime - a.mtime || b.revision - a.revision || a.binding.localeCompare(b.binding) || a.request_id.localeCompare(b.request_id);
+  });
+  for (const c of candidates) {
+    if (!seenReq.has(c.request_id)) {
+      seenReq.add(c.request_id);
+      deduped.push(c);
+    }
+  }
+  return deduped.length > 0 ? deduped[0] : null;
 }
 
 function formatBoundedRuntimeContext({ tasks = [], temporaries = [], followups = [], longTermCount = 0, checkpoint = null, degradedWarning = null, limit = 3 }) {
@@ -187,12 +227,16 @@ function formatBoundedRuntimeContext({ tasks = [], temporaries = [], followups =
   }
 
   if (checkpoint) {
+    const status = checkpoint.status || 'committed';
     lines.push(
       '## Recoverable Checkpoint',
       'Recoverable checkpoint: yes',
+      `status: ${status}`,
       `scope: ${checkpoint.scope}`,
       `binding: ${checkpoint.binding}`,
-      `revision: ${checkpoint.revision}`,
+      status === 'pending'
+        ? `proposed_revision: ${checkpoint.proposed_revision || checkpoint.revision}`
+        : `revision: ${checkpoint.revision}`,
       '',
     );
   }
@@ -247,21 +291,6 @@ export async function loadBoundedRuntimeContext(root, paths = {}) {
       return null;
     }
 
-    // 1. Try running memory_catalog.py overview --limit 3 (only when authoritative sources exist on disk)
-    let hasAuthoritativeFiles = false;
-    try {
-      const taskEntries = await readdir(path.join(root, '.maestro/tasks'));
-      if (taskEntries.some(e => e !== 'archive' && !e.startsWith('.'))) hasAuthoritativeFiles = true;
-    } catch {}
-    try {
-      const tempEntries = await readdir(path.join(root, '.maestro/memory/temporary/active'));
-      if (tempEntries.some(e => !e.startsWith('.'))) hasAuthoritativeFiles = true;
-    } catch {}
-    try {
-      const chkEntries = await readdir(path.join(root, '.maestro/checkpoints'));
-      if (chkEntries.some(e => e.endsWith('.json') && !e.includes('.committed.') && !e.includes('.failed-'))) hasAuthoritativeFiles = true;
-    } catch {}
-
     const candidateScripts = [
       paths.skill ? path.join(path.dirname(paths.skill), 'scripts', 'memory_catalog.py') : null,
       path.join(root, 'maestro/scripts/memory_catalog.py'),
@@ -278,13 +307,14 @@ export async function loadBoundedRuntimeContext(root, paths = {}) {
       }
     }
 
-    if (scriptPath && (hasAuthoritativeFiles || !(await exists(path.join(root, '.maestro/memory/index.json'))))) {
+    if (scriptPath) {
       try {
         const python = process.platform === 'win32' ? 'python' : 'python3';
         const res = spawnSync(python, [scriptPath, '--project-root', root, 'overview', '--limit', '3'], {
           encoding: 'utf8',
           timeout: 5000,
           windowsHide: true,
+          env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
         });
         if (res.status === 0 && typeof res.stdout === 'string') {
           const out = res.stdout.trim();

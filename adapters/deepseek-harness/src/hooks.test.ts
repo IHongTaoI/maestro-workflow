@@ -229,27 +229,75 @@ test('loadBoundedRuntimeContext returns null when no active work exists', async 
     pending_followups: [],
   }))
   assert.equal(await loadBoundedRuntimeContext(tmp), null)
+
+  // Orphaned index.json without any authoritative sources on disk
+  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
+    schema_version: 1,
+    entries: [
+      { memory_id: 'task-orphan', title: 'Orphan task', record_type: 'task', status: 'active' },
+    ],
+    pending_followups: [],
+  }))
+  assert.equal(await loadBoundedRuntimeContext(tmp), null)
 })
 
 test('loadBoundedRuntimeContext returns bounded runtime context when active work exists', async (t) => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-active-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
 
-  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
-  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
-    schema_version: 1,
-    entries: [
-      { memory_id: 'task-1', title: 'Task 1', record_type: 'task', status: 'active' },
-      { memory_id: 'task-2', title: 'Task 2', record_type: 'task', status: 'active' },
-      { memory_id: 'task-3', title: 'Task 3', record_type: 'task', status: 'active' },
-      { memory_id: 'task-4', title: 'Task 4', record_type: 'task', status: 'active' },
-      { memory_id: 'temp-1', title: 'Temporary 1', record_type: 'temporary', status: 'active' },
-      { memory_id: 'lt-1', title: 'Long-term 1', record_type: 'long-term-entry', status: 'active' },
-    ],
-    pending_followups: [
-      { followup_id: 'f-1', title: 'Follow-up 1', status: 'pending' },
-    ],
-  }))
+  const task1 = path.join(tmp, '.maestro/tasks/task-1')
+  const task2 = path.join(tmp, '.maestro/tasks/task-2')
+  const task3 = path.join(tmp, '.maestro/tasks/task-3')
+  const task4 = path.join(tmp, '.maestro/tasks/task-4')
+  const temp1 = path.join(tmp, '.maestro/memory/temporary/active/temp-1')
+  const ltDir = path.join(tmp, '.maestro/memory/long-term/entries')
+  const fuDir = path.join(tmp, '.maestro/memory/followups/pending')
+
+  await mkdir(task1, { recursive: true })
+  await mkdir(task2, { recursive: true })
+  await mkdir(task3, { recursive: true })
+  await mkdir(task4, { recursive: true })
+  await mkdir(temp1, { recursive: true })
+  await mkdir(ltDir, { recursive: true })
+  await mkdir(fuDir, { recursive: true })
+
+  const taskYaml = (id: string, objective: string) => `id: ${id}
+objective: ${objective}
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`
+  await writeFile(path.join(task1, 'task.yaml'), taskYaml('task-1', 'Task 1'))
+  await writeFile(path.join(task2, 'task.yaml'), taskYaml('task-2', 'Task 2'))
+  await writeFile(path.join(task3, 'task.yaml'), taskYaml('task-3', 'Task 3'))
+  await writeFile(path.join(task4, 'task.yaml'), taskYaml('task-4', 'Task 4'))
+  await writeFile(path.join(temp1, 'meta.yaml'), `id: temp-1
+topic: Temporary 1
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
+  await writeFile(path.join(ltDir, 'lt-1.md'), `---
+revision: 1
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+---
+
+\`\`\`maestro-memory-entry
+{"entry_id":"lt-1","title":"Long-term 1","memory_kind":"principle","content":"Rule","source_refs":[".maestro/tasks/task-1/task.yaml"],"status":"active"}
+\`\`\`
+`)
+  await writeFile(path.join(fuDir, 'f-1.yaml'), `followup_id: f-1
+title: Follow-up 1
+status: pending
+created_at: 2026-09-12T10:00:00Z
+source_refs:
+  - .maestro/tasks/task-1/task.yaml
+`)
 
   const result = await loadBoundedRuntimeContext(tmp)
   assert.ok(result)
@@ -269,14 +317,16 @@ test('injectSessionRuntimeContext steers agent with bounded runtime context on s
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-steer-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
 
-  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
-  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
-    schema_version: 1,
-    entries: [
-      { memory_id: 'task-active', title: 'Work in progress', record_type: 'task', status: 'active' },
-    ],
-    pending_followups: [],
-  }))
+  const taskDir = path.join(tmp, '.maestro/tasks/task-active')
+  await mkdir(taskDir, { recursive: true })
+  await writeFile(path.join(taskDir, 'task.yaml'), `id: task-active
+objective: Work in progress
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
 
   const f = autoFixture()
   const injected = await injectSessionRuntimeContext({ agent: f.agent }, tmp)
@@ -321,15 +371,30 @@ test('loadBoundedRuntimeContext discovers recoverable checkpoint and returns con
   await mkdir(chkDir, { recursive: true })
   await writeFile(path.join(chkDir, 'req-chk-1.json'), JSON.stringify(checkpointPayload, null, 2))
 
+  // 1. Pending request: status: pending and proposed_revision: 2
   const result = await loadBoundedRuntimeContext(tmp)
   assert.ok(result)
   assert.match(result, /# Memory Overview \(Runtime Context\)/)
   assert.match(result, /当前检测到项目存在活动工作/)
   assert.match(result, /## Recoverable Checkpoint/)
   assert.match(result, /Recoverable checkpoint: yes/)
+  assert.match(result, /status: pending/)
   assert.match(result, /scope: task/)
   assert.match(result, /binding: task-chk/)
-  assert.match(result, /revision: 2/)
+  assert.match(result, /proposed_revision: 2/)
+
+  // 2. Verified committed checkpoint: status: committed and revision: 2
+  await writeFile(path.join(chkDir, 'req-chk-1.committed.json'), JSON.stringify({
+    request_id: 'req-chk-1',
+    revision: 2,
+  }))
+
+  const committedResult = await loadBoundedRuntimeContext(tmp)
+  assert.ok(committedResult)
+  assert.match(committedResult, /## Recoverable Checkpoint/)
+  assert.match(committedResult, /status: committed/)
+  assert.match(committedResult, /revision: 2/)
+  assert.doesNotMatch(committedResult, /proposed_revision/)
 })
 
 test('loadBoundedRuntimeContext rebuilds missing index when authoritative task exists', async (t) => {
@@ -395,5 +460,42 @@ revision: 1
   assert.ok(refreshed.entries.some((e: any) => e.memory_id === 'task-live-new'))
   assert.ok(!refreshed.entries.some((e: any) => e.memory_id === 'task-obsolete'))
 })
+
+test('loadBoundedRuntimeContext with fs does not bypass freshness/rebuild when authoritative task exists', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-fs-rebuild-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  const taskDir = path.join(tmp, '.maestro/tasks/task-with-fs')
+  await mkdir(taskDir, { recursive: true })
+  await writeFile(path.join(taskDir, 'task.yaml'), `id: task-with-fs
+objective: Active task tested with fs parameter
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
+
+  // Pass dummy fs object
+  const dummyFs: any = {
+    async resolve(p: string) { return { targetKey: p } },
+    async stat() { return undefined },
+    async readText() { return '' },
+    async writeText() { return { targetKey: '' } },
+  }
+
+  const result = await loadBoundedRuntimeContext(tmp, dummyFs)
+  assert.ok(result)
+  assert.match(result, /# Memory Overview \(Runtime Context\)/)
+  assert.match(result, /当前检测到项目存在活动工作/)
+  assert.match(result, /## Active Tasks \(1\)/)
+  assert.match(result, /task-with-fs/)
+
+  // Assert index was written even though fs was passed
+  const indexPath = path.join(tmp, '.maestro/memory/index.json')
+  const content = await readFile(indexPath, 'utf8')
+  assert.ok(content)
+})
+
 
 

@@ -252,22 +252,26 @@ test('Codex injects bounded live Runtime Context when active Task, Temporary, or
   const root = await fixture(t);
   await project(root);
 
-  const indexPayload = {
-    schema_version: 1,
-    entries: [
-      { memory_id: 'task-cache', title: 'Implement caching layer', record_type: 'task', status: 'active', path: '.maestro/tasks/task-cache/task.yaml' },
-      { memory_id: 'task-auth', title: 'OAuth integration', record_type: 'task', status: 'active', path: '.maestro/tasks/task-auth/task.yaml' },
-      { memory_id: 'task-ci', title: 'Setup CI pipelines', record_type: 'task', status: 'active', path: '.maestro/tasks/task-ci/task.yaml' },
-      { memory_id: 'task-db', title: 'DB migration', record_type: 'task', status: 'active', path: '.maestro/tasks/task-db/task.yaml' },
-      { memory_id: 'temp-investigate', title: 'Investigate leak', record_type: 'temporary', status: 'active', path: '.maestro/memory/temporary/active/temp-investigate/meta.yaml' },
-      { memory_id: 'lt-api-boundary', title: 'API boundary rules', record_type: 'long-term-entry', status: 'active', path: '.maestro/memory/long-term/entries/lt-api-boundary.md' },
-    ],
-    pending_followups: [
-      { followup_id: 'followup-review', title: 'Review memory invariants', status: 'pending' },
-    ],
-  };
+  await put(root, '.maestro/evidence/rules.md', '# Rules\nSome rules.\n');
+  await put(root, '.maestro/tasks/task-cache/task.yaml', 'id: task-cache\nobjective: Implement caching layer\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-auth/task.yaml', 'id: task-auth\nobjective: OAuth integration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-ci/task.yaml', 'id: task-ci\nobjective: Setup CI pipelines\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-db/task.yaml', 'id: task-db\nobjective: DB migration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/memory/temporary/active/temp-investigate/meta.yaml', 'id: temp-investigate\ntopic: Investigate leak\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/memory/long-term/entries/lt-api-boundary.md', `---
+revision: 1
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+---
 
-  await put(root, '.maestro/memory/index.json', JSON.stringify(indexPayload));
+# Entry
+
+\`\`\`maestro-memory-entry
+{"entry_id":"lt-api-boundary","title":"API boundary rules","memory_kind":"experience","content":"Boundary rules","source_refs":[".maestro/evidence/rules.md"],"status":"active"}
+\`\`\`
+`);
+  await put(root, '.maestro/memory/followups/pending/followup-review.yaml', 'followup_id: followup-review\ntitle: Review memory invariants\nstatus: pending\ncreated_at: 2026-09-12T10:00:00Z\nsource_refs:\n  - .maestro/evidence/rules.md\n');
+
   const result = await recoveryContext(event(root));
   assert.ok(result);
   const context = result.hookSpecificOutput.additionalContext;
@@ -285,6 +289,25 @@ test('Codex injects bounded live Runtime Context when active Task, Temporary, or
   assert.match(context, /## Pending Follow-ups \(1\)/);
   assert.match(context, /followup-review/);
   assert.match(context, /## Long-term Memory \(1 项已索引\)/);
+});
+
+test('Codex SessionStart does not inject runtime context when index.json exists without any authoritative sources', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // Orphaned index.json without authoritative sources on disk
+  const indexPayload = {
+    schema_version: 1,
+    entries: [
+      { memory_id: 'task-orphaned', title: 'Orphaned task', record_type: 'task', status: 'active', path: '.maestro/tasks/task-orphaned/task.yaml' },
+    ],
+    pending_followups: [],
+  };
+  await put(root, '.maestro/memory/index.json', JSON.stringify(indexPayload));
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /# Memory Overview/);
 });
 
 test('Codex SessionStart rebuilds missing index when authoritative sources exist and injects live context', async t => {
@@ -390,17 +413,37 @@ test('Codex SessionStart injects recoverable checkpoint runtime context when no 
     JSON.stringify(checkpointPayload, null, 2),
   );
 
-  const result = await recoveryContext(event(root));
-  assert.ok(result);
-  const context = result.hookSpecificOutput.additionalContext;
+  // 1. Pending request: outputs status: pending and proposed_revision: 4
+  const pendingResult = await recoveryContext(event(root));
+  assert.ok(pendingResult);
+  const pendingContext = pendingResult.hookSpecificOutput.additionalContext;
 
-  assert.match(context, /# Memory Overview \(Runtime Context\)/);
-  assert.match(context, /当前检测到项目存在活动工作/);
-  assert.match(context, /## Recoverable Checkpoint/);
-  assert.match(context, /Recoverable checkpoint: yes/);
-  assert.match(context, /scope: task/);
-  assert.match(context, /binding: task-suspended/);
-  assert.match(context, /revision: 4/);
+  assert.match(pendingContext, /# Memory Overview \(Runtime Context\)/);
+  assert.match(pendingContext, /当前检测到项目存在活动工作/);
+  assert.match(pendingContext, /## Recoverable Checkpoint/);
+  assert.match(pendingContext, /Recoverable checkpoint: yes/);
+  assert.match(pendingContext, /status: pending/);
+  assert.match(pendingContext, /scope: task/);
+  assert.match(pendingContext, /binding: task-suspended/);
+  assert.match(pendingContext, /proposed_revision: 4/);
+
+  // 2. Committed checkpoint observation: outputs status: committed and revision: 4
+  await put(
+    root,
+    '.maestro/tasks/task-suspended/references/checkpoints/req-chk-99.committed.json',
+    JSON.stringify({ request_id: 'req-chk-99', revision: 4 }),
+  );
+
+  const committedResult = await recoveryContext(event(root));
+  assert.ok(committedResult);
+  const committedContext = committedResult.hookSpecificOutput.additionalContext;
+
+  assert.match(committedContext, /## Recoverable Checkpoint/);
+  assert.match(committedContext, /Recoverable checkpoint: yes/);
+  assert.match(committedContext, /status: committed/);
+  assert.match(committedContext, /scope: task/);
+  assert.match(committedContext, /binding: task-suspended/);
+  assert.match(committedContext, /revision: 4/);
 });
 
 
