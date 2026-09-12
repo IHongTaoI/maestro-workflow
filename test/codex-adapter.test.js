@@ -446,4 +446,60 @@ test('Codex SessionStart injects recoverable checkpoint runtime context when no 
   assert.match(committedContext, /revision: 4/);
 });
 
+test('Codex SessionStart does not consume stale index when refresh/rebuild fails and outputs degraded warning', async t => {
+  const root = await fixture(t);
+  await project(root);
+
+  // Authoritative task on disk
+  await put(root, '.maestro/tasks/task-current/task.yaml', `id: task-current
+objective: Real current task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+
+  // Stale index containing obsolete task
+  await put(root, '.maestro/memory/index.json', JSON.stringify({
+    schema_version: 1,
+    generated_at: '2026-09-01T00:00:00Z',
+    source_digest: 'obsolete',
+    entries: [
+      { memory_id: 'task-stale', title: 'Stale task that must not be consumed', record_type: 'task', status: 'active' },
+    ],
+    pending_followups: [],
+  }));
+
+  // Authoritative committed checkpoint exists
+  await put(
+    root,
+    '.maestro/tasks/task-current/references/checkpoints/req-deg-1.committed.json',
+    JSON.stringify({ request_id: 'req-deg-1', revision: 1 }),
+  );
+
+  // Force Python overview/rebuild to fail
+  process.env.MAESTRO_FORCE_PYTHON_FAIL = '1';
+  t.after(() => { delete process.env.MAESTRO_FORCE_PYTHON_FAIL; });
+
+  const result = await recoveryContext(event(root));
+  assert.ok(result);
+  const context = result.hookSpecificOutput.additionalContext;
+
+  // Stale task from index.json MUST NOT be consumed
+  assert.doesNotMatch(context, /task-stale/);
+  assert.doesNotMatch(context, /Stale task that must not be consumed/);
+
+  // Explicit degraded warning MUST be output
+  assert.match(context, /警告：检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败/);
+
+  // Authoritative checkpoint MUST still be presented
+  assert.match(context, /## Recoverable Checkpoint/);
+  assert.match(context, /Recoverable checkpoint: yes/);
+  assert.match(context, /status: committed/);
+  assert.match(context, /binding: task-current/);
+  assert.match(context, /revision: 1/);
+});
+
+
 

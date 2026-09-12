@@ -1184,16 +1184,16 @@ def find_recoverable_checkpoint(project_root: Path) -> dict[str, Any] | None:
                         "mtime": mtime,
                     })
 
-        # Also add any receipt that didn't have a matching .json in chk_dir
-        if receipt and not any(c["request_id"] == receipt["request_id"] for c in candidates):
-            candidates.append({
-                "status": "committed",
-                "scope": scope,
-                "binding": binding,
-                "revision": receipt["revision"],
-                "request_id": receipt["request_id"],
-                "mtime": receipt_mtime,
-            })
+        for req_id, (rev, c_mtime) in committed_map.items():
+            if not any(c["request_id"] == req_id for c in candidates):
+                candidates.append({
+                    "status": "committed",
+                    "scope": scope,
+                    "binding": binding,
+                    "revision": rev,
+                    "request_id": req_id,
+                    "mtime": c_mtime,
+                })
 
     # 1. Tasks
     tasks_root = project_root / ".maestro/tasks"

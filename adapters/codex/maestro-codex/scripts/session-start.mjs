@@ -133,15 +133,17 @@ async function findRecoverableCheckpoint(root) {
       }
     } catch {}
 
-    if (receipt && !candidates.some(c => c.request_id === receipt.request_id)) {
-      candidates.push({
-        status: 'committed',
-        scope,
-        binding,
-        revision: receipt.revision,
-        request_id: receipt.request_id,
-        mtime: receiptMtime,
-      });
+    for (const [reqId, comm] of committedMap.entries()) {
+      if (!candidates.some(c => c.request_id === reqId)) {
+        candidates.push({
+          status: 'committed',
+          scope,
+          binding,
+          revision: comm.revision,
+          request_id: reqId,
+          mtime: comm.mtime,
+        });
+      }
     }
   };
 
@@ -307,7 +309,7 @@ export async function loadBoundedRuntimeContext(root, paths = {}) {
       }
     }
 
-    if (scriptPath) {
+    if (scriptPath && process.env.MAESTRO_FORCE_PYTHON_FAIL !== '1') {
       try {
         const python = process.platform === 'win32' ? 'python' : 'python3';
         const res = spawnSync(python, [scriptPath, '--project-root', root, 'overview', '--limit', '3'], {
@@ -331,49 +333,16 @@ export async function loadBoundedRuntimeContext(root, paths = {}) {
           }
         }
       } catch {
-        // Fall through to JS fallback
+        // Fall through to degraded fallback
       }
     }
 
-    // 2. JS Fallback
+    // 2. Degradation fallback: refresh failed or freshness unknown
+    // Do NOT consume unverified or stale index.json! Output degraded warning while preserving authoritative checkpoint.
     const checkpoint = await findRecoverableCheckpoint(root);
-    const indexPath = paths.index || path.join(root, '.maestro/memory/index.json');
-    let index = null;
-    if (await exists(indexPath)) {
-      try {
-        const content = await readFile(indexPath, 'utf8');
-        index = JSON.parse(content);
-      } catch {}
-    }
-
-    if (!index) {
-      // Missing index while authoritative sources exist: degrade gracefully
-      return formatBoundedRuntimeContext({
-        checkpoint,
-        degradedWarning: '检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失且自动重建失败。请运行 `python maestro/scripts/memory_catalog.py build` 重建索引。',
-      });
-    }
-
-    const visible = Array.isArray(index.entries)
-      ? index.entries.filter(e => e && typeof e === 'object' && e.status === 'active')
-      : [];
-    const tasks = visible.filter(e => e.record_type === 'task');
-    const temporaries = visible.filter(e => e.record_type === 'temporary');
-    const followups = Array.isArray(index.pending_followups)
-      ? index.pending_followups.filter(f => f && typeof f === 'object' && f.status !== 'completed' && f.status !== 'cancelled')
-      : [];
-    const longTermCount = visible.filter(e => e.record_type === 'long-term-entry').length;
-
-    if (tasks.length === 0 && temporaries.length === 0 && followups.length === 0 && !checkpoint) {
-      return null;
-    }
-
     return formatBoundedRuntimeContext({
-      tasks,
-      temporaries,
-      followups,
-      longTermCount,
       checkpoint,
+      degradedWarning: '检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败。请运行 `python maestro/scripts/memory_catalog.py build` 重建索引。',
     });
   } catch {
     return null;

@@ -497,5 +497,63 @@ revision: 1
   assert.ok(content)
 })
 
+test('loadBoundedRuntimeContext does not consume stale index when refresh/rebuild fails and outputs degraded warning', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-fail-deg-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  const taskDir = path.join(tmp, '.maestro/tasks/task-dsh-current')
+  await mkdir(taskDir, { recursive: true })
+  await writeFile(path.join(taskDir, 'task.yaml'), `id: task-dsh-current
+objective: Real current DSH task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
+
+  // Stale index containing obsolete task
+  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
+  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
+    schema_version: 1,
+    generated_at: '2026-09-01T00:00:00Z',
+    source_digest: 'obsolete',
+    entries: [
+      { memory_id: 'task-stale', title: 'Stale task that must not be consumed', record_type: 'task', status: 'active' },
+    ],
+    pending_followups: [],
+  }))
+
+  // Authoritative committed checkpoint exists
+  const chkDir = path.join(taskDir, 'references/checkpoints')
+  await mkdir(chkDir, { recursive: true })
+  await writeFile(path.join(chkDir, 'req-dsh-deg-1.committed.json'), JSON.stringify({
+    request_id: 'req-dsh-deg-1',
+    revision: 1,
+  }))
+
+  // Force Python overview/rebuild to fail
+  process.env.MAESTRO_FORCE_PYTHON_FAIL = '1'
+  t.after(() => { delete process.env.MAESTRO_FORCE_PYTHON_FAIL })
+
+  const result = await loadBoundedRuntimeContext(tmp)
+  assert.ok(result)
+
+  // Stale task from index.json MUST NOT be consumed
+  assert.doesNotMatch(result, /task-stale/)
+  assert.doesNotMatch(result, /Stale task that must not be consumed/)
+
+  // Explicit degraded warning MUST be output
+  assert.match(result, /警告：检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败/)
+
+  // Authoritative checkpoint MUST still be presented
+  assert.match(result, /## Recoverable Checkpoint/)
+  assert.match(result, /Recoverable checkpoint: yes/)
+  assert.match(result, /status: committed/)
+  assert.match(result, /binding: task-dsh-current/)
+  assert.match(result, /revision: 1/)
+})
+
+
 
 
