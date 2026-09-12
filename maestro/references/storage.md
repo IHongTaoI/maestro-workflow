@@ -428,8 +428,11 @@ Temporary；未提交的提升相反。不需要维护组不变量时，优先�
 在当前状态变化前，以互斥方式完整发布请求。对 `current.md`（Temporary）或 `progress.md`
 （Task）的单次原子替换同时提交摘要和 `checkpoint_receipt`；receipt 包含 `request_id`、
 `source_hash`、`revision`。这不能替代多文件事务协议。通过验证的不可变
-`<request-id>.committed.json` 记录 request hash、proposal hash 和 committed revision。该标记
-只是该请求完成的证据，不覆盖之后的编辑。
+`<request-id>.committed.json` 记录 request hash、proposal hash 和 committed revision。新记录还按
+[checkpoint-observation.schema.json](schemas/checkpoint-observation.schema.json) 保存
+`completion`（`save` 或 `recovery`）以及首次发布时的 `committed_at`；旧四字段记录继续有效。
+`completion` 由调用入口决定：只有显式 `retry` 写 `recovery`，重复 `save` 仍写 `save`。该标记
+只是该请求完成的证据，不覆盖之后的编辑；已经存在的合法 observation 不得重写时间或 completion。
 
 删除或替换 receipt 前，校验对应 request 和 committed observation。若确认过程中断，准确
 proposal bytes 加匹配 receipt 可以修复 observation，而无需重复状态写入。当前状态与原始 base、

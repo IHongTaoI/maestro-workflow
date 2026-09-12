@@ -97,8 +97,12 @@ No Long-term entries, task lifecycle metadata or multi-file business state chang
 
 Hold metadata and state locks in lexical path order, recheck active lifecycle and base revision/hash,
 and use host FsVersion CAS. FsVersion and Core revision are distinct. Re-read the committed
-bytes before publishing the immutable committed observation (request hash, proposal hash,
-revision). Release all locks even when another release fails. Lock waiting is bounded/nonblocking;
+bytes before publishing the immutable committed observation. New observations follow
+[checkpoint-observation.schema.json](../../maestro/references/schemas/checkpoint-observation.schema.json)
+and contain request hash, proposal hash, revision, `completion` (`save` or `recovery`) and the
+first-publication `committed_at`; legacy four-field observations remain readable. Only the explicit
+`retry` entry point writes `completion: recovery`; a repeated `save` remains `completion: save`.
+Release all locks even when another release fails. Lock waiting is bounded/nonblocking;
 expired held locks are never automatically stolen.
 
 ## Retry, concurrency and failure behavior
@@ -142,6 +146,11 @@ The [Memory](../../maestro/references/memory.md) and [storage](../../maestro/ref
 references describe optional checkpoint recovery. Read the selected target's managed snapshot
 alongside its user-authored context; refresh the Memory catalog after successful formal writes.
 Catalog failure does not roll back the committed checkpoint. Bare Core remains usable.
+
+Activity may derive one `checkpoint_recovered` milestone from a valid new observation whose
+completion is `recovery`. Its event time comes only from `committed_at`; save observations, legacy
+observations and failure diagnostics are not projected. Activity is a deletable view and never
+participates in checkpoint status, retry or commit decisions.
 
 Automated tests cover receipt/no-op retries, changed-payload IDs, new input, lost acknowledgements,
 observation repair, CAS races, source/lifecycle changes, invalid records, path escape,

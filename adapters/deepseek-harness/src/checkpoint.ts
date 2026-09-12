@@ -6,6 +6,7 @@ import { MaestroSchemaValidator } from './validate'
 import type { FsDirEntry, FsTarget } from '@deepseek-ai/dsh-fs'
 
 const SCHEMA = 'https://maestro.local/schemas/checkpoint.schema.json'
+const OBSERVATION_SCHEMA = 'https://maestro.local/schemas/checkpoint-observation.schema.json'
 const LIMIT = 128 * 1024
 const START = '<!-- maestro-checkpoint:start -->'
 const END = '<!-- maestro-checkpoint:end -->'
@@ -37,6 +38,14 @@ interface RecordData extends CheckpointInput {
   source_hash: string
   proposal: string
   proposal_hash: string
+}
+interface ObservationData {
+  request_id: string
+  record_hash: string
+  proposal_hash: string
+  revision: number
+  completion?: 'save' | 'recovery'
+  committed_at?: string
 }
 export interface CheckpointConfig { projectRoot: string; recoveryRoot?: string; optionalRecovery?: boolean }
 export interface CheckpointFs extends StateFileSystem {
@@ -77,6 +86,11 @@ function target(kind: string, id: string) {
 }
 function requestId(id: string) {
   requireThat(typeof id === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id), 'invalid_request_id')
+}
+function timestampWithTimezone(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/.test(value)
+    && Number.isFinite(Date.parse(value))
 }
 
 /** Bind every relative resolution to the configured project, never process.cwd(). */
@@ -252,7 +266,7 @@ export class CheckpointWriter {
     if (previous) {
       requireThat(previous.input_hash === inputHash, 'request_id_reused')
       this.lastRecord = previous
-      return this.commit(previous)
+      return this.commit(previous, 'save')
     }
     const t = await this.active(kind, target_id)
     const state = await this.store.readSnapshot(t.state)
@@ -293,22 +307,43 @@ export class CheckpointWriter {
     this.failureStage = 'project_request'
     await this.immutable(this.recordPath(kind, target_id, request_id), json(record))
     if (this.recovery === 'none') this.recovery = 'project'
-    return this.commit(record)
+    return this.commit(record, 'save')
   }
 
   async retry(kind: 'temporary' | 'task', id: string, rid: string) {
     const record = await this.load(kind, id, rid)
     requireThat(record, 'request_not_found')
     this.lastRecord = record
-    return this.commit(record)
+    return this.commit(record, 'recovery')
   }
 
   private observationPath(r: RecordData) {
     return `${target(r.kind, r.target_id).root}/references/checkpoints/${r.request_id}.committed.json`
   }
-  private observation(r: RecordData) {
+  private legacyObservation(r: RecordData) {
     return json({ request_id: r.request_id, record_hash: hash(json(r)), proposal_hash: r.proposal_hash,
       revision: r.base_revision + 1 })
+  }
+  private observation(r: RecordData, completion: 'save' | 'recovery') {
+    return json({ request_id: r.request_id, record_hash: hash(json(r)), proposal_hash: r.proposal_hash,
+      revision: r.base_revision + 1, completion, committed_at: new Date().toISOString() })
+  }
+  private validateObservation(content: string, r: RecordData): ObservationData {
+    let value: unknown
+    try { value = JSON.parse(content) }
+    catch { throw new CheckpointError('invalid_observation') }
+    requireThat(this.validator.validate(OBSERVATION_SCHEMA, value).ok, 'invalid_observation')
+    const observation = value as ObservationData
+    requireThat(observation.request_id === r.request_id
+      && observation.record_hash === hash(json(r))
+      && observation.proposal_hash === r.proposal_hash
+      && observation.revision === r.base_revision + 1, 'invalid_observation')
+    if (observation.completion === undefined) {
+      requireThat(content === this.legacyObservation(r), 'invalid_observation')
+    } else {
+      requireThat(timestampWithTimezone(observation.committed_at), 'invalid_observation')
+    }
+    return observation
   }
   async status(kind: 'temporary' | 'task', id: string, rid: string) {
     const r = await this.load(kind, id, rid)
@@ -317,12 +352,12 @@ export class CheckpointWriter {
     // archived, so it does not gate on the target still being `active`.
     const state = await this.store.readSnapshot(target(kind, id).state)
     const observation = await this.store.readSnapshot(this.observationPath(r))
-    if (observation) requireThat(observation.content === this.observation(r), 'invalid_observation')
+    if (observation) this.validateObservation(observation.content, r)
     return { status: (observation || (state && hash(state.content) === r.proposal_hash)) ? 'committed' : 'pending',
       request_id: rid, proposed_revision: r.base_revision + 1, recovery: this.recovery }
   }
 
-  private async commit(r: RecordData) {
+  private async commit(r: RecordData, completion: 'save' | 'recovery') {
     this.signal.throwIfAborted()
     const t = target(r.kind, r.target_id)
     const releases: Array<() => Promise<void>> = []
@@ -338,7 +373,7 @@ export class CheckpointWriter {
       requireThat(state, 'state_not_found')
       const observation = await this.store.readSnapshot(this.observationPath(r))
       if (observation) {
-        requireThat(observation.content === this.observation(r), 'invalid_observation')
+        this.validateObservation(observation.content, r)
         return { status: 'already_committed', request_id: r.request_id, revision: r.base_revision + 1,
           catalog_refresh_required: true }
       }
@@ -352,10 +387,10 @@ export class CheckpointWriter {
           const previous = await this.load(r.kind, r.target_id, prior.request_id)
           requireThat(previous, 'previous_request_missing')
           const known = await this.store.readSnapshot(this.observationPath(previous))
-          if (known) requireThat(known.content === this.observation(previous), 'invalid_observation')
+          if (known) this.validateObservation(known.content, previous)
           else {
             requireThat(hash(state.content) === previous.proposal_hash, 'previous_commit_ambiguous')
-            await this.immutable(this.observationPath(previous), this.observation(previous))
+            await this.immutable(this.observationPath(previous), this.observation(previous, 'save'))
           }
         }
         this.signal.throwIfAborted()
@@ -365,7 +400,7 @@ export class CheckpointWriter {
       }
       requireThat(hash((await this.store.readSnapshot(t.state))?.content ?? '') === r.proposal_hash, 'commit_unconfirmed')
       this.failureStage = 'observation_write'
-      await this.immutable(this.observationPath(r), this.observation(r))
+      await this.immutable(this.observationPath(r), this.observation(r, completion))
       return { status: 'committed', request_id: r.request_id, revision: r.base_revision + 1,
         catalog_refresh_required: true }
     } finally {

@@ -293,6 +293,15 @@ try {
         "$validatorFixtureRoot/activity-event-temporary-promoted-valid.json" 0
     Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
         "$validatorFixtureRoot/activity-event-unknown-type-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-checkpoint-recovered-valid.json" 0
+    $checkpointObservationSchema = "maestro/references/schemas/checkpoint-observation.schema.json"
+    Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
+        "$validatorFixtureRoot/checkpoint-observation-recovery-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
+        "$validatorFixtureRoot/checkpoint-observation-partial-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
+        "$validatorFixtureRoot/checkpoint-observation-timezone-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"
@@ -710,6 +719,8 @@ try {
         @{ Path = "maestro/references/storage.md"; Text = "staged/<state-key>" },
         @{ Path = "maestro/references/storage.md"; Text = "applied/<sequence>.yaml" },
         @{ Path = "maestro/references/storage.md"; Text = "SHA-256" },
+        @{ Path = "maestro/references/storage.md"; Text = "checkpoint-observation.schema.json" },
+        @{ Path = "maestro/references/activity.md"; Text = "checkpoint_recovered" },
         @{ Path = "maestro/references/coordination.md"; Text = "Task 已是唯一逻辑活动目标" },
         @{ Path = "maestro/references/handoffs.md"; Text = '`needs_user_input: true` 要求 `status: blocked`' },
         @{ Path = "maestro/references/memory.md"; Text = "当前代码或运行时证据" },

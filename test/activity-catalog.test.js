@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -120,6 +121,114 @@ async function seedPlaybookDecision(projectRoot, options, fileId = options.id) {
     decisionRecord({ targetIds: ['pb-20260829t000000z-a1b2'], ...options }),
   );
 }
+
+const sha256 = (content) => createHash('sha256').update(content).digest('hex');
+
+async function seedCheckpointObservation(projectRoot, {
+  kind = 'task', targetId = 'checkpoint-task', requestId = 'checkpoint_recovery_1',
+  completion = 'recovery', committedAt = '2026-09-12T11:28:04.506Z', lifecycle = 'active',
+} = {}) {
+  let root;
+  if (kind === 'task') {
+    root = lifecycle === 'archive'
+      ? `.maestro/tasks/archive/${targetId}`
+      : `.maestro/tasks/${targetId}`;
+    await seedTask(projectRoot, {
+      id: targetId, objective: 'Checkpoint target', status: lifecycle === 'archive' ? 'archive' : 'active',
+      completedAt: null,
+    }, lifecycle === 'archive' ? '.maestro/tasks/archive' : '.maestro/tasks');
+  } else {
+    root = `.maestro/memory/temporary/${lifecycle}/${targetId}`;
+    await writeProjectFile(projectRoot, `${root}/meta.yaml`, [
+      `id: ${targetId}`, 'topic: Checkpoint target', `status: ${lifecycle === 'archive' ? 'archive' : 'active'}`,
+      'created_at: 2026-09-01T00:00:00Z', 'updated_at: 2026-09-01T00:00:00Z',
+      'updated_by: old-zhou/test', 'revision: 1', '',
+    ].join('\n'));
+  }
+  const request = JSON.stringify({
+    schema_version: 1, request_id: requestId, project: projectRoot, kind, target_id: targetId,
+    session_id: 'session-test', base_revision: 7, base_hash: 'a'.repeat(64),
+    input_hash: 'b'.repeat(64), snapshot: { objective: '恢复关键工作', confirmed: [], rejected: [],
+      in_progress: [], next: [], open_questions: [], source_refs: [] }, source_hash: 'c'.repeat(64),
+    proposal: 'proposal', proposal_hash: 'd'.repeat(64),
+  });
+  const directory = `${root}/references/checkpoints`;
+  await writeProjectFile(projectRoot, `${directory}/${requestId}.json`, request);
+  const observation = {
+    request_id: requestId, record_hash: sha256(request), proposal_hash: 'd'.repeat(64), revision: 8,
+  };
+  if (completion !== 'legacy') Object.assign(observation, { completion, committed_at: committedAt });
+  const observationPath = `${directory}/${requestId}.committed.json`;
+  await writeProjectFile(projectRoot, observationPath, JSON.stringify(observation));
+  return { observationPath, requestPath: `${directory}/${requestId}.json` };
+}
+
+test('explicit retry completion becomes one deterministic checkpoint recovery event', async (t) => {
+  const projectRoot = await createProject(t);
+  const { observationPath } = await seedCheckpointObservation(projectRoot);
+
+  const first = parseJson(await runActivity(projectRoot, [
+    'search', '--month', '2026-09', '--event-type', 'checkpoint_recovered',
+  ]));
+  assert.equal(first.total, 1);
+  assert.equal(first.events[0].occurred_at, '2026-09-12T11:28:04Z');
+  assert.equal(first.events[0].title, '恢复 checkpoint：恢复关键工作');
+  assert.deepEqual(first.events[0].source_refs, [observationPath]);
+
+  await rm(path.join(projectRoot, '.maestro', 'activity'), { recursive: true, force: true });
+  const rebuilt = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(rebuilt.events[0].event_id, first.events[0].event_id);
+});
+
+test('save and legacy checkpoint observations are omitted without guessing recovery events', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedCheckpointObservation(projectRoot, { requestId: 'checkpoint_save_1', completion: 'save' });
+  await seedCheckpointObservation(projectRoot, {
+    targetId: 'legacy-task', requestId: 'checkpoint_legacy_1', completion: 'legacy',
+  });
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 0);
+});
+
+test('the same checkpoint request id on different targets produces distinct events', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedCheckpointObservation(projectRoot, { targetId: 'checkpoint-a', requestId: 'shared_request' });
+  await seedCheckpointObservation(projectRoot, { targetId: 'checkpoint-b', requestId: 'shared_request' });
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 2);
+  assert.notEqual(result.events[0].event_id, result.events[1].event_id);
+});
+
+test('recovery observations require an intact adjacent request and invalidate the Activity cache', async (t) => {
+  const projectRoot = await createProject(t);
+  const seeded = await seedCheckpointObservation(projectRoot, { kind: 'temporary', targetId: 'temp-recovery' });
+  const before = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(before.total, 1);
+  await rm(path.join(projectRoot, ...seeded.requestPath.split('/')));
+  const failure = await rejectedCommand(runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.match(failure.stderr, /recovery request record is missing or unsafe/);
+});
+
+test('Temporary metadata without checkpoints is not parsed as recovery authority', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/temporary/active/unrelated/meta.yaml',
+    'topic: unrelated malformed metadata\n',
+  );
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 0);
+});
+
+test('duplicate active and archived Temporary checkpoint targets fail with the target identity', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedCheckpointObservation(projectRoot, { kind: 'temporary', targetId: 'duplicate-temp' });
+  await seedCheckpointObservation(projectRoot, {
+    kind: 'temporary', targetId: 'duplicate-temp', lifecycle: 'archive', requestId: 'archived_request',
+  });
+  const failure = await rejectedCommand(runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.match(failure.stderr, /duplicate checkpoint target 'temporary\/duplicate-temp'/);
+});
 
 test('completed Task automatically becomes a UTC Activity event without an event journal', async (t) => {
   const projectRoot = await createProject(t);

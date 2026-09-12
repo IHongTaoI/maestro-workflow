@@ -6,7 +6,8 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 
 ## 当前范围
 
-当前派生 Task 完成事件、Temporary 晋升事件、里程碑 Decision 事件，以及里程碑 Playbook 评审事件。
+当前派生 Task 完成事件、Temporary 晋升事件、里程碑 Decision 事件、里程碑 Playbook 评审事件，
+以及显式 checkpoint 恢复成功事件。
 
 `task_completed`：
 
@@ -27,7 +28,8 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 - `occurred_at` 只取 `promoted_at`，并归一化为 UTC；
 - `status` 为 `preparing` 的 Task 尚未提交，不投影晋升事件；
 - `source_refs` 指向 Task 当前的 `task.yaml`。来源 Temporary 的规范 ID 记录在事件摘要里；
-  Temporary 目录本身不是 Activity 来源，它已归档或已丢弃都不影响时间线。
+  对晋升事件而言，Temporary 目录本身不是 Activity 来源，它已归档或已丢弃都不影响该晋升事件。
+  checkpoint recovery 事件另按下文规则扫描目标内的不可变 observation。
 
 `promotion_transaction` **不是**事件时间，Activity 不解释它：该标记在事务打开时写入，早于晋升
 生效，只用于事务关联、恢复与审计。晋升真正生效的边界是原子发布 `committed.yaml`，`promoted_at`
@@ -66,6 +68,26 @@ Playbook 候选本身（`playbooks/candidates/`）和已批准 Playbook 文件�
 `updated_at` 都不是事件时间：前者只是提案，后者是可变现状。只有不可变评审记录能进入时间线，
 也不得用它们回推批准时刻。
 
+`checkpoint_recovered`：
+
+- 只投影显式 `maestro_checkpoint retry` 成功发布的新版不可变
+  `references/checkpoints/<request-id>.committed.json`；
+- `occurred_at` 只取 observation 的 `committed_at` 并截断到 UTC 秒，`completion` 必须为
+  `recovery`；
+- 普通/自动 `save`、重复 save、`already_committed`、inspect、status、失败事件、CAS 冲突和锁操作
+  都不进入 Activity；
+- 同目录请求文件必须存在，且目标、request ID、revision、record hash 与 proposal hash 必须和
+  observation 严格绑定；非法权威链会使构建失败；
+- 旧四字段 observation 和新版 `completion: save` observation 保持兼容但不投影，也不从
+  `updated_at`、failure `recorded_at`、mtime 或 Git 时间猜测恢复时间；
+- `source_refs` 指向证明恢复已经完成的 `.committed.json`。事件 ID 由事件类型、目标种类、目标 ID、
+  request ID 和归一化时间确定性生成。
+
+Task metadata 仍只扫描规范 `task.yaml`。checkpoint 恢复使用独立的受限来源模式，只扫描规范活动或
+归档 Task/Temporary 的直属 `references/checkpoints/*.committed.json`，不递归读取其他 reference、
+artifact 或 failure event。相关请求与 observation 参与 `source_digest`，所以恢复提交或权威链变化会
+使 Activity 缓存失效。
+
 ## 写入规则
 
 Activity 没有 `record` 操作，也不维护 `events/*.jsonl`。完成新 Task 时，在 Task 生命周期更新中
@@ -73,6 +95,8 @@ Activity 没有 `record` 操作，也不维护 `events/*.jsonl`。完成新 Task
 并保留 `source_temporary` 与 `promotion_transaction`；作出新的重要决策时，发布带 `decided_at`
 的不可变 Decision Record。
 批准或取代 Playbook 时，把评审记录发布到 `playbooks/decisions/`。
+checkpoint recovery 事件不需要额外 Activity 写入；显式 retry 成功发布带 `completion: recovery` 和
+`committed_at` 的 observation 后即可派生。
 Activity 只负责读取和派生。规范来源损坏、重复 ID、文件名不匹配或时间格式无效时，构建必须
 明确失败，不能静默跳过有问题的权威记录。`promoted_at` 存在但 `source_temporary` 缺失、或时间
 格式无效时，同样属于损坏记录并明确失败；缺少 `promoted_at` 的旧提升记录则保持原样、不投影。
