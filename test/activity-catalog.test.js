@@ -19,6 +19,52 @@ function runActivity(projectRoot, args) {
   });
 }
 
+test('immutable Worker approval records become stable Activity events', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedWorkerApproval(projectRoot);
+
+  await runActivity(projectRoot, ['build', '--now', '2026-09-12T03:00:00Z']);
+  const first = JSON.parse(await readFile(path.join(projectRoot, '.maestro/activity/index.json'), 'utf8'));
+  assert.equal(first.events.length, 1);
+  assert.equal(first.events[0].event_type, 'worker_approved');
+  assert.equal(first.events[0].occurred_at, '2026-09-12T02:00:00Z');
+  assert.equal(first.events[0].title, '小林（运行时排查）');
+  assert.deepEqual(first.events[0].source_refs, [
+    '.maestro/workers/approvals/approve-runtime-investigator-r3.approval.json',
+  ]);
+
+  await runActivity(projectRoot, ['build', '--now', '2026-09-12T04:00:00Z']);
+  const rebuilt = JSON.parse(await readFile(path.join(projectRoot, '.maestro/activity/index.json'), 'utf8'));
+  assert.equal(rebuilt.events[0].event_id, first.events[0].event_id);
+  const searched = parseJson(await runActivity(projectRoot, [
+    'search', '--year', '2026', '--event-type', 'worker_approved',
+  ]));
+  assert.equal(searched.total, 1);
+});
+
+test('projects without Worker approval records do not guess approval events', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(projectRoot, '.maestro/workers/registry.yaml', [
+    'schema_version: 1', 'id: project-workers', 'source: project', 'revision: 9',
+    'updated_at: 2026-09-12T00:00:00Z', 'updated_by: old-zhou/test',
+    'workers: []', 'aliases: {}', '',
+  ].join('\n'));
+  const result = parseJson(await runActivity(projectRoot, ['build']));
+  assert.equal(result.events, 0);
+});
+
+test('invalid Worker approval authorities fail Activity rebuilding', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedWorkerApproval(projectRoot, { id: 'approve-runtime-investigator-r3' }, 'wrong-name');
+  const filenameError = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(filenameError.stderr, /filename must match approval_id/);
+
+  await rm(path.join(projectRoot, '.maestro', 'workers'), { recursive: true, force: true });
+  await seedWorkerApproval(projectRoot, { approvedAt: 'not-a-time' });
+  const schemaError = await rejectedCommand(runActivity(projectRoot, ['build']));
+  assert.match(schemaError.stderr, /invalid Worker approval/);
+});
+
 function parseJson(result) {
   return JSON.parse(result.stdout);
 }
@@ -119,6 +165,34 @@ async function seedPlaybookDecision(projectRoot, options, fileId = options.id) {
     projectRoot,
     `.maestro/playbooks/decisions/${fileId}.decision.json`,
     decisionRecord({ targetIds: ['pb-20260829t000000z-a1b2'], ...options }),
+  );
+}
+
+function workerApproval({
+  id = 'approve-runtime-investigator-r3',
+  workerId = 'runtime-investigator',
+  workerName = '小林（运行时排查）',
+  approvedAt = '2026-09-12T10:00:00+08:00',
+} = {}) {
+  return `${JSON.stringify({
+    schema_version: 1,
+    record_type: 'worker-approval',
+    approval_id: id,
+    worker_id: workerId,
+    worker_name: workerName,
+    registry_id: 'project-workers',
+    registry_revision: 3,
+    worker_digest: 'a'.repeat(64),
+    approved_at: approvedAt,
+    approved_by: 'old-zhou/test',
+  }, null, 2)}\n`;
+}
+
+async function seedWorkerApproval(projectRoot, options = {}, fileId = options.id ?? 'approve-runtime-investigator-r3') {
+  return writeProjectFile(
+    projectRoot,
+    `.maestro/workers/approvals/${fileId}.approval.json`,
+    workerApproval(options),
   );
 }
 

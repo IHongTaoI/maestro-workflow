@@ -32,7 +32,8 @@
         "decision_superseded",
         "playbook_approved",
         "playbook_superseded",
-        "checkpoint_recovered"
+        "checkpoint_recovered",
+        "worker_approved"
       ]
     },
     "title": {

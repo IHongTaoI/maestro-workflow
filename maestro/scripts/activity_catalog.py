@@ -29,6 +29,7 @@ from validate import (
     validate_activity_index,
     validate_checkpoint_observation,
     validate_decision_record,
+    validate_worker_approval,
 )
 
 
@@ -37,8 +38,10 @@ INDEX_PATH = ACTIVITY_ROOT / "index.json"
 TASKS_ROOT = Path(".maestro/tasks")
 DECISIONS_ROOT = Path(".maestro/memory/long-term/decisions")
 PLAYBOOK_DECISIONS_ROOT = Path(".maestro/playbooks/decisions")
+WORKER_APPROVALS_ROOT = Path(".maestro/workers/approvals")
 TEMPORARY_ROOT = Path(".maestro/memory/temporary")
 DECISION_SUFFIX = ".decision.json"
+WORKER_APPROVAL_SUFFIX = ".approval.json"
 EVENT_TYPES = {
     "task_completed",
     "temporary_promoted",
@@ -47,6 +50,7 @@ EVENT_TYPES = {
     "playbook_approved",
     "playbook_superseded",
     "checkpoint_recovered",
+    "worker_approved",
 }
 TASK_EVENT_STATUSES = {"completed", "archive"}
 # ``promoted_at`` is only written when the promotion transaction commits, so a ``preparing`` Task
@@ -171,6 +175,21 @@ def playbook_decision_source_files(project_root: Path) -> list[Path]:
     )
 
 
+def worker_approval_source_files(project_root: Path) -> list[Path]:
+    directory = project_root / WORKER_APPROVALS_ROOT
+    if directory.exists() and not directory.is_dir():
+        raise CatalogError(f"Worker approval root must be a directory: {directory}")
+    if not directory.is_dir():
+        return []
+    result: list[Path] = []
+    for path in sorted(directory.glob(f"*{WORKER_APPROVAL_SUFFIX}")):
+        if path.is_symlink():
+            raise CatalogError(f"Worker approval must not be a symlink: {path}")
+        project_relative(project_root, path)
+        result.append(path)
+    return result
+
+
 def temporary_metadata_files(project_root: Path) -> list[Path]:
     result: list[Path] = []
     for lifecycle in ("active", "archive"):
@@ -240,6 +259,7 @@ def activity_source_files(project_root: Path) -> list[Path]:
         + decision_source_files(project_root)
         + playbook_decision_source_files(project_root)
         + checkpoint_source_files(project_root)
+        + worker_approval_source_files(project_root)
     )
 
 
@@ -421,6 +441,44 @@ def derive_playbook_events(project_root: Path, sources: list[Path]) -> list[dict
     )
 
 
+def derive_worker_approval_events(
+    project_root: Path, sources: list[Path]
+) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    seen_ids: dict[str, Path] = {}
+    for path in sources:
+        record, _ = read_json_object(path, "Worker approval")
+        errors: list[Diagnostic] = []
+        validate_worker_approval(record, errors)
+        if errors:
+            messages = "; ".join(f"{error.path}: {error.message}" for error in errors)
+            raise CatalogError(f"invalid Worker approval {path}: {messages}")
+        approval_id = record["approval_id"]
+        expected_name = f"{approval_id}{WORKER_APPROVAL_SUFFIX}"
+        if path.name != expected_name:
+            raise CatalogError(f"{path}: filename must match approval_id as '{expected_name}'")
+        previous = seen_ids.get(approval_id)
+        if previous is not None:
+            raise CatalogError(f"duplicate Worker approval id '{approval_id}' in {previous} and {path}")
+        seen_ids[approval_id] = path
+        approved_at = normalize_utc(record["approved_at"])
+        worker_id = record["worker_id"]
+        registry_id = record["registry_id"]
+        revision = record["registry_revision"]
+        event = {
+            "event_id": make_event_id("worker_approved", approval_id, approved_at),
+            "occurred_at": approved_at,
+            "event_type": "worker_approved",
+            "title": record["worker_name"].strip(),
+            "summary": f"批准 Worker {worker_id} 进入 registry {registry_id} revision {revision}",
+            "source_refs": [project_relative(project_root, path)],
+            "status": "completed",
+        }
+        validate_event(project_root, event)
+        events.append(event)
+    return events
+
+
 def read_json_object(path: Path, label: str) -> tuple[dict[str, Any], str]:
     try:
         content = path.read_text(encoding="utf-8")
@@ -536,12 +594,14 @@ def derive_index(project_root: Path, *, now: datetime | None = None) -> dict[str
     decision_sources = decision_source_files(project_root)
     playbook_sources = playbook_decision_source_files(project_root)
     checkpoint_sources = checkpoint_source_files(project_root)
-    sources = task_sources + decision_sources + playbook_sources + checkpoint_sources
+    worker_approval_sources = worker_approval_source_files(project_root)
+    sources = task_sources + decision_sources + playbook_sources + checkpoint_sources + worker_approval_sources
     digest_before = source_digest(project_root, sources)
     events = derive_task_events(project_root, task_sources)
     events.extend(derive_decision_events(project_root, decision_sources))
     events.extend(derive_playbook_events(project_root, playbook_sources))
     events.extend(derive_checkpoint_events(project_root))
+    events.extend(derive_worker_approval_events(project_root, worker_approval_sources))
     events.sort(key=lambda item: (item["occurred_at"], item["event_id"]))
     sources_after = activity_source_files(project_root)
     digest_after = source_digest(project_root, sources_after)

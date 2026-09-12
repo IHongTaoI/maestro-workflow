@@ -235,3 +235,14 @@ Memory Worker 是在持久边界（委派完成、Session Handoff、Temporary �
 仅是证据，不能执行该转换。忽略并报告无效注册表条目，不要静默修复或选择。如果注册表在选择
 期间变化，从新 revision 重新开始。已经完成的持久化选择保持稳定，因为执行使用不可变 Task
 或 Temporary 快照。
+
+每次经明确评审把可复用 Worker 发布到项目 registry 时，同时以互斥创建方式发布一份不可变批准
+记录到 `.maestro/workers/approvals/<approval-id>.approval.json`，并用
+[worker-approval.schema.json](schemas/worker-approval.schema.json) 校验。记录保存 Worker ID、显示
+名称、registry ID 与 revision、批准者、实际生效时间，以及批准时完整 Worker 规格的规范摘要。
+规范摘要是对 Worker JSON 使用 UTF-8、键排序和紧凑分隔符编码后计算的小写 SHA-256。
+
+批准记录必须在 registry 变更的逻辑提交边界一起发布；已有同名记录不得替换或改写。写入方必须
+在发布时核对摘要和 registry 内容，但后续读取不可要求旧 registry revision 仍是当前 revision。
+registry 后续编辑、禁用或移除 Worker 都不会改写历史批准事实。批准记录只证明既有评审结果，
+不能自行授予批准权限，也不能由 Activity 创建。

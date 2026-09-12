@@ -49,6 +49,7 @@ ACTIVITY_EVENT_TYPES = {
     "playbook_approved",
     "playbook_superseded",
     "checkpoint_recovered",
+    "worker_approved",
 }
 ACTIVITY_EVENT_ID_PATTERN = re.compile(r"^activity-[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -1130,6 +1131,38 @@ def validate_checkpoint_observation(value: Any, errors: list[Diagnostic]) -> Non
         check_date_time(value["committed_at"], "$.committed_at", errors)
 
 
+def validate_worker_approval(value: Any, errors: list[Diagnostic]) -> None:
+    if not require_object(value, "$", errors):
+        return
+    required = {
+        "schema_version", "record_type", "approval_id", "worker_id", "worker_name",
+        "registry_id", "registry_revision", "worker_digest", "approved_at", "approved_by",
+    }
+    check_object_shape(value, "$", errors, required=required, allowed=required)
+    if value.get("schema_version") != 1:
+        add_error(errors, "$.schema_version", "must equal 1")
+    if value.get("record_type") != "worker-approval":
+        add_error(errors, "$.record_type", "must equal 'worker-approval'")
+    for key in ("approval_id", "worker_id", "registry_id"):
+        if key in value:
+            if check_string(value[key], f"$.{key}", errors, min_length=1):
+                if not CAPABILITY_PATTERN.fullmatch(value[key]):
+                    add_error(errors, f"$.{key}", "must be a lowercase kebab-case id")
+    for key in ("worker_name", "approved_by"):
+        if key in value:
+            check_string(value[key], f"$.{key}", errors, min_length=1)
+    if "registry_revision" in value:
+        revision = value["registry_revision"]
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
+            add_error(errors, "$.registry_revision", "must be an integer greater than or equal to 0")
+    if "worker_digest" in value:
+        if check_string(value["worker_digest"], "$.worker_digest", errors, min_length=64):
+            if not SHA256_PATTERN.fullmatch(value["worker_digest"]):
+                add_error(errors, "$.worker_digest", "must be a lowercase SHA-256 hash")
+    if "approved_at" in value:
+        check_date_time(value["approved_at"], "$.approved_at", errors)
+
+
 def validate_decision_record(
     value: Any,
     errors: list[Diagnostic],
@@ -2170,6 +2203,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "activity-event",
             "activity-index",
             "checkpoint-observation",
+            "worker-approval",
         ),
     )
     parser.add_argument("file", type=Path)
@@ -2269,6 +2303,8 @@ def main(argv: list[str] | None = None) -> int:
         validate_activity_index(value, errors, file_reference)
     elif args.kind == "checkpoint-observation":
         validate_checkpoint_observation(value, errors)
+    elif args.kind == "worker-approval":
+        validate_worker_approval(value, errors)
 
     emit_result(args, errors, output_file=output_file)
     return 1 if errors else 0

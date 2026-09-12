@@ -295,6 +295,13 @@ try {
         "$validatorFixtureRoot/activity-event-unknown-type-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
         "$validatorFixtureRoot/activity-event-checkpoint-recovered-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $activityEventSchema "activity-event" `
+        "$validatorFixtureRoot/activity-event-worker-approved-valid.json" 0
+    $workerApprovalSchema = "maestro/references/schemas/worker-approval.schema.json"
+    Invoke-ProtocolSchemaParityCase $workerApprovalSchema "worker-approval" `
+        "maestro/references/scenarios/schema-fixtures/worker-approval-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $workerApprovalSchema "worker-approval" `
+        "maestro/references/scenarios/schema-fixtures/worker-approval-invalid.json" 1
     $checkpointObservationSchema = "maestro/references/schemas/checkpoint-observation.schema.json"
     Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
         "$validatorFixtureRoot/checkpoint-observation-recovery-valid.json" 0
