@@ -80,8 +80,13 @@ test('save preserves user text and atomically adds revision/receipt; retry after
   const committed = f.files.get(f.key(statePath))!
   assert.match(committed.content, /Keep this text\./)
   assert.match(committed.content, /revision: 1/)
+  const observationPath = f.key('.maestro/memory/temporary/active/test/references/checkpoints/save_1.committed.json')
+  const observation = JSON.parse(f.files.get(observationPath)!.content)
+  assert.equal(observation.completion, 'save')
+  assert.ok(Number.isFinite(Date.parse(observation.committed_at)))
   const fresh = await f.writer()
   assert.equal((await fresh.retry('temporary', 'test', 'save_1')).status, 'already_committed')
+  assert.deepEqual(JSON.parse(f.files.get(observationPath)!.content), observation)
   assert.deepEqual(f.files.get(f.key(statePath)), committed)
   assert.equal((await fresh.status('temporary', 'test', 'save_1')).status, 'committed')
 })
@@ -115,6 +120,26 @@ test('lost write acknowledgement is reconciled from exact proposal bytes', async
   const old = f.files.get(f.key(statePath))!
   await (await f.writer()).retry('temporary', 'test', 'save_1')
   assert.deepEqual(f.files.get(f.key(statePath)), old)
+  const observation = JSON.parse(f.files.get(f.key(
+    '.maestro/memory/temporary/active/test/references/checkpoints/save_1.committed.json',
+  ))!.content)
+  assert.equal(observation.completion, 'recovery')
+  assert.ok(Number.isFinite(Date.parse(observation.committed_at)))
+})
+
+test('legacy observations remain readable while malformed versioned observations fail closed', async () => {
+  const f = fixture(), w = await f.writer()
+  await w.save(f.input)
+  const requestPath = f.key('.maestro/memory/temporary/active/test/references/checkpoints/save_1.json')
+  const observationPath = f.key('.maestro/memory/temporary/active/test/references/checkpoints/save_1.committed.json')
+  const record = f.files.get(requestPath)!.content
+  const proposal = JSON.parse(record).proposal_hash
+  const legacy = JSON.stringify({ request_id: 'save_1', record_hash: hash(record), proposal_hash: proposal, revision: 1 })
+  f.files.set(observationPath, { content: legacy, version: 2 })
+  assert.equal((await (await f.writer()).status('temporary', 'test', 'save_1')).status, 'committed')
+
+  f.files.set(observationPath, { content: JSON.stringify({ ...JSON.parse(legacy), completion: 'recovery' }), version: 3 })
+  await assert.rejects((await f.writer()).status('temporary', 'test', 'save_1'), /invalid_observation/)
 })
 
 test('source/target write-ahead archive survives primary writes failing before request publication', async () => {
