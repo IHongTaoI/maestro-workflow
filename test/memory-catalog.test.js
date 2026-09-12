@@ -16,7 +16,7 @@ function runCatalog(projectRoot, args, { env } = {}) {
   return execFileAsync(python, [catalogScript, '--project-root', projectRoot, ...args], {
     cwd: repositoryRoot,
     windowsHide: true,
-    env: { ...process.env, MAESTRO_CURRENT_TIME: '2026-09-10T12:00:00Z', ...env },
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8', MAESTRO_CURRENT_TIME: '2026-09-10T12:00:00Z', ...env },
   });
 }
 
@@ -976,4 +976,70 @@ revision: 1
   assert.match(fullOutput, /task-batch-4/);
   assert.doesNotMatch(fullOutput, /已省略/);
 });
+
+test('overview discovers recoverable checkpoints and marks has_active_work even without active tasks', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+
+  // Archive or remove all existing active tasks and temporaries
+  await rm(path.join(projectRoot, '.maestro/tasks'), { recursive: true, force: true });
+  await rm(path.join(projectRoot, '.maestro/memory/temporary'), { recursive: true, force: true });
+
+  // Rebuild empty catalog
+  await runCatalog(projectRoot, ['build']);
+
+  // Before checkpoint: has_active_work is false
+  const beforeJson = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json'])).stdout);
+  assert.equal(beforeJson.has_active_work, false);
+  assert.equal(beforeJson.recoverable_checkpoint, null);
+
+  // Add a recoverable checkpoint under .maestro/tasks/task-recovery/references/checkpoints/req-recovery-1.json
+  const checkpointPayload = {
+    schema_version: 1,
+    request_id: 'req-recovery-1',
+    project: 'test-project',
+    kind: 'task',
+    target_id: 'task-recovery',
+    session_id: 'session-test',
+    base_revision: 2,
+    base_hash: 'a'.repeat(64),
+    input_hash: 'b'.repeat(64),
+    source_hash: 'c'.repeat(64),
+    proposal: 'proposal content',
+    proposal_hash: 'd'.repeat(64),
+    snapshot: {
+      objective: 'Recovered task objective',
+      confirmed: ['step 1 done'],
+      rejected: [],
+      in_progress: ['step 2'],
+      next: ['step 3'],
+      open_questions: [],
+      source_refs: ['.maestro/tasks/task-recovery/progress.md'],
+    },
+  };
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/tasks/task-recovery/references/checkpoints/req-recovery-1.json',
+    JSON.stringify(checkpointPayload, null, 2),
+  );
+
+  // After checkpoint: has_active_work is true and recoverable_checkpoint is populated
+  const afterJson = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json'])).stdout);
+  assert.equal(afterJson.has_active_work, true);
+  assert.ok(afterJson.recoverable_checkpoint);
+  assert.equal(afterJson.recoverable_checkpoint.available, true);
+  assert.equal(afterJson.recoverable_checkpoint.scope, 'task');
+  assert.equal(afterJson.recoverable_checkpoint.binding, 'task-recovery');
+  assert.equal(afterJson.recoverable_checkpoint.revision, 3);
+  assert.equal(afterJson.recoverable_checkpoint.request_id, 'req-recovery-1');
+
+  // Text output contains ## Recoverable Checkpoint block
+  const textOutput = (await runCatalog(projectRoot, ['overview'])).stdout;
+  assert.match(textOutput, /当前检测到项目存在活动工作/);
+  assert.match(textOutput, /## Recoverable Checkpoint/);
+  assert.match(textOutput, /Recoverable checkpoint: yes/);
+  assert.match(textOutput, /scope: task/);
+  assert.match(textOutput, /binding: task-recovery/);
+  assert.match(textOutput, /revision: 3/);
+});
+
 

@@ -16,7 +16,10 @@
  * @module @maestro-ai/dsh-adapter/hooks
  */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -25,15 +28,268 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { StateFileSystem } from './storage'
 import type { AutoCheckpointConfig } from './types'
 
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+
+interface RecoverableCheckpointInfo {
+  scope: string
+  binding: string
+  revision: number
+  request_id: string
+}
+
+async function findRecoverableCheckpointDsh(
+  projectRoot: string,
+): Promise<RecoverableCheckpointInfo | null> {
+  const candidates: Array<RecoverableCheckpointInfo & { mtime: number }> = []
+
+  // 1. Task checkpoints: .maestro/tasks/*/references/checkpoints/*.json and progress.md
+  try {
+    const tasksDir = path.join(projectRoot, '.maestro/tasks')
+    const taskEntries = await readdir(tasksDir)
+    for (const t of taskEntries) {
+      if (t === 'archive' || t.startsWith('.')) continue
+      const tDir = path.join(tasksDir, t)
+      try {
+        const text = await readFile(path.join(tDir, 'progress.md'), 'utf8')
+        const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text)
+        const revMatch = /revision:\s*(\d+)/.exec(text)
+        if (reqMatch && revMatch) {
+          const st = await stat(path.join(tDir, 'progress.md'))
+          candidates.push({ scope: 'task', binding: t, revision: Number(revMatch[1]), request_id: reqMatch[1], mtime: st.mtimeMs })
+        }
+      } catch {}
+      try {
+        const chkDir = path.join(tDir, 'references/checkpoints')
+        const files = await readdir(chkDir)
+        for (const f of files) {
+          if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue
+          try {
+            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'))
+            if (data && typeof data === 'object' && data.request_id) {
+              const st = await stat(path.join(chkDir, f))
+              candidates.push({
+                scope: data.kind || 'task',
+                binding: data.target_id || t,
+                revision: Number(data.base_revision || 0) + 1,
+                request_id: data.request_id,
+                mtime: st.mtimeMs,
+              })
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // 2. Temporary checkpoints: .maestro/memory/temporary/active/*/references/checkpoints/*.json and current.md
+  try {
+    const tempDir = path.join(projectRoot, '.maestro/memory/temporary/active')
+    const tempEntries = await readdir(tempDir)
+    for (const t of tempEntries) {
+      if (t.startsWith('.')) continue
+      const tDir = path.join(tempDir, t)
+      try {
+        const text = await readFile(path.join(tDir, 'current.md'), 'utf8')
+        const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text)
+        const revMatch = /revision:\s*(\d+)/.exec(text)
+        if (reqMatch && revMatch) {
+          const st = await stat(path.join(tDir, 'current.md'))
+          candidates.push({ scope: 'temporary', binding: t, revision: Number(revMatch[1]), request_id: reqMatch[1], mtime: st.mtimeMs })
+        }
+      } catch {}
+      try {
+        const chkDir = path.join(tDir, 'references/checkpoints')
+        const files = await readdir(chkDir)
+        for (const f of files) {
+          if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue
+          try {
+            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'))
+            if (data && typeof data === 'object' && data.request_id) {
+              const st = await stat(path.join(chkDir, f))
+              candidates.push({
+                scope: data.kind || 'temporary',
+                binding: data.target_id || t,
+                revision: Number(data.base_revision || 0) + 1,
+                request_id: data.request_id,
+                mtime: st.mtimeMs,
+              })
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // 3. Project checkpoints: .maestro/checkpoints/*.json
+  try {
+    const chkDir = path.join(projectRoot, '.maestro/checkpoints')
+    const files = await readdir(chkDir)
+    for (const f of files) {
+      if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue
+      try {
+        const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'))
+        if (data && typeof data === 'object' && data.request_id) {
+          const st = await stat(path.join(chkDir, f))
+          candidates.push({
+            scope: data.kind || 'session',
+            binding: data.target_id || 'session',
+            revision: Number(data.base_revision || 0) + 1,
+            request_id: data.request_id,
+            mtime: st.mtimeMs,
+          })
+        }
+      } catch {}
+    }
+  } catch {}
+
+  if (candidates.length === 0) return null
+  candidates.sort((a, b) => b.mtime - a.mtime || b.revision - a.revision || a.binding.localeCompare(b.binding) || a.request_id.localeCompare(b.request_id))
+  return candidates[0]
+}
+
+function formatBoundedRuntimeContextDsh(options: {
+  tasks?: any[]
+  temporaries?: any[]
+  followups?: any[]
+  longTermCount?: number
+  checkpoint?: RecoverableCheckpointInfo | null
+  degradedWarning?: string | null
+  limit?: number
+}): string {
+  const { tasks = [], temporaries = [], followups = [], longTermCount = 0, checkpoint = null, degradedWarning = null, limit = 3 } = options
+  const lines: string[] = [
+    '# Memory Overview (Runtime Context)',
+    '',
+    '当前检测到项目存在活动工作：',
+    '',
+  ]
+
+  if (degradedWarning) {
+    lines.push(`> 警告：${degradedWarning}`, '')
+  }
+
+  if (checkpoint) {
+    lines.push(
+      '## Recoverable Checkpoint',
+      'Recoverable checkpoint: yes',
+      `scope: ${checkpoint.scope}`,
+      `binding: ${checkpoint.binding}`,
+      `revision: ${checkpoint.revision}`,
+      '',
+    )
+  }
+
+  lines.push(`## Active Tasks (${tasks.length})`)
+  if (tasks.length > 0) {
+    for (const t of tasks.slice(0, limit)) {
+      lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
+    }
+    if (tasks.length > limit) {
+      lines.push(`  *(另外 ${tasks.length - limit} 项活动任务已省略，详情请使用 recent / show)*`)
+    }
+  } else {
+    lines.push('- *(无活动任务)*')
+  }
+  lines.push('')
+
+  lines.push(`## Active Temporary Memory (${temporaries.length})`)
+  if (temporaries.length > 0) {
+    for (const t of temporaries.slice(0, limit)) {
+      lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
+    }
+    if (temporaries.length > limit) {
+      lines.push(`  *(另外 ${temporaries.length - limit} 项活动探索已省略，详情请使用 recent / show)*`)
+    }
+  } else {
+    lines.push('- *(无活动探索)*')
+  }
+  lines.push('')
+
+  if (followups.length > 0) {
+    lines.push(`## Pending Follow-ups (${followups.length})`)
+    for (const f of followups.slice(0, limit)) {
+      lines.push(`- \`${String(f.followup_id || '').slice(0, 80)}\`: ${String(f.title || f.followup_id || '').slice(0, 120)}`)
+    }
+    if (followups.length > limit) {
+      lines.push(`  *(另外 ${followups.length - limit} 项待跟进已省略，详情请使用 show)*`)
+    }
+    lines.push('')
+  }
+
+  lines.push(`## Long-term Memory (${longTermCount} 项已索引)`)
+  lines.push('')
+  lines.push('> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。')
+
+  return lines.join('\n')
+}
+
 /**
  * Load bounded Runtime Context summary from `.maestro/memory/index.json`.
- * If no active Task, Temporary, or follow-up exist, returns null.
+ * If no active Task, Temporary, follow-up, or recoverable checkpoint exist, returns null.
  */
 export async function loadBoundedRuntimeContext(
   projectRoot: string,
   fs?: StateFileSystem,
 ): Promise<string | null> {
   try {
+    let hasAuthoritativeFiles = false
+    try {
+      const taskEntries = await readdir(path.join(projectRoot, '.maestro/tasks'))
+      if (taskEntries.some(e => e !== 'archive' && !e.startsWith('.'))) hasAuthoritativeFiles = true
+    } catch {}
+    try {
+      const tempEntries = await readdir(path.join(projectRoot, '.maestro/memory/temporary/active'))
+      if (tempEntries.some(e => !e.startsWith('.'))) hasAuthoritativeFiles = true
+    } catch {}
+    try {
+      const chkEntries = await readdir(path.join(projectRoot, '.maestro/checkpoints'))
+      if (chkEntries.some(e => e.endsWith('.json') && !e.includes('.committed.') && !e.includes('.failed-'))) hasAuthoritativeFiles = true
+    } catch {}
+
+    // If on real disk (no custom fs provided), try running Python memory_catalog.py overview --limit 3
+    if (!fs) {
+      const candidateScripts = [
+        path.resolve(currentDir, 'core/scripts/memory_catalog.py'),
+        path.resolve(currentDir, '../lib/core/scripts/memory_catalog.py'),
+        path.resolve(currentDir, '../../../maestro/scripts/memory_catalog.py'),
+        path.join(projectRoot, 'maestro/scripts/memory_catalog.py'),
+        path.join(projectRoot, '.agents/skills/maestro/scripts/memory_catalog.py'),
+        path.join(projectRoot, '.maestro/scripts/memory_catalog.py'),
+      ]
+      let scriptPath: string | null = null
+      for (const p of candidateScripts) {
+        if (existsSync(p)) {
+          scriptPath = p
+          break
+        }
+      }
+
+      if (scriptPath && (hasAuthoritativeFiles || !existsSync(path.join(projectRoot, '.maestro/memory/index.json')))) {
+        try {
+          const python = process.platform === 'win32' ? 'python' : 'python3'
+          const res = spawnSync(python, [scriptPath, '--project-root', projectRoot, 'overview', '--limit', '3'], {
+            encoding: 'utf8',
+            timeout: 5000,
+            windowsHide: true,
+          })
+          if (res.status === 0 && typeof res.stdout === 'string') {
+            const out = res.stdout.trim()
+            if (out.includes('当前检测到项目存在活动工作：')) {
+              return out
+            }
+            if (out.includes('当前项目暂无活动任务或临时探索')) {
+              return null
+            }
+          }
+        } catch {
+          // Fall through to JS fallback
+        }
+      }
+    }
+
+    // JS Fallback
+    const checkpoint = await findRecoverableCheckpointDsh(projectRoot)
+
     let content: string | undefined
     if (fs) {
       try {
@@ -50,12 +306,27 @@ export async function loadBoundedRuntimeContext(
       try {
         content = await readFile(path.join(projectRoot, '.maestro/memory/index.json'), 'utf8')
       } catch {
-        return null
+        // Missing index
       }
     }
-    if (!content) return null
+
+    if (!content) {
+      if (hasAuthoritativeFiles || checkpoint) {
+        return formatBoundedRuntimeContextDsh({
+          checkpoint,
+          degradedWarning: '检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失且自动重建失败。请运行 `python maestro/scripts/memory_catalog.py build` 重建索引。',
+        })
+      }
+      return null
+    }
+
     const index = JSON.parse(content)
-    if (!index || typeof index !== 'object' || !Array.isArray(index.entries)) return null
+    if (!index || typeof index !== 'object' || !Array.isArray(index.entries)) {
+      if (checkpoint) {
+        return formatBoundedRuntimeContextDsh({ checkpoint })
+      }
+      return null
+    }
 
     const visible = index.entries.filter((e: any) => e && typeof e === 'object' && e.status === 'active')
     const tasks = visible.filter((e: any) => e.record_type === 'task')
@@ -64,60 +335,18 @@ export async function loadBoundedRuntimeContext(
       ? index.pending_followups.filter((f: any) => f && typeof f === 'object' && f.status !== 'completed' && f.status !== 'cancelled')
       : []
 
-    if (tasks.length === 0 && temporaries.length === 0 && followups.length === 0) {
+    if (tasks.length === 0 && temporaries.length === 0 && followups.length === 0 && !checkpoint) {
       return null
     }
 
-    const limit = 3
-    const lines: string[] = [
-      '# Memory Overview (Runtime Context)',
-      '',
-      '当前检测到项目存在活动工作：',
-      '',
-      `## Active Tasks (${tasks.length})`,
-    ]
-    if (tasks.length > 0) {
-      for (const t of tasks.slice(0, limit)) {
-        lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
-      }
-      if (tasks.length > limit) {
-        lines.push(`  *(另外 ${tasks.length - limit} 项活动任务已省略，详情请使用 recent / show)*`)
-      }
-    } else {
-      lines.push('- *(无活动任务)*')
-    }
-    lines.push('')
-
-    lines.push(`## Active Temporary Memory (${temporaries.length})`)
-    if (temporaries.length > 0) {
-      for (const t of temporaries.slice(0, limit)) {
-        lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`)
-      }
-      if (temporaries.length > limit) {
-        lines.push(`  *(另外 ${temporaries.length - limit} 项活动探索已省略，详情请使用 recent / show)*`)
-      }
-    } else {
-      lines.push('- *(无活动探索)*')
-    }
-    lines.push('')
-
-    if (followups.length > 0) {
-      lines.push(`## Pending Follow-ups (${followups.length})`)
-      for (const f of followups.slice(0, limit)) {
-        lines.push(`- \`${String(f.followup_id || '').slice(0, 80)}\`: ${String(f.title || f.followup_id || '').slice(0, 120)}`)
-      }
-      if (followups.length > limit) {
-        lines.push(`  *(另外 ${followups.length - limit} 项待跟进已省略，详情请使用 show)*`)
-      }
-      lines.push('')
-    }
-
     const longTermCount = visible.filter((e: any) => e.record_type === 'long-term-entry').length
-    lines.push(`## Long-term Memory (${longTermCount} 项已索引)`)
-    lines.push('')
-    lines.push('> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。')
-
-    return lines.join('\n')
+    return formatBoundedRuntimeContextDsh({
+      tasks,
+      temporaries,
+      followups,
+      longTermCount,
+      checkpoint,
+    })
   } catch {
     return null
   }

@@ -1,6 +1,9 @@
-import { open, realpath, stat } from 'node:fs/promises';
+import { open, readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const SOURCES = new Set(['startup', 'resume', 'clear', 'compact']);
 const CORE = '.agents/skills/maestro/SKILL.md';
 const CONFIG = '.maestro/installation.json';
@@ -37,80 +40,311 @@ async function readConfig(file) {
   } finally { await handle.close(); }
 }
 
-async function loadBoundedRuntimeContext(indexPath) {
+async function hasAuthoritativeSources(root) {
   try {
-    const handle = await open(indexPath, 'r');
-    try {
-      const buffer = Buffer.alloc(256 * 1024 + 1);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-      if (bytesRead === buffer.length) return null;
-      const index = JSON.parse(buffer.subarray(0, bytesRead).toString('utf8'));
-      if (!index || typeof index !== 'object' || !Array.isArray(index.entries)) return null;
+    const taskDir = path.join(root, '.maestro/tasks');
+    const entries = await readdir(taskDir);
+    if (entries.some(e => e !== 'archive' && !e.startsWith('.'))) return true;
+  } catch {}
+  try {
+    const tempDir = path.join(root, '.maestro/memory/temporary/active');
+    const entries = await readdir(tempDir);
+    if (entries.some(e => !e.startsWith('.'))) return true;
+  } catch {}
+  try {
+    const ltDir = path.join(root, '.maestro/memory/long-term/entries');
+    const entries = await readdir(ltDir);
+    if (entries.some(e => e.endsWith('.md'))) return true;
+  } catch {}
+  try {
+    const chkDir = path.join(root, '.maestro/checkpoints');
+    const entries = await readdir(chkDir);
+    if (entries.some(e => e.endsWith('.json') && !e.includes('.committed.') && !e.includes('.failed-'))) return true;
+  } catch {}
+  try {
+    if (await exists(path.join(root, '.maestro/memory/index.json'))) return true;
+  } catch {}
+  return false;
+}
 
-      const visible = index.entries.filter(e => e && typeof e === 'object' && e.status === 'active');
-      const tasks = visible.filter(e => e.record_type === 'task');
-      const temporaries = visible.filter(e => e.record_type === 'temporary');
-      const followups = Array.isArray(index.pending_followups)
-        ? index.pending_followups.filter(f => f && typeof f === 'object' && f.status !== 'completed' && f.status !== 'cancelled')
-        : [];
-
-      if (tasks.length === 0 && temporaries.length === 0 && followups.length === 0) {
-        return null;
-      }
-
-      const limit = 3;
-      const lines = [
-        '# Memory Overview (Runtime Context)',
-        '',
-        '当前检测到项目存在活动工作：',
-        '',
-        `## Active Tasks (${tasks.length})`,
-      ];
-      if (tasks.length > 0) {
-        for (const t of tasks.slice(0, limit)) {
-          lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`);
+async function findRecoverableCheckpoint(root) {
+  const candidates = [];
+  // 1. Task checkpoints: .maestro/tasks/*/references/checkpoints/*.json and progress.md
+  try {
+    const tasksDir = path.join(root, '.maestro/tasks');
+    const taskEntries = await readdir(tasksDir);
+    for (const t of taskEntries) {
+      if (t === 'archive' || t.startsWith('.')) continue;
+      const tDir = path.join(tasksDir, t);
+      try {
+        const text = await readFile(path.join(tDir, 'progress.md'), 'utf8');
+        const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text);
+        const revMatch = /revision:\s*(\d+)/.exec(text);
+        if (reqMatch && revMatch) {
+          const st = await stat(path.join(tDir, 'progress.md'));
+          candidates.push({ scope: 'task', binding: t, revision: Number(revMatch[1]), request_id: reqMatch[1], mtime: st.mtimeMs });
         }
-        if (tasks.length > limit) {
-          lines.push(`  *(另外 ${tasks.length - limit} 项活动任务已省略，详情请使用 recent / show)*`);
+      } catch {}
+      try {
+        const chkDir = path.join(tDir, 'references/checkpoints');
+        const files = await readdir(chkDir);
+        for (const f of files) {
+          if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
+          try {
+            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
+            if (data && typeof data === 'object' && data.request_id) {
+              const st = await stat(path.join(chkDir, f));
+              candidates.push({
+                scope: data.kind || 'task',
+                binding: data.target_id || t,
+                revision: Number(data.base_revision || 0) + 1,
+                request_id: data.request_id,
+                mtime: st.mtimeMs,
+              });
+            }
+          } catch {}
         }
-      } else {
-        lines.push('- *(无活动任务)*');
-      }
-      lines.push('');
-
-      lines.push(`## Active Temporary Memory (${temporaries.length})`);
-      if (temporaries.length > 0) {
-        for (const t of temporaries.slice(0, limit)) {
-          lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`);
-        }
-        if (temporaries.length > limit) {
-          lines.push(`  *(另外 ${temporaries.length - limit} 项活动探索已省略，详情请使用 recent / show)*`);
-        }
-      } else {
-        lines.push('- *(无活动探索)*');
-      }
-      lines.push('');
-
-      if (followups.length > 0) {
-        lines.push(`## Pending Follow-ups (${followups.length})`);
-        for (const f of followups.slice(0, limit)) {
-          lines.push(`- \`${String(f.followup_id || '').slice(0, 80)}\`: ${String(f.title || f.followup_id || '').slice(0, 120)}`);
-        }
-        if (followups.length > limit) {
-          lines.push(`  *(另外 ${followups.length - limit} 项待跟进已省略，详情请使用 show)*`);
-        }
-        lines.push('');
-      }
-
-      const longTermCount = visible.filter(e => e.record_type === 'long-term-entry').length;
-      lines.push(`## Long-term Memory (${longTermCount} 项已索引)`);
-      lines.push('');
-      lines.push('> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。');
-
-      return lines.join('\n');
-    } finally {
-      await handle.close();
+      } catch {}
     }
+  } catch {}
+
+  // 2. Temporary checkpoints: .maestro/memory/temporary/active/*/references/checkpoints/*.json and current.md
+  try {
+    const tempDir = path.join(root, '.maestro/memory/temporary/active');
+    const tempEntries = await readdir(tempDir);
+    for (const t of tempEntries) {
+      if (t.startsWith('.')) continue;
+      const tDir = path.join(tempDir, t);
+      try {
+        const text = await readFile(path.join(tDir, 'current.md'), 'utf8');
+        const reqMatch = /request_id:\s*['"]?([a-z0-9][a-z0-9_-]*)['"]?/i.exec(text);
+        const revMatch = /revision:\s*(\d+)/.exec(text);
+        if (reqMatch && revMatch) {
+          const st = await stat(path.join(tDir, 'current.md'));
+          candidates.push({ scope: 'temporary', binding: t, revision: Number(revMatch[1]), request_id: reqMatch[1], mtime: st.mtimeMs });
+        }
+      } catch {}
+      try {
+        const chkDir = path.join(tDir, 'references/checkpoints');
+        const files = await readdir(chkDir);
+        for (const f of files) {
+          if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
+          try {
+            const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
+            if (data && typeof data === 'object' && data.request_id) {
+              const st = await stat(path.join(chkDir, f));
+              candidates.push({
+                scope: data.kind || 'temporary',
+                binding: data.target_id || t,
+                revision: Number(data.base_revision || 0) + 1,
+                request_id: data.request_id,
+                mtime: st.mtimeMs,
+              });
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // 3. Project checkpoints: .maestro/checkpoints/*.json
+  try {
+    const chkDir = path.join(root, '.maestro/checkpoints');
+    const files = await readdir(chkDir);
+    for (const f of files) {
+      if (!f.endsWith('.json') || f.includes('.committed.') || f.includes('.failed-')) continue;
+      try {
+        const data = JSON.parse(await readFile(path.join(chkDir, f), 'utf8'));
+        if (data && typeof data === 'object' && data.request_id) {
+          const st = await stat(path.join(chkDir, f));
+          candidates.push({
+            scope: data.kind || 'session',
+            binding: data.target_id || 'session',
+            revision: Number(data.base_revision || 0) + 1,
+            request_id: data.request_id,
+            mtime: st.mtimeMs,
+          });
+        }
+      } catch {}
+    }
+  } catch {}
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.mtime - a.mtime || b.revision - a.revision || a.binding.localeCompare(b.binding) || a.request_id.localeCompare(b.request_id));
+  return candidates[0];
+}
+
+function formatBoundedRuntimeContext({ tasks = [], temporaries = [], followups = [], longTermCount = 0, checkpoint = null, degradedWarning = null, limit = 3 }) {
+  const lines = [
+    '# Memory Overview (Runtime Context)',
+    '',
+    '当前检测到项目存在活动工作：',
+    '',
+  ];
+
+  if (degradedWarning) {
+    lines.push(`> 警告：${degradedWarning}`, '');
+  }
+
+  if (checkpoint) {
+    lines.push(
+      '## Recoverable Checkpoint',
+      'Recoverable checkpoint: yes',
+      `scope: ${checkpoint.scope}`,
+      `binding: ${checkpoint.binding}`,
+      `revision: ${checkpoint.revision}`,
+      '',
+    );
+  }
+
+  lines.push(`## Active Tasks (${tasks.length})`);
+  if (tasks.length > 0) {
+    for (const t of tasks.slice(0, limit)) {
+      lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`);
+    }
+    if (tasks.length > limit) {
+      lines.push(`  *(另外 ${tasks.length - limit} 项活动任务已省略，详情请使用 recent / show)*`);
+    }
+  } else {
+    lines.push('- *(无活动任务)*');
+  }
+  lines.push('');
+
+  lines.push(`## Active Temporary Memory (${temporaries.length})`);
+  if (temporaries.length > 0) {
+    for (const t of temporaries.slice(0, limit)) {
+      lines.push(`- \`${String(t.memory_id || '').slice(0, 80)}\`: ${String(t.title || t.memory_id || '').slice(0, 120)}`);
+    }
+    if (temporaries.length > limit) {
+      lines.push(`  *(另外 ${temporaries.length - limit} 项活动探索已省略，详情请使用 recent / show)*`);
+    }
+  } else {
+    lines.push('- *(无活动探索)*');
+  }
+  lines.push('');
+
+  if (followups.length > 0) {
+    lines.push(`## Pending Follow-ups (${followups.length})`);
+    for (const f of followups.slice(0, limit)) {
+      lines.push(`- \`${String(f.followup_id || '').slice(0, 80)}\`: ${String(f.title || f.followup_id || '').slice(0, 120)}`);
+    }
+    if (followups.length > limit) {
+      lines.push(`  *(另外 ${followups.length - limit} 项待跟进已省略，详情请使用 show)*`);
+    }
+    lines.push('');
+  }
+
+  lines.push(`## Long-term Memory (${longTermCount} 项已索引)`);
+  lines.push('');
+  lines.push('> 提示：启动时仅加载本有界总览；具体记忆正文严禁全量预加载，请按需使用 recent / search / show。');
+
+  return lines.join('\n');
+}
+
+export async function loadBoundedRuntimeContext(root, paths = {}) {
+  try {
+    if (!(await hasAuthoritativeSources(root))) {
+      return null;
+    }
+
+    // 1. Try running memory_catalog.py overview --limit 3 (only when authoritative sources exist on disk)
+    let hasAuthoritativeFiles = false;
+    try {
+      const taskEntries = await readdir(path.join(root, '.maestro/tasks'));
+      if (taskEntries.some(e => e !== 'archive' && !e.startsWith('.'))) hasAuthoritativeFiles = true;
+    } catch {}
+    try {
+      const tempEntries = await readdir(path.join(root, '.maestro/memory/temporary/active'));
+      if (tempEntries.some(e => !e.startsWith('.'))) hasAuthoritativeFiles = true;
+    } catch {}
+    try {
+      const chkEntries = await readdir(path.join(root, '.maestro/checkpoints'));
+      if (chkEntries.some(e => e.endsWith('.json') && !e.includes('.committed.') && !e.includes('.failed-'))) hasAuthoritativeFiles = true;
+    } catch {}
+
+    const candidateScripts = [
+      paths.skill ? path.join(path.dirname(paths.skill), 'scripts', 'memory_catalog.py') : null,
+      path.join(root, 'maestro/scripts/memory_catalog.py'),
+      path.join(root, '.agents/skills/maestro/scripts/memory_catalog.py'),
+      path.join(root, '.maestro/scripts/memory_catalog.py'),
+      path.resolve(currentDir, '../../../../maestro/scripts/memory_catalog.py'),
+    ].filter(Boolean);
+
+    let scriptPath = null;
+    for (const p of candidateScripts) {
+      if (await exists(p)) {
+        scriptPath = p;
+        break;
+      }
+    }
+
+    if (scriptPath && (hasAuthoritativeFiles || !(await exists(path.join(root, '.maestro/memory/index.json'))))) {
+      try {
+        const python = process.platform === 'win32' ? 'python' : 'python3';
+        const res = spawnSync(python, [scriptPath, '--project-root', root, 'overview', '--limit', '3'], {
+          encoding: 'utf8',
+          timeout: 5000,
+          windowsHide: true,
+        });
+        if (res.status === 0 && typeof res.stdout === 'string') {
+          const out = res.stdout.trim();
+          const indexPath = path.join(root, '.maestro/memory/index.json');
+          if (await exists(indexPath)) paths.index = indexPath;
+          const manifestPath = path.join(root, '.maestro/memory/manifest.md');
+          if (await exists(manifestPath)) paths.manifest = manifestPath;
+
+          if (out.includes('当前检测到项目存在活动工作：')) {
+            return out;
+          }
+          if (out.includes('当前项目暂无活动任务或临时探索')) {
+            return null;
+          }
+        }
+      } catch {
+        // Fall through to JS fallback
+      }
+    }
+
+    // 2. JS Fallback
+    const checkpoint = await findRecoverableCheckpoint(root);
+    const indexPath = paths.index || path.join(root, '.maestro/memory/index.json');
+    let index = null;
+    if (await exists(indexPath)) {
+      try {
+        const content = await readFile(indexPath, 'utf8');
+        index = JSON.parse(content);
+      } catch {}
+    }
+
+    if (!index) {
+      // Missing index while authoritative sources exist: degrade gracefully
+      return formatBoundedRuntimeContext({
+        checkpoint,
+        degradedWarning: '检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失且自动重建失败。请运行 `python maestro/scripts/memory_catalog.py build` 重建索引。',
+      });
+    }
+
+    const visible = Array.isArray(index.entries)
+      ? index.entries.filter(e => e && typeof e === 'object' && e.status === 'active')
+      : [];
+    const tasks = visible.filter(e => e.record_type === 'task');
+    const temporaries = visible.filter(e => e.record_type === 'temporary');
+    const followups = Array.isArray(index.pending_followups)
+      ? index.pending_followups.filter(f => f && typeof f === 'object' && f.status !== 'completed' && f.status !== 'cancelled')
+      : [];
+    const longTermCount = visible.filter(e => e.record_type === 'long-term-entry').length;
+
+    if (tasks.length === 0 && temporaries.length === 0 && followups.length === 0 && !checkpoint) {
+      return null;
+    }
+
+    return formatBoundedRuntimeContext({
+      tasks,
+      temporaries,
+      followups,
+      longTermCount,
+      checkpoint,
+    });
   } catch {
     return null;
   }
@@ -139,10 +373,9 @@ export async function recoveryContext(event) {
       ]) {
         if (await localFile(root, relative)) paths[key] = path.join(root, relative);
       }
+      const runtimeContext = await loadBoundedRuntimeContext(root, paths);
       // JSON-encode filesystem strings instead of inserting them into instructions.
       if (JSON.stringify(paths).length > 1600) throw new Error('Project paths exceed context limit');
-
-      const runtimeContext = paths.index ? await loadBoundedRuntimeContext(paths.index) : null;
       const additionalContext = [
         '检测到有效的 Maestro 项目状态。只有当前请求明确使用 Maestro 或继续 Maestro 工作时才应用本提醒；项目状态本身不会激活任务。',
         '执行 Maestro 工作时：老周是唯一预置、直接面向用户的角色。使用简洁大白话，先报告结果和决策；常规代码搜索、实施细节和命令过程留在有界 Worker 内。没有明确实施意图时，探索保持为 Temporary。',

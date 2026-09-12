@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -288,4 +288,112 @@ test('injectSessionRuntimeContext steers agent with bounded runtime context on s
   assert.match(steeredMsg.content[0].text, /task-active/)
   assert.match(steeredMsg.content[0].text, /Work in progress/)
 })
+
+test('loadBoundedRuntimeContext discovers recoverable checkpoint and returns context even without active tasks', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-checkpoint-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  // Checkpoint file under .maestro/tasks/task-chk/references/checkpoints/req-chk-1.json
+  const checkpointPayload = {
+    schema_version: 1,
+    request_id: 'req-chk-1',
+    project: 'test-project',
+    kind: 'task',
+    target_id: 'task-chk',
+    session_id: 'session-dsh',
+    base_revision: 1,
+    base_hash: 'a'.repeat(64),
+    input_hash: 'b'.repeat(64),
+    source_hash: 'c'.repeat(64),
+    proposal: 'proposal content',
+    proposal_hash: 'd'.repeat(64),
+    snapshot: {
+      objective: 'Suspended task checkpoint',
+      confirmed: ['step 1 done'],
+      rejected: [],
+      in_progress: ['step 2'],
+      next: ['step 3'],
+      open_questions: [],
+      source_refs: ['.maestro/tasks/task-chk/progress.md'],
+    },
+  }
+  const chkDir = path.join(tmp, '.maestro/tasks/task-chk/references/checkpoints')
+  await mkdir(chkDir, { recursive: true })
+  await writeFile(path.join(chkDir, 'req-chk-1.json'), JSON.stringify(checkpointPayload, null, 2))
+
+  const result = await loadBoundedRuntimeContext(tmp)
+  assert.ok(result)
+  assert.match(result, /# Memory Overview \(Runtime Context\)/)
+  assert.match(result, /当前检测到项目存在活动工作/)
+  assert.match(result, /## Recoverable Checkpoint/)
+  assert.match(result, /Recoverable checkpoint: yes/)
+  assert.match(result, /scope: task/)
+  assert.match(result, /binding: task-chk/)
+  assert.match(result, /revision: 2/)
+})
+
+test('loadBoundedRuntimeContext rebuilds missing index when authoritative task exists', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-rebuild-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  const taskDir = path.join(tmp, '.maestro/tasks/task-live')
+  await mkdir(taskDir, { recursive: true })
+  await writeFile(path.join(taskDir, 'task.yaml'), `id: task-live
+objective: Live active task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
+
+  const result = await loadBoundedRuntimeContext(tmp)
+  assert.ok(result)
+  assert.match(result, /# Memory Overview \(Runtime Context\)/)
+  assert.match(result, /当前检测到项目存在活动工作/)
+  assert.match(result, /## Active Tasks \(1\)/)
+  assert.match(result, /task-live/)
+
+  // Assert index was written
+  const indexPath = path.join(tmp, '.maestro/memory/index.json')
+  const content = await readFile(indexPath, 'utf8')
+  assert.ok(content)
+})
+
+test('loadBoundedRuntimeContext refreshes stale index when authoritative task changed', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-stale-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+
+  const taskDir = path.join(tmp, '.maestro/tasks/task-live-new')
+  await mkdir(taskDir, { recursive: true })
+  await writeFile(path.join(taskDir, 'task.yaml'), `id: task-live-new
+objective: Brand new active task
+status: active
+created_at: 2026-09-12T10:00:00Z
+updated_at: 2026-09-12T10:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
+
+  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
+  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
+    schema_version: 1,
+    generated_at: '2026-09-01T00:00:00Z',
+    source_digest: 'obsolete',
+    entries: [
+      { memory_id: 'task-obsolete', title: 'Old obsolete task', record_type: 'task', status: 'active' },
+    ],
+    pending_followups: [],
+  }))
+
+  const result = await loadBoundedRuntimeContext(tmp)
+  assert.ok(result)
+  assert.match(result, /task-live-new/)
+  assert.doesNotMatch(result, /task-obsolete/)
+
+  const refreshed = JSON.parse(await readFile(path.join(tmp, '.maestro/memory/index.json'), 'utf8'))
+  assert.ok(refreshed.entries.some((e: any) => e.memory_id === 'task-live-new'))
+  assert.ok(!refreshed.entries.some((e: any) => e.memory_id === 'task-obsolete'))
+})
+
 

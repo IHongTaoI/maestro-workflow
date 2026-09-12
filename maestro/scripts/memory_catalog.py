@@ -22,6 +22,13 @@ from validate import (
     validate_memory_index,
 )
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 INDEX_PATH = Path(".maestro/memory/index.json")
 MANIFEST_PATH = Path(".maestro/memory/manifest.md")
@@ -1093,6 +1100,139 @@ def recent_entries(
     return [bound_recent_entry(entry) for entry in ordered[:limit]]
 
 
+def extract_checkpoint_receipt(text: str) -> dict[str, Any] | None:
+    if "checkpoint_receipt" not in text:
+        return None
+    req_match = re.search(r"request_id:\s*['\"]?([a-z0-9][a-z0-9_-]*)['\"]?", text, re.IGNORECASE)
+    rev_match = re.search(r"revision:\s*(\d+)", text)
+    if req_match and rev_match:
+        return {
+            "request_id": req_match.group(1),
+            "revision": int(rev_match.group(1)),
+        }
+    return None
+
+
+def parse_checkpoint_file(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and "request_id" in data:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def find_recoverable_checkpoint(project_root: Path) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+
+    # 1. Task checkpoints: .maestro/tasks/*/references/checkpoints/*.json and progress.md
+    tasks_root = project_root / ".maestro/tasks"
+    if tasks_root.is_dir():
+        for task_dir in tasks_root.iterdir():
+            if not task_dir.is_dir() or task_dir.name == "archive":
+                continue
+            progress_path = task_dir / "progress.md"
+            if progress_path.is_file():
+                try:
+                    receipt = extract_checkpoint_receipt(progress_path.read_text(encoding="utf-8"))
+                    if receipt:
+                        candidates.append({
+                            "scope": "task",
+                            "binding": task_dir.name,
+                            "revision": receipt["revision"],
+                            "request_id": receipt["request_id"],
+                            "mtime": progress_path.stat().st_mtime,
+                        })
+                except Exception:
+                    pass
+            chk_dir = task_dir / "references/checkpoints"
+            if chk_dir.is_dir():
+                for chk_file in chk_dir.iterdir():
+                    if not chk_file.is_file() or not chk_file.name.endswith(".json"):
+                        continue
+                    if ".committed." in chk_file.name or ".failed-" in chk_file.name:
+                        continue
+                    rec = parse_checkpoint_file(chk_file)
+                    if rec:
+                        candidates.append({
+                            "scope": rec.get("kind", "task"),
+                            "binding": rec.get("target_id", task_dir.name),
+                            "revision": rec.get("base_revision", 0) + 1,
+                            "request_id": rec.get("request_id", chk_file.stem),
+                            "mtime": chk_file.stat().st_mtime,
+                        })
+
+    # 2. Temporary checkpoints: .maestro/memory/temporary/active/*/references/checkpoints/*.json and current.md
+    temp_root = project_root / ".maestro/memory/temporary/active"
+    if temp_root.is_dir():
+        for temp_dir in temp_root.iterdir():
+            if not temp_dir.is_dir():
+                continue
+            current_path = temp_dir / "current.md"
+            if current_path.is_file():
+                try:
+                    receipt = extract_checkpoint_receipt(current_path.read_text(encoding="utf-8"))
+                    if receipt:
+                        candidates.append({
+                            "scope": "temporary",
+                            "binding": temp_dir.name,
+                            "revision": receipt["revision"],
+                            "request_id": receipt["request_id"],
+                            "mtime": current_path.stat().st_mtime,
+                        })
+                except Exception:
+                    pass
+            chk_dir = temp_dir / "references/checkpoints"
+            if chk_dir.is_dir():
+                for chk_file in chk_dir.iterdir():
+                    if not chk_file.is_file() or not chk_file.name.endswith(".json"):
+                        continue
+                    if ".committed." in chk_file.name or ".failed-" in chk_file.name:
+                        continue
+                    rec = parse_checkpoint_file(chk_file)
+                    if rec:
+                        candidates.append({
+                            "scope": rec.get("kind", "temporary"),
+                            "binding": rec.get("target_id", temp_dir.name),
+                            "revision": rec.get("base_revision", 0) + 1,
+                            "request_id": rec.get("request_id", chk_file.stem),
+                            "mtime": chk_file.stat().st_mtime,
+                        })
+
+    # 3. Project/Session checkpoints: .maestro/checkpoints/*.json
+    proj_chk = project_root / ".maestro/checkpoints"
+    if proj_chk.is_dir():
+        for chk_file in proj_chk.iterdir():
+            if not chk_file.is_file() or not chk_file.name.endswith(".json"):
+                continue
+            if ".committed." in chk_file.name or ".failed-" in chk_file.name:
+                continue
+            rec = parse_checkpoint_file(chk_file)
+            if rec:
+                candidates.append({
+                    "scope": rec.get("kind", "session"),
+                    "binding": rec.get("target_id", "session"),
+                    "revision": rec.get("base_revision", 0) + 1,
+                    "request_id": rec.get("request_id", chk_file.stem),
+                    "mtime": chk_file.stat().st_mtime,
+                })
+
+    if not candidates:
+        return None
+
+    # Deduplicate and sort: mtime descending, revision descending, binding ascending, request_id ascending
+    candidates.sort(key=lambda c: (-c["mtime"], -c["revision"], c["binding"], c["request_id"]))
+    top = candidates[0]
+    return {
+        "available": True,
+        "scope": top["scope"],
+        "binding": top["binding"],
+        "revision": top["revision"],
+        "request_id": top["request_id"],
+    }
+
+
 def catalog_overview_summary(
     project_root: Path,
     index: dict[str, Any],
@@ -1139,7 +1279,8 @@ def catalog_overview_summary(
         }
         for item in index.get("pending_followups", [])
     ]
-    has_active_work = bool(all_temporaries or all_tasks or all_followups)
+    recoverable_checkpoint = find_recoverable_checkpoint(project_root)
+    has_active_work = bool(all_temporaries or all_tasks or all_followups or recoverable_checkpoint)
 
     bounded_temporaries = all_temporaries[:limit]
     bounded_tasks = all_tasks[:limit]
@@ -1148,6 +1289,7 @@ def catalog_overview_summary(
     return {
         "catalog_refreshed": refreshed,
         "has_active_work": has_active_work,
+        "recoverable_checkpoint": recoverable_checkpoint,
         "active_temporary_count": len(all_temporaries),
         "active_temporaries": bounded_temporaries,
         "more_temporaries": max(0, len(all_temporaries) - limit),
@@ -1172,6 +1314,15 @@ def bounded_runtime_context_text(summary: dict[str, Any]) -> str:
     else:
         lines.append("当前项目暂无活动任务或临时探索，系统处于就绪状态。")
     lines.append("")
+
+    chk = summary.get("recoverable_checkpoint")
+    if chk and chk.get("available"):
+        lines.append("## Recoverable Checkpoint")
+        lines.append("Recoverable checkpoint: yes")
+        lines.append(f"scope: {chk.get('scope')}")
+        lines.append(f"binding: {chk.get('binding')}")
+        lines.append(f"revision: {chk.get('revision')}")
+        lines.append("")
 
     t_count = summary["active_task_count"]
     lines.append(f"## Active Tasks ({t_count})")
