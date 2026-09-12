@@ -113,6 +113,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 !.maestro/
 !.maestro/config.yaml
 !.maestro/playbooks/
+!.maestro/workers/approvals/
 !.maestro/workers/registry.yaml
 !.maestro/instructions/registry.yaml
 !.maestro/memory/long-term/
@@ -445,6 +446,11 @@ Long-term Memory，也不能由模型选择。没有独立可达副本时，项�
 时间已经过去不得回收锁。
 
 ### 通用文件规则
+
+项目 Worker registry 批准记录位于 `.maestro/workers/approvals/`。写入方先校验目标 Worker、当前
+registry revision 和规范 Worker 摘要，再以互斥创建发布 `<approval-id>.approval.json`；目标已存在
+即停止，不得原子替换。批准时间记录逻辑提交实际生效边界。批准记录一旦发布即独立保留历史事实，
+后续 registry revision 不参与其读取时校验。
 
 - 所有写入都必须解析到选定项目的 `.maestro/` 目录内。
 - 拒绝 `../` 等路径穿越，不把传入的绝对路径用作状态目标。

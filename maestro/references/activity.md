@@ -6,8 +6,8 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 
 ## 当前范围
 
-当前派生 Task 完成事件、Temporary 晋升事件、里程碑 Decision 事件、里程碑 Playbook 评审事件，
-以及显式 checkpoint 恢复成功事件。
+当前派生 Task 完成事件、Temporary 晋升事件、里程碑 Decision 事件、里程碑 Playbook 评审事件、
+Worker registry 批准事件，以及显式 checkpoint 恢复成功事件。
 
 `task_completed`：
 
@@ -68,6 +68,15 @@ Playbook 候选本身（`playbooks/candidates/`）和已批准 Playbook 文件�
 `updated_at` 都不是事件时间：前者只是提案，后者是可变现状。只有不可变评审记录能进入时间线，
 也不得用它们回推批准时刻。
 
+`worker_approved`：
+
+- 来源只包括 `.maestro/workers/approvals/<approval-id>.approval.json`；
+- `occurred_at` 只取不可变记录的 `approved_at` 并归一化为 UTC；
+- 记录保存批准时的 Worker 显示名称、registry revision 和 Worker 规格摘要，因此后续 registry 编辑、
+  禁用或移除 Worker 不会改写历史事件；
+- `source_refs` 指向批准记录，事件 ID 由事件类型、approval ID 和批准时间确定性生成；
+- 没有批准记录的旧 registry 保持有效但不投影，绝不用 registry `updated_at`、mtime 或 Git 时间猜测。
+
 `checkpoint_recovered`：
 
 - 只投影显式 `maestro_checkpoint retry` 成功发布的新版不可变
@@ -97,6 +106,8 @@ Activity 没有 `record` 操作，也不维护 `events/*.jsonl`。完成新 Task
 批准或取代 Playbook 时，把评审记录发布到 `playbooks/decisions/`。
 checkpoint recovery 事件不需要额外 Activity 写入；显式 retry 成功发布带 `completion: recovery` 和
 `committed_at` 的 observation 后即可派生。
+Worker 批准事件不需要额外 Activity 写入；在既有评审权限边界内随 registry 逻辑提交原子发布
+不可变批准记录后即可派生。
 Activity 只负责读取和派生。规范来源损坏、重复 ID、文件名不匹配或时间格式无效时，构建必须
 明确失败，不能静默跳过有问题的权威记录。`promoted_at` 存在但 `source_temporary` 缺失、或时间
 格式无效时，同样属于损坏记录并明确失败；缺少 `promoted_at` 的旧提升记录则保持原样、不投影。
