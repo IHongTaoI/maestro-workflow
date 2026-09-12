@@ -205,6 +205,9 @@ Activity Timeline 从带有可靠 `completed_at` 的 Task、带有 `promoted_at`
 自动测试套件有意不包含基于模型的行为 eval。Maestro 运行在不同宿主中，而 Codex 专用 live
 runner 耗时、成本高，也无法验证真实 DSH 或裸 Skill 体验。
 
+Core 与各宿主 Adapter 的职责、当前激活状态和降级边界见
+[`docs/architecture/core-adapter-boundary.md`](docs/architecture/core-adapter-boundary.md)。
+
 有重要指令变更后，在真实目标宿主抽查受影响行为。小型发布清单见
 [`docs/manual-acceptance.md`](docs/manual-acceptance.md)。确定性单元测试与契约测试仍自动运行。
 
