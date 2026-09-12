@@ -331,6 +331,7 @@ test('real Cordis activates checkpoint when fs and tools arrive after the adapte
   ctx.provide('skills', { register: () => () => {} } as never)
   const adapter = await ctx.plugin(apply, { coreDir: fileURLToPath(new URL('../../../maestro/', import.meta.url)) })
   assert.equal(ctx.get('maestro.stateStore'), undefined)
+  assert.equal(ctx.get('maestro.transactionStore'), undefined)
   new SystemPrompt(ctx, {})
   const runtime = new ToolRuntime(ctx)
   assert.equal(runtime.get('maestro_checkpoint'), undefined)
@@ -339,8 +340,10 @@ test('real Cordis activates checkpoint when fs and tools arrive after the adapte
     const deadline = Date.now() + 2000
     while (!runtime.get('maestro_checkpoint') && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
     assert.ok(runtime.get('maestro_checkpoint'))
+    assert.ok(ctx.get('maestro.transactionStore'))
     await adapter.dispose()
     assert.equal(runtime.get('maestro_checkpoint'), undefined)
+    assert.equal(ctx.get('maestro.transactionStore'), undefined)
   } finally { releaseFs(); await ctx.fiber.dispose() }
 })
 

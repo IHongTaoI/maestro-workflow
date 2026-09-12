@@ -11,11 +11,13 @@ dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #
 可选 Harness Plugin / Adapter」方向的第一个宿主实现。
 
 > **当前接线状态（如实）**：**Product A**（把 Core 注册成 dsh skill）已接线。
-> `ctx.fs` 存在时，确定性的 `MaestroStateStore` 与 `MaestroSchemaValidator` 会被构建并注册成
-> Cordis service（`maestro.stateStore` / `maestro.schemaValidator`），但**尚未暴露成
+> `ctx.fs` 存在时，确定性的 `MaestroStateStore`、`MaestroSchemaValidator` 与
+> `MaestroTransactionStore` 会被构建并注册成 Cordis service（`maestro.stateStore` /
+> `maestro.schemaValidator` / `maestro.transactionStore`），但**尚未暴露成
 > 任意 model-facing storage tool**。启用下述 checkpoint 工具后，单目标快照保存会经过锁 / CAS /
-> 校验；其他 Core 写入不会自动改道。`ctx.agents` 仅用于能力探测，没有注册任何生命周期 handler（Handoff /
-> session-boundary 决策逻辑还在 Core Skill 里，属 TODO）。详见下文「落地顺序」。
+> 校验；事务 service 只提供 create/replace 的逻辑提交、overlay 与重启恢复机械层，现有 checkpoint
+> 及其他 Core 写入不会自动改道。DSH 没有 delete/rename seam，因此生命周期 move 仍不支持。
+> `ctx.agents` 的实际接线状态见下文自动 checkpoint 与 Runtime Context 章节。
 
 > **Worker Delegation Contract**：当前 Adapter 尚未实现 Worker Delegation Packet 到 dsh
 > subagent prompt / tool isolation 的映射，因此不能对独立 Worker 执行宣称 `supported`。在该映射
@@ -32,7 +34,7 @@ dsh 的 `ctx.fs` 原语之上提供确定性的状态写协议。这是 [Issue #
 | --- | --- | --- |
 | **Maestro Core** | 角色调度、三层记忆语义、Handoff 边界、Playbook 规则（宿主无关） | `../../maestro/` |
 | **Skill adapter（薄）** | 把 Core 注册成 dsh skill | `src/skill.ts` |
-| **Capability plugin（厚）** | 锁 / 原子写 / 事务、schema 校验、session 生命周期 | `src/storage.ts`、`src/validate.ts`、`src/hooks.ts` |
+| **Capability plugin（厚）** | 锁 / 原子写 / 事务、schema 校验、session 生命周期 | `src/storage.ts`、`src/transaction.ts`、`src/validate.ts`、`src/hooks.ts` |
 | **detection + fallback** | 探测 dsh 提供了哪些 seam，按能力降级 | `src/detect.ts` |
 
 红线（来自 Issue #14 验收标准）：
@@ -139,6 +141,8 @@ export function apply(ctx, config) {
 | 独占锁 create-if-absent | `ctx.fs.writeText(lockTarget, owner, { kind: 'createIfAbsent' })`；已存在抛 `FS_NOT_OBSERVED` |
 | 状态路径边界 | 每次解析都走 `ctx.fs.contains(.maestro/, target)` 做权威 containment 校验，`lockPathFor` / 状态路径再拒绝 `..` 与绝对路径 |
 | schema 校验 | 复用 `maestro/references/schemas/*.json`（JSON Schema draft 2020-12），用 `ajv` 校验 |
+| create/replace 多文件事务 | 不可变 before/staged/intent + 互斥 terminal marker + overlay + CAS materialization；`execute` 强制调用方提供 fail-closed validator seam，缺失时不写入；内部 service，尚无通用模型工具 |
+| lifecycle move | 当前 filesystem 无 delete/rename，明确 unsupported，不用残留 source 文件伪装 move |
 | Worker 指令与上下文注入 | 尚未接线；独立 Worker 必须报告 `unsupported`，不能静默继承父上下文 |
 
 ## 锁协议（`acquireLock`）
@@ -188,6 +192,7 @@ adapters/deepseek-harness/
     ├── detect.ts       # capability detection + fallback 决策
     ├── skill.ts        # 产物 A：注册 Core 为 dsh skill
     ├── storage.ts      # 产物 B：ctx.fs 上的锁 / CAS 写协议（含 .maestro/ 边界强制）
+    ├── transaction.ts  # 多文件 create/replace 逻辑提交、overlay、materialization 与恢复
     ├── validate.ts     # 产物 B：schema 校验
     ├── hooks.ts        # 产物 B：可等待的 turn-stopping 与上下文压力 checkpoint 触发器
     ├── storage.test.ts # storage / lock 单元测试（fake seam）
@@ -297,8 +302,9 @@ checkpoint 区段并推进 revision。完整请求保存在目标 references/che
 提交点，随后发布 committed observation。不同请求之间的 pending 不会被自动清除；conflict
 需要重新查看当前事实，旧 pending 保留作为证据。
 
-本版不支持 Worker 目标、宿主原生 pre-compaction 接线、事务 overlay 或 Task 晋升。存在任何 transaction bundle
-（即使已完成）时保守拒绝写入，空 transactions 目录允许。不要删除事务记录来绕过限制。
+Checkpoint 本身不支持 Worker 目标、宿主原生 pre-compaction 接线、transaction overlay 或 Task 晋升。
+虽然 Adapter 已提供内部 transaction service，checkpoint 尚未接入它；因此 checkpoint 看到任何
+transaction bundle（即使已完成）时仍保守拒绝写入，空 transactions 目录允许。不要删除事务记录来绕过限制。
 进程被强制终止后若留下 held 锁，必须先由已有存储恢复流程核验 owner 已失活；工具不按过期时间
 抢锁。测试验证的是机制和真实 ToolRuntime 管线，完整 DSH 模型提供方/磁盘后端的人工验收仍待完成。
 
@@ -339,7 +345,7 @@ npm run test:package
 4. ~~hooks 的 turn-stopping 监听原语（正确 await）~~
 5. 已接通显式启用的 snapshot checkpoint 工具；通用 storage / validator 工具仍属后续
 6. 已接通可选的上下文压力自动 checkpoint；真实宿主验收后再判断默认策略
-7. 事务（`storage.md` 的 `transactions/` 多文件原子提交）——后续
+7. ~~create/replace 事务机械层（逻辑 commit、overlay、materialization、重启恢复）~~；具体窄业务路径与 lifecycle move 后续
 8. 宿主未来提供 pre-compaction / Session End 时再接原生生命周期，不使用假事件
 9. 将 Worker Delegation Packet 映射到 dsh subagent 指令、上下文、工具与权限隔离，并返回真实
    `supported` / `degraded` / `unsupported` 状态——后续

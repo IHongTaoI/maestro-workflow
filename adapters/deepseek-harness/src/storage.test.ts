@@ -229,6 +229,21 @@ test('acquireLock: contention throws after the bounded timeout', async () => {
   }
 })
 
+test('acquireLock: contention wait is cooperatively cancellable', async () => {
+  const { fs } = makeFs()
+  const store = new MaestroStateStore(fs)
+  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
+  const controller = new AbortController()
+  const waiting = acquireLock(store, 'memory/long-term/current.md', 'agent-b', {
+    timeoutMs: 10_000,
+    retryDelayMs: 1_000,
+    signal: controller.signal,
+  })
+  controller.abort()
+  try { await assert.rejects(() => waiting, { name: 'AbortError' }) }
+  finally { await release() }
+})
+
 test('acquireLock: release is idempotent and safe to call twice', async () => {
   const { fs } = makeFs()
   const store = new MaestroStateStore(fs)
