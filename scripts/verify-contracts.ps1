@@ -300,6 +300,8 @@ try {
         "$validatorFixtureRoot/checkpoint-observation-recovery-valid.json" 0
     Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
         "$validatorFixtureRoot/checkpoint-observation-partial-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
+        "$validatorFixtureRoot/checkpoint-observation-timezone-invalid.json" 1
     Invoke-ProtocolDiagnosticCase "handoff" `
         "$validatorFixtureRoot/handoff-control-character-invalid.json" `
         '$.result_path' "control character"

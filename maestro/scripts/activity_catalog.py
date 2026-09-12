@@ -189,12 +189,30 @@ def temporary_metadata_files(project_root: Path) -> list[Path]:
 
 def checkpoint_target_roots(project_root: Path) -> list[tuple[str, str, Path]]:
     result: list[tuple[str, str, Path]] = []
+    seen: dict[tuple[str, str], Path] = {}
+
+    def add(kind: str, target_id: str, root: Path) -> None:
+        checkpoint_root = root / "references" / "checkpoints"
+        if checkpoint_root.exists() and not checkpoint_root.is_dir():
+            raise CatalogError(f"Checkpoint record root must be a directory: {checkpoint_root}")
+        if not checkpoint_root.is_dir():
+            return
+        key = (kind, target_id)
+        previous = seen.get(key)
+        if previous is not None:
+            raise CatalogError(
+                f"duplicate checkpoint target '{kind}/{target_id}' in {previous} and {root}"
+            )
+        seen[key] = root
+        result.append((kind, target_id, root))
+
     for metadata in task_source_files(project_root):
         task = parse_simple_yaml(metadata)
-        result.append(("task", require_text(task, "id", metadata), metadata.parent))
+        add("task", require_text(task, "id", metadata), metadata.parent)
     for metadata in temporary_metadata_files(project_root):
-        temporary = parse_simple_yaml(metadata)
-        result.append(("temporary", require_text(temporary, "id", metadata), metadata.parent))
+        # Temporary metadata is not an Activity authority for checkpoint recovery. Its presence
+        # establishes a canonical target directory; the stable target id is the directory name.
+        add("temporary", metadata.parent.name, metadata.parent)
     return result
 
 

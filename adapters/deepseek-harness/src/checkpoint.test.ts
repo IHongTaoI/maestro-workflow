@@ -140,6 +140,10 @@ test('legacy observations remain readable while malformed versioned observations
 
   f.files.set(observationPath, { content: JSON.stringify({ ...JSON.parse(legacy), completion: 'recovery' }), version: 3 })
   await assert.rejects((await f.writer()).status('temporary', 'test', 'save_1'), /invalid_observation/)
+
+  f.files.set(observationPath, { content: JSON.stringify({ ...JSON.parse(legacy), completion: 'recovery',
+    committed_at: '2026-09-12T11:28:04' }), version: 4 })
+  await assert.rejects((await f.writer()).status('temporary', 'test', 'save_1'), /invalid_observation/)
 })
 
 test('source/target write-ahead archive survives primary writes failing before request publication', async () => {

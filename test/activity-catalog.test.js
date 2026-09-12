@@ -209,6 +209,27 @@ test('recovery observations require an intact adjacent request and invalidate th
   assert.match(failure.stderr, /recovery request record is missing or unsafe/);
 });
 
+test('Temporary metadata without checkpoints is not parsed as recovery authority', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(
+    projectRoot,
+    '.maestro/memory/temporary/active/unrelated/meta.yaml',
+    'topic: unrelated malformed metadata\n',
+  );
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 0);
+});
+
+test('duplicate active and archived Temporary checkpoint targets fail with the target identity', async (t) => {
+  const projectRoot = await createProject(t);
+  await seedCheckpointObservation(projectRoot, { kind: 'temporary', targetId: 'duplicate-temp' });
+  await seedCheckpointObservation(projectRoot, {
+    kind: 'temporary', targetId: 'duplicate-temp', lifecycle: 'archive', requestId: 'archived_request',
+  });
+  const failure = await rejectedCommand(runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.match(failure.stderr, /duplicate checkpoint target 'temporary\/duplicate-temp'/);
+});
+
 test('completed Task automatically becomes a UTC Activity event without an event journal', async (t) => {
   const projectRoot = await createProject(t);
   await seedTask(projectRoot);

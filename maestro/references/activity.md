@@ -28,7 +28,8 @@ Activity 回答“这个月完成了什么”“今年做过哪些事”。它�
 - `occurred_at` 只取 `promoted_at`，并归一化为 UTC；
 - `status` 为 `preparing` 的 Task 尚未提交，不投影晋升事件；
 - `source_refs` 指向 Task 当前的 `task.yaml`。来源 Temporary 的规范 ID 记录在事件摘要里；
-  Temporary 目录本身不是 Activity 来源，它已归档或已丢弃都不影响时间线。
+  对晋升事件而言，Temporary 目录本身不是 Activity 来源，它已归档或已丢弃都不影响该晋升事件。
+  checkpoint recovery 事件另按下文规则扫描目标内的不可变 observation。
 
 `promotion_transaction` **不是**事件时间，Activity 不解释它：该标记在事务打开时写入，早于晋升
 生效，只用于事务关联、恢复与审计。晋升真正生效的边界是原子发布 `committed.yaml`，`promoted_at`

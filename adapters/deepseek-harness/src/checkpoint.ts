@@ -87,6 +87,11 @@ function target(kind: string, id: string) {
 function requestId(id: string) {
   requireThat(typeof id === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id), 'invalid_request_id')
 }
+function timestampWithTimezone(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/.test(value)
+    && Number.isFinite(Date.parse(value))
+}
 
 /** Bind every relative resolution to the configured project, never process.cwd(). */
 export function scopedFs(fs: StateFileSystem, cwd: string, signal?: AbortSignal): StateFileSystem {
@@ -336,8 +341,7 @@ export class CheckpointWriter {
     if (observation.completion === undefined) {
       requireThat(content === this.legacyObservation(r), 'invalid_observation')
     } else {
-      requireThat(typeof observation.committed_at === 'string'
-        && Number.isFinite(Date.parse(observation.committed_at)), 'invalid_observation')
+      requireThat(timestampWithTimezone(observation.committed_at), 'invalid_observation')
     }
     return observation
   }
