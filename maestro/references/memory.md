@@ -305,6 +305,55 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> build
 ```
 
+### Memory Catalog 有界访问协议与四层路由
+
+`.maestro/memory/index.json` 是确定性脚本的内部派生索引，用于确定性过滤、排序与 freshness 校验。
+**正常 Memory 使用中，模型严禁直接 Read / cat 完整 `index.json`**，避免把整个派生索引 dump 进上下文。
+只有在用户明确要求调试、审计或检查原始 Catalog 结构时才允许直接读取。
+
+日常 Memory 查询统一路由到有界接口：
+
+| 用户意图 | 路由路径 | 接口与约束 |
+| --- | --- | --- |
+| 有什么记忆 / 当前记忆总览 | 轻量概览 | 读取 `.maestro/memory/manifest.md` 或运行 `overview` |
+| 最新记忆 / 最近记了什么 / 最近几条 | 有界最新 | `recent --limit N`（默认 5 条有界元数据） |
+| 之前有没有讨论过 X / 关于 X 的记忆 | 渐进检索 | `search "<query>"`（最多 5 条相关候选） |
+| 看看这条记忆的详情 | 精确下钻 | `show <memory-id>`（单条完整当前内容） |
+
+### 轻量总览（overview）
+
+在 Session 启动或需要检查当前记忆全局状态时获取轻量概览：
+
+```bash
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> overview
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> overview --format json
+```
+
+`overview` 默认检查 Catalog freshness，缺失或陈旧时自动重建。默认以 Markdown 文本形式返回
+`manifest.md` 内容；传入 `--format json` 时返回结构化摘要（包含活跃 Temporary、活跃 Task、各层
+计数与 `has_active_work` 标记）。这是老周形成初始 Runtime Context 的核心输入。
+
+### 最新记忆（recent）
+
+查询最近更新的 Memory 条目元数据：
+
+```bash
+python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> recent --limit 5
+```
+
+- **有界输出：** 默认最多返回 5 条（`--limit` 必须在 1 到 5 之间）。输出仅包含路由所需的有界
+  元数据（`memory_id`、`layer`、`record_type`、`title`、`summary`、`status`、`path`、`locator`、
+  `updated_at`、可选的 `memory_kind` 与 `stale`），不展开完整 `content`、`search_hints` 或
+  Reference 树。需要详情时通过 `show <memory-id>` 单条加载。
+- **支持过滤：** 支持 `--layer {temporary,task,long-term}` 过滤特定层级；默认仅返回 `active`
+  条目，传入 `--include-inactive` 可包含历史或非活跃条目；支持 `--no-refresh`。
+- **时间语义与降级规则：** 排序基于权威记录中的 `updated_at`（规范 ISO-8601 UTC）降序排列，时间
+  相同时以 `memory_id` 升序决胜。**绝不使用文件系统不可靠的 `mtime`、Git 提交时间或当前时间伪造
+  Memory 时间**。没有可靠时间字段的记录（如未标注时间的 worker-state 或旧记录）排在所有具备可靠
+  时间戳的记录之后，按 `memory_id` 升序确定性降级排序。
+
+### 渐进检索（search 与 show）
+
 初始概览只读取 `manifest.md`。用户请求可能受益于既往上下文时，使用当前请求、活动 Skill 或
 Worker 上下文，以及已知绑定的 Temporary 或 Task 查询索引：
 
@@ -357,12 +406,17 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 4. Task 完成或归档。
 
 宿主支持模型选择时使用配置的 memory model。瞬时故障或无效输出后重试一次，再回退到主模型。
-没有合适 runner 时，当前 Agent 可以执行相同的有界压缩。如果全部尝试失败，将完整请求和来源
-写入 `memory/pending/`，并继续业务 Task。
+宿主具备原生隔离子代理（如 Codex `spawn_agent`）时，委派给独立原生 Memory Worker（中文称呼“记忆整理员”）；
+宿主不支持独立隔离子代理时，如实报告 `unsupported`，由当前 Agent 执行相同的有界压缩（In-Session Fallback），
+并在执行记录中明确标记 `execution: in-session-fallback`，绝不得虚报为独立 Worker 运行。
+如果全部尝试失败，将完整请求和来源写入 `memory/pending/`，并继续业务 Task。
 
 Memory Worker 负责整理 memory 和有界 Experience Review。它按 memory 能力选择或生成，不是
-预置角色。它不得选择其他 Worker、作出架构决定、改变 Task 范围，或批准自己的 Long-term 或
-Playbook 候选。该评审不会引入新的预置角色或 Runtime。
+预置角色。它受 [Core Guard](guard.md) 与 [workers.md](workers.md) 约束：
+- **工具白名单仅限只读**：仅允许读取指定文件与查询已知条目；严禁提供写工具、修改工具、命令执行或网络工具。
+- **提案禁止自我批准**：Memory Worker 只能生成候选提案，绝对不能批准自己的 Long-term 或
+  Playbook 候选，严禁直接改写 `.maestro/memory/long-term/entries/` 或 `.maestro/playbooks/`。
+- **职责不得越权**：它不得选择其他 Worker、作出架构决定，或改变 Task 范围。该评审不会引入新的预置角色或 Runtime。
 
 每个请求还暴露 `current_playbooks`；项目没有 Playbook 时也要提供空数组。每个索引 Playbook
 包含稳定 `playbook_id`、规范 `file_path`、标题、触发条件、有序步骤、检查、active 状态、

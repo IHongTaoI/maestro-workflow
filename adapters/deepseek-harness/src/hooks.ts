@@ -34,10 +34,17 @@ export interface TurnStopPayload {
   signal: AbortSignal
 }
 
+/** Payload of dsh's `agent/session-start` event (see dsh-agent runtime-types). */
+export interface SessionStartPayload {
+  agent: Agent
+}
+
 /** Callbacks the adapter can invoke at deterministic lifecycle boundaries. */
 export interface LifecycleHandlers {
   /** Invoked when a turn is about to close. */
   onTurnStopping?: (payload: TurnStopPayload) => void | Promise<void>
+  /** Invoked when a session starts. */
+  onSessionStart?: (payload: SessionStartPayload) => void | Promise<void>
 }
 
 export interface LifecycleHookOptions {
@@ -262,31 +269,52 @@ export class AutoCheckpointCoordinator {
 export function registerLifecycleHooks(ctx: Context, handlers: LifecycleHandlers,
   options: LifecycleHookOptions = {}): void {
   const onTurnStopping = handlers.onTurnStopping
-  if (onTurnStopping === undefined) return
-  const timeoutMs = boundedInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, 50, 5_000,
-    'checkpoint.auto.timeoutMs')
-  ctx.on(
-    'agent/turn-stopping',
-    function (payload) {
-      const timeout = new AbortController()
-      const signal = AbortSignal.any([payload.signal, timeout.signal])
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const deadline = new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          timeout.abort(new Error('lifecycle hook timeout'))
-          ctx.logger.warn(`maestro-adapter: onTurnStopping listener timed out after ${timeoutMs}ms`)
-          resolve()
-        }, timeoutMs)
-      })
-      const handled = Promise.resolve()
-        .then(() => onTurnStopping({ ...payload, signal }))
-        .catch((error: unknown) => {
-          ctx.logger.warn(`maestro-adapter: onTurnStopping listener failed: ${String(error)}`)
+  if (onTurnStopping !== undefined) {
+    const timeoutMs = boundedInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, 50, 5_000,
+      'checkpoint.auto.timeoutMs')
+    ctx.on(
+      'agent/turn-stopping',
+      function (payload) {
+        const timeout = new AbortController()
+        const signal = AbortSignal.any([payload.signal, timeout.signal])
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const deadline = new Promise<void>((resolve) => {
+          timer = setTimeout(() => {
+            timeout.abort(new Error('lifecycle hook timeout'))
+            ctx.logger.warn(`maestro-adapter: onTurnStopping listener timed out after ${timeoutMs}ms`)
+            resolve()
+          }, timeoutMs)
         })
-      return Promise.race([handled, deadline]).finally(() => {
-        if (timer !== undefined) clearTimeout(timer)
-      })
-    },
-    { global: true },
-  )
+        const handled = Promise.resolve()
+          .then(() => onTurnStopping({ ...payload, signal }))
+          .catch((error: unknown) => {
+            ctx.logger.warn(`maestro-adapter: onTurnStopping listener failed: ${String(error)}`)
+          })
+        return Promise.race([handled, deadline]).finally(() => {
+          if (timer !== undefined) clearTimeout(timer)
+        })
+      },
+      { global: true },
+    )
+  }
+
+  const onSessionStart = handlers.onSessionStart
+  if (onSessionStart !== undefined) {
+    ctx.on(
+      'agent/session-start',
+      function (payload) {
+        try {
+          const handled = onSessionStart(payload)
+          if (handled instanceof Promise) {
+            handled.catch((error: unknown) => {
+              ctx.logger.warn(`maestro-adapter: onSessionStart listener failed: ${String(error)}`)
+            })
+          }
+        } catch (error: unknown) {
+          ctx.logger.warn(`maestro-adapter: onSessionStart listener failed: ${String(error)}`)
+        }
+      },
+      { global: true },
+    )
+  }
 }

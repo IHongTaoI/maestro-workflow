@@ -40,6 +40,8 @@ import { MaestroStateStore } from './storage'
 import { MaestroSchemaValidator } from './validate'
 import type { AdapterConfig } from './types'
 
+export * from './guard'
+
 /** Cordis plugin name. */
 export const name = 'maestro-adapter'
 

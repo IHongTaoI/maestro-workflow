@@ -61,6 +61,21 @@ test('registerLifecycleHooks listens on agent/turn-stopping with global scope', 
   assert.equal(ctx.listeners[0].options.global, true)
 })
 
+test('registerLifecycleHooks listens on agent/session-start with global scope', () => {
+  const ctx = makeCtx()
+  let called = false
+  registerLifecycleHooks(ctx as never, {
+    onSessionStart: () => {
+      called = true
+    },
+  })
+  assert.equal(ctx.listeners.length, 1)
+  assert.equal(ctx.listeners[0].name, 'agent/session-start')
+  assert.equal(ctx.listeners[0].options.global, true)
+  ctx.listeners[0].listener({ agent: {} as never })
+  assert.equal(called, true)
+})
+
 test('the listener returns a promise that is resolved only after the handler settles', async () => {
   const ctx = makeCtx()
   let finished = false

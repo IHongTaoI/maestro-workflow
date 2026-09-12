@@ -1031,6 +1031,122 @@ def search_index(
     return candidates[:limit]
 
 
+def parse_iso_timestamp(raw: str | None) -> datetime | None:
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        return None
+    return dt.astimezone(timezone.utc)
+
+
+def bound_recent_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    bounded: dict[str, Any] = {
+        "memory_id": entry["memory_id"],
+        "layer": entry["layer"],
+        "record_type": entry["record_type"],
+        "title": entry["title"],
+        "summary": entry["summary"],
+        "status": entry.get("status", "active"),
+        "path": entry["path"],
+        "locator": entry["locator"],
+        "updated_at": entry.get("updated_at"),
+    }
+    if entry.get("memory_kind") is not None:
+        bounded["memory_kind"] = entry["memory_kind"]
+    if entry.get("stale") is not None:
+        bounded["stale"] = entry["stale"]
+    return bounded
+
+
+def recent_entries(
+    index: dict[str, Any],
+    *,
+    layer: str | None = None,
+    include_inactive: bool = False,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    timed: list[dict[str, Any]] = []
+    untimed: list[dict[str, Any]] = []
+    for entry in index["entries"]:
+        if not include_inactive and entry.get("status") not in ACTIVE_STATUSES:
+            continue
+        if layer and entry.get("layer") != layer:
+            continue
+        dt = parse_iso_timestamp(entry.get("updated_at"))
+        if dt is not None:
+            timed.append(entry)
+        else:
+            untimed.append(entry)
+
+    # Sort timed: primary updated_at descending, tie-breaker memory_id ascending
+    timed.sort(key=lambda item: item["memory_id"])
+    timed.sort(key=lambda item: parse_iso_timestamp(item.get("updated_at")), reverse=True)
+
+    # Sort untimed: degraded deterministic order, memory_id ascending
+    untimed.sort(key=lambda item: item["memory_id"])
+
+    ordered = timed + untimed
+    return [bound_recent_entry(entry) for entry in ordered[:limit]]
+
+
+def catalog_overview_summary(
+    project_root: Path,
+    index: dict[str, Any],
+    refreshed: bool,
+) -> dict[str, Any]:
+    visible = [entry for entry in index["entries"] if entry["status"] == "active"]
+    temporaries = [
+        {
+            "memory_id": entry["memory_id"],
+            "title": entry["title"],
+            "summary": entry["summary"],
+            "updated_at": entry.get("updated_at"),
+            "stale": entry.get("stale"),
+        }
+        for entry in visible
+        if entry["record_type"] == "temporary"
+    ]
+    tasks = [
+        {
+            "memory_id": entry["memory_id"],
+            "title": entry["title"],
+            "summary": entry["summary"],
+            "updated_at": entry.get("updated_at"),
+        }
+        for entry in visible
+        if entry["record_type"] == "task"
+    ]
+    long_term_count = sum(entry["record_type"] == "long-term-entry" for entry in visible)
+    worker_state_count = sum(entry["record_type"] == "worker-state" for entry in visible)
+    followups = [
+        {
+            "followup_id": item["followup_id"],
+            "title": item["title"],
+            "status": item["status"],
+            "created_at": item.get("created_at"),
+            "source_refs": item.get("source_refs", []),
+        }
+        for item in index.get("pending_followups", [])
+    ]
+    has_active_work = bool(temporaries or tasks or followups)
+    return {
+        "catalog_refreshed": refreshed,
+        "has_active_work": has_active_work,
+        "active_temporary_count": len(temporaries),
+        "active_temporaries": temporaries,
+        "active_task_count": len(tasks),
+        "active_tasks": tasks,
+        "long_term_count": long_term_count,
+        "worker_state_count": worker_state_count,
+        "pending_followup_count": len(followups),
+        "pending_followups": followups,
+    }
+
+
 def detail_for_entry(project_root: Path, entry: dict[str, Any]) -> dict[str, Any]:
     path = project_root / Path(entry["path"])
     record_type = entry["record_type"]
@@ -1321,6 +1437,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     search.add_argument("--limit", type=int, default=5)
     search.add_argument("--no-refresh", action="store_true")
 
+    overview = subparsers.add_parser("overview", parents=[common])
+    overview.add_argument("--format", choices=("text", "json"), default="text")
+    overview.add_argument("--no-refresh", action="store_true")
+
+    recent = subparsers.add_parser("recent", parents=[common])
+    recent.add_argument("--limit", type=int, default=5)
+    recent.add_argument("--layer", choices=("temporary", "task", "long-term"))
+    recent.add_argument("--include-inactive", action="store_true")
+    recent.add_argument("--no-refresh", action="store_true")
+
     show = subparsers.add_parser("show", parents=[common])
     show.add_argument("memory_id")
     show.add_argument("--include-inactive", action="store_true")
@@ -1371,6 +1497,43 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh, now=reference_time)
+        if args.command == "overview":
+            if args.format == "json":
+                summary = catalog_overview_summary(project_root, index, refreshed)
+                print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+                return 0
+            manifest_path = project_root / MANIFEST_PATH
+            if manifest_path.is_file():
+                print(manifest_path.read_text(encoding="utf-8").strip())
+            else:
+                print(manifest_text(index).strip())
+            return 0
+        if args.command == "recent":
+            if args.limit < 1 or args.limit > 5:
+                raise CatalogError("--limit must be between 1 and 5")
+            entries = recent_entries(
+                index,
+                layer=args.layer,
+                include_inactive=args.include_inactive,
+                limit=args.limit,
+            )
+            payload: dict[str, Any] = {
+                "catalog_refreshed": refreshed,
+                "command": "recent",
+                "entries": entries,
+                "limit": args.limit,
+            }
+            if args.layer:
+                payload["layer"] = args.layer
+            print(
+                json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
         if args.command == "search":
             if args.limit < 1 or args.limit > 5:
                 raise CatalogError("--limit must be between 1 and 5")

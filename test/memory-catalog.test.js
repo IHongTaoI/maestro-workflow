@@ -773,3 +773,161 @@ resolution_refs:
   assert.match(err.stderr, /\$\.resolution_refs\[1\]: must be unique/);
   await rm(path.join(projectRoot, '.maestro/memory/followups'), { recursive: true, force: true });
 });
+
+test('recent returns bounded metadata ordered by recency with degradation rules', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  await runCatalog(projectRoot, ['build']);
+
+  // 1. Default recent query (limit 5)
+  const defaultRecent = JSON.parse((await runCatalog(projectRoot, ['recent'])).stdout);
+  assert.equal(defaultRecent.command, 'recent');
+  assert.equal(defaultRecent.limit, 5);
+  assert.equal(defaultRecent.catalog_refreshed, false);
+  assert.equal(defaultRecent.entries.length, 4);
+
+  // Check ordering:
+  // 1st: task-cache (06:20)
+  // 2nd: temp-home (06:10)
+  // 3rd: lt-startup-performance (06:00)
+  // 4th: task-cache.worker-state.cache-observer (no timestamp, degraded to end)
+  assert.equal(defaultRecent.entries[0].memory_id, 'task-cache');
+  assert.equal(defaultRecent.entries[0].updated_at, '2026-09-01T06:20:00Z');
+  assert.equal(defaultRecent.entries[1].memory_id, 'temp-home');
+  assert.equal(defaultRecent.entries[1].updated_at, '2026-09-01T06:10:00Z');
+  assert.equal(defaultRecent.entries[2].memory_id, 'lt-startup-performance');
+  assert.equal(defaultRecent.entries[2].updated_at, '2026-09-01T06:00:00Z');
+  assert.equal(defaultRecent.entries[3].memory_id, 'task-cache.worker-state.cache-observer');
+  assert.equal(defaultRecent.entries[3].updated_at, null);
+
+  // Check bounded fields: search_hints, content, tags, aliases are NOT present
+  for (const entry of defaultRecent.entries) {
+    assert.equal(entry.search_hints, undefined);
+    assert.equal(entry.content, undefined);
+    assert.equal(entry.tags, undefined);
+    assert.equal(entry.aliases, undefined);
+    assert.ok(entry.memory_id);
+    assert.ok(entry.layer);
+    assert.ok(entry.record_type);
+    assert.ok(entry.title);
+    assert.ok(entry.summary);
+    assert.ok(entry.status);
+    assert.ok(entry.path);
+    assert.ok(entry.locator);
+  }
+
+  // 2. Limit parameter
+  const limited = JSON.parse((await runCatalog(projectRoot, ['recent', '--limit', '2'])).stdout);
+  assert.equal(limited.limit, 2);
+  assert.equal(limited.entries.length, 2);
+  assert.equal(limited.entries[0].memory_id, 'task-cache');
+  assert.equal(limited.entries[1].memory_id, 'temp-home');
+
+  // Limit boundary checks (< 1 or > 5)
+  const errLow = await rejectedCommand(runCatalog(projectRoot, ['recent', '--limit', '0']));
+  assert.equal(errLow.code, 2);
+  assert.match(errLow.stderr, /--limit must be between 1 and 5/);
+
+  const errHigh = await rejectedCommand(runCatalog(projectRoot, ['recent', '--limit', '6']));
+  assert.equal(errHigh.code, 2);
+  assert.match(errHigh.stderr, /--limit must be between 1 and 5/);
+
+  // 3. Layer filter
+  const tempOnly = JSON.parse((await runCatalog(projectRoot, ['recent', '--layer', 'temporary'])).stdout);
+  assert.equal(tempOnly.layer, 'temporary');
+  assert.equal(tempOnly.entries.length, 1);
+  assert.equal(tempOnly.entries[0].memory_id, 'temp-home');
+
+  const taskOnly = JSON.parse((await runCatalog(projectRoot, ['recent', '--layer', 'task'])).stdout);
+  assert.equal(taskOnly.layer, 'task');
+  assert.equal(taskOnly.entries.length, 2);
+  assert.equal(taskOnly.entries[0].memory_id, 'task-cache');
+  assert.equal(taskOnly.entries[1].memory_id, 'task-cache.worker-state.cache-observer');
+
+  // 4. Include inactive
+  const withInactive = JSON.parse((await runCatalog(projectRoot, ['recent', '--include-inactive'])).stdout);
+  assert.equal(withInactive.entries.length, 5);
+  // lt-old-workflow (06:00) vs lt-startup-performance (06:00): lt-old-workflow sorts first alphabetically
+  assert.equal(withInactive.entries[2].memory_id, 'lt-old-workflow');
+  assert.equal(withInactive.entries[2].status, 'superseded');
+  assert.equal(withInactive.entries[3].memory_id, 'lt-startup-performance');
+  assert.equal(withInactive.entries[4].memory_id, 'task-cache.worker-state.cache-observer');
+
+  // 5. Automatic refresh on stale index
+  await writeProjectFile(projectRoot, '.maestro/memory/temporary/active/temp-new/meta.yaml', `id: temp-new
+topic: new temporary exploration
+status: active
+created_at: 2026-09-02T01:00:00Z
+updated_at: 2026-09-02T02:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+  const refreshedRecent = JSON.parse((await runCatalog(projectRoot, ['recent'])).stdout);
+  assert.equal(refreshedRecent.catalog_refreshed, true);
+  // temp-new (09-02) is newer than 09-01
+  assert.equal(refreshedRecent.entries[0].memory_id, 'temp-new');
+  assert.equal(refreshedRecent.entries[0].updated_at, '2026-09-02T02:00:00Z');
+});
+
+test('overview outputs lightweight manifest text or structured json summary with freshness handling', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+
+  // 1. Overview when catalog is missing builds and prints manifest text by default
+  const textOutput = (await runCatalog(projectRoot, ['overview'])).stdout;
+  assert.match(textOutput, /# Memory Overview/);
+  assert.match(textOutput, /## Active Temporary Memory/);
+  assert.match(textOutput, /temp-home/);
+  assert.match(textOutput, /## Active Tasks/);
+  assert.match(textOutput, /task-cache/);
+  assert.match(textOutput, /## Long-term Memory/);
+  assert.match(textOutput, /lt-startup-performance/);
+  assert.match(textOutput, /1 current Worker state\(s\)/);
+
+  // 2. Overview with --format json outputs structured summary
+  const jsonOutput = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json'])).stdout);
+  assert.equal(jsonOutput.catalog_refreshed, false); // Already built in step 1
+  assert.equal(jsonOutput.has_active_work, true);
+  assert.equal(jsonOutput.active_temporary_count, 1);
+  assert.equal(jsonOutput.active_temporaries[0].memory_id, 'temp-home');
+  assert.equal(jsonOutput.active_task_count, 1);
+  assert.equal(jsonOutput.active_tasks[0].memory_id, 'task-cache');
+  assert.equal(jsonOutput.long_term_count, 1); // Only active long-term entries (lt-startup-performance)
+  assert.equal(jsonOutput.worker_state_count, 1);
+  assert.equal(jsonOutput.pending_followup_count, 0);
+
+  // 3. Stale catalog is automatically refreshed
+  await writeProjectFile(projectRoot, '.maestro/memory/followups/pending/followup-startup.yaml', `followup_id: followup-startup
+title: Track startup trace
+status: pending
+created_at: 2026-09-02T10:00:00Z
+source_refs:
+  - .maestro/evidence/performance.md
+`);
+  const refreshedJson = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json'])).stdout);
+  assert.equal(refreshedJson.catalog_refreshed, true);
+  assert.equal(refreshedJson.pending_followup_count, 1);
+  assert.equal(refreshedJson.pending_followups[0].followup_id, 'followup-startup');
+  assert.equal(refreshedJson.has_active_work, true);
+
+  // 4. Stale catalog with --no-refresh raises visible error
+  await writeProjectFile(projectRoot, '.maestro/tasks/task-cache-2/task.yaml', `id: task-cache-2
+objective: Second cache experiment
+status: active
+created_at: 2026-09-02T11:00:00Z
+updated_at: 2026-09-02T11:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+  const unrefreshedErr = await rejectedCommand(runCatalog(projectRoot, ['overview', '--format', 'json', '--no-refresh']));
+  assert.equal(unrefreshedErr.code, 2);
+  assert.match(unrefreshedErr.stderr, /missing or stale/);
+
+  // 5. Corrupt catalog fails with explicit diagnostic instead of silently reporting empty memory
+  await writeProjectFile(projectRoot, '.maestro/tasks/task-corrupt/task.yaml', `id: wrong-id
+objective: Invalid task id mismatch
+status: active
+`);
+  const err = await rejectedCommand(runCatalog(projectRoot, ['overview']));
+  assert.equal(err.code, 2);
+  assert.match(err.stderr, /memory catalog error/);
+});
+
