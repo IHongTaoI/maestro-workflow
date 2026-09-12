@@ -4,6 +4,6 @@
   "event_type": "checkpoint_recovered",
   "title": "恢复 checkpoint：验证恢复",
   "summary": "恢复 Temporary test 到 revision 8",
-  "source_refs": ["activity-event-checkpoint-recovered-valid.json"],
+  "source_refs": ["maestro/references/scenarios/validator-fixtures/activity-event-checkpoint-recovered-valid.json"],
   "status": "completed"
 }

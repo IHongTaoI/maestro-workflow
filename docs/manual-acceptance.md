@@ -223,6 +223,12 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
     `promotion_transaction`、`created_at`、`updated_at`、mtime 或 Git 时间当作晋升时间。
 16. `promoted_at` 存在但 `source_temporary` 缺失或时间格式无效时，构建明确失败；Task 移入
     `tasks/archive/` 后晋升事件的事件 ID 与发生时间不变，引用指向当前文件。
+17. 制造一个可恢复 checkpoint 失败并用显式 `retry` 成功提交；查询应只产生一条
+    `checkpoint_recovered`，时间来自 `.committed.json` 的 `committed_at`，引用指向该 observation。
+18. 普通/自动 `save`、重复 save、旧四字段 observation、failure event 和 CAS 冲突不产生恢复事件；
+    不得使用目标 `updated_at`、failure `recorded_at`、mtime 或 Git 时间补齐。
+19. 删除 `activity/index.json` 后重建，恢复事件 ID 不变且 checkpoint 请求、observation 与 canonical
+    文件字节不变；损坏 recovery observation 或删除其绑定请求时必须明确失败。
 
 ## 发布决定
 
