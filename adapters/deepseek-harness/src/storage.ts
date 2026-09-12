@@ -257,6 +257,8 @@ export interface LockLease {
 
 /** Tunables for {@link acquireLock}. */
 export interface AcquireLockOptions {
+  /** Cooperatively stop lock acquisition while preserving any acquired-lock cleanup. */
+  signal?: AbortSignal
   /** Lease lifetime in milliseconds (default 5 minutes). */
   leaseMs?: number
   /** Bounded contention window in milliseconds (default 30 seconds). */
@@ -277,8 +279,19 @@ const DEFAULT_LEASE_MS = 5 * 60 * 1000
 const DEFAULT_TIMEOUT_MS = 30 * 1000
 const DEFAULT_RETRY_DELAY_MS = 250
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason)
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort)
+      resolve()
+    }, ms)
+    const abort = () => {
+      clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+  })
 }
 
 /** Parse a lock file's JSON lease; `undefined` for unparseable content. */
@@ -370,6 +383,7 @@ export async function acquireLock(
   const lockPath = store.lockPathFor(statePath)
 
   for (;;) {
+    options.signal?.throwIfAborted()
     const now = Date.now()
     const held: LockLease = {
       owner,
@@ -397,6 +411,7 @@ export async function acquireLock(
     let reclaimable = released
     if (!reclaimable && expired && options.canReclaim !== undefined) {
       // storage.md: clock age alone is insufficient — confirm owner inactive.
+      options.signal?.throwIfAborted()
       reclaimable = await options.canReclaim(lease!)
     }
 
@@ -417,6 +432,6 @@ export async function acquireLock(
           'conflict per storage.md.',
       )
     }
-    await sleep(retryDelayMs)
+    await sleep(retryDelayMs, options.signal)
   }
 }

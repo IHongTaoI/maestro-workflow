@@ -1,6 +1,6 @@
 # DSH 多文件事务设计
 
-Status: proposed for Issue #68. Updated 2026-09-12.
+Status: implemented for Issue #68; live-host verification remains in Issue #69. Updated 2026-09-12.
 
 ## 需求与边界
 
@@ -85,4 +85,3 @@ write 和 applied marker 后注入中断。覆盖正常 create/replace、validat
 首版合并后能力矩阵应写成：DSH transaction mechanism/service `available`，具体 model-facing 业务路径
 尚未 `activated`，真实后端仍 `unverified`。只有窄工具实际调用该 service 且有证据后，才把对应流程
 标记为 activated。
-

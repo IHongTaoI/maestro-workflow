@@ -37,10 +37,12 @@ import { AutoCheckpointCoordinator, registerLifecycleHooks, injectSessionRuntime
 import { assertSkills, detectCapabilities, planActivation } from './detect'
 import { loadCoreSkill, registerCoreSkill, resolveCoreDir } from './skill'
 import { MaestroStateStore } from './storage'
+import { MaestroTransactionStore } from './transaction'
 import { MaestroSchemaValidator } from './validate'
 import type { AdapterConfig } from './types'
 
 export * from './guard'
+export * from './transaction'
 
 /** Cordis plugin name. */
 export const name = 'maestro-adapter'
@@ -53,6 +55,9 @@ export const STATE_STORE_SERVICE = 'maestro.stateStore'
 
 /** Cordis service name under which the schema validator is provided. */
 export const SCHEMA_VALIDATOR_SERVICE = 'maestro.schemaValidator'
+
+/** Internal create/replace transaction mechanism; not a model-facing tool. */
+export const TRANSACTION_STORE_SERVICE = 'maestro.transactionStore'
 
 /**
  * Mount the adapter. Async because it reads `SKILL.md` from disk during setup.
@@ -79,6 +84,7 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     const fs = ctx.get('fs') as FileSystem
     const store = new MaestroStateStore(fs)
     const validator = new MaestroSchemaValidator()
+    const transactions = new MaestroTransactionStore(fs)
     const schemaCount = await validator.loadAll(path.join(coreDir, 'references', 'schemas'))
     if (schemaCount === 0) {
       ctx.logger.warn(
@@ -91,7 +97,9 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     // arbitrary Core storage operations are not automatically routed through it.
     const disposeValidator = ctx.provide(SCHEMA_VALIDATOR_SERVICE, validator)
     const disposeStore = ctx.provide(STATE_STORE_SERVICE, store)
+    const disposeTransactions = ctx.provide(TRANSACTION_STORE_SERVICE, transactions)
     ctx.effect(() => () => {
+      disposeTransactions()
       disposeStore()
       disposeValidator()
     }, 'maestro-adapter: storage services')
