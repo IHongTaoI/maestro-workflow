@@ -47,7 +47,8 @@ export interface TransactionInput {
 
 export interface TransactionExecuteOptions {
   signal?: AbortSignal
-  validateMember?: (member: Readonly<TransactionIntentMember>, staged: string) => void | Promise<void>
+  /** Required fail-closed seam for schema, source-ref, lifecycle, and operation-specific checks. */
+  validateMember: (member: Readonly<TransactionIntentMember>, staged: string) => void | Promise<void>
   locks?: AcquireLockOptions
   /** Test/diagnostic hook. Production callers normally omit it. */
   afterStep?: (step: string) => void | Promise<void>
@@ -372,6 +373,21 @@ export class MaestroTransactionStore {
     }
   }
 
+  private async revalidateCanonicalPreconditions(loaded: LoadedTransaction): Promise<void> {
+    for (const member of loaded.intent.members) {
+      const current = await this.store.readSnapshot(member.path)
+      if (member.kind === 'create') {
+        fail(current === undefined, 'precondition_conflict')
+        continue
+      }
+      fail(current !== undefined && sha256(current.content) === member.before.sha256,
+        'precondition_conflict')
+      if (member.before.revision !== undefined) {
+        fail(revisionOf(current.content) === member.before.revision, 'precondition_conflict')
+      }
+    }
+  }
+
   private async terminal(id: string, result: 'committed' | 'failed', intentText: string, actor: string,
     reason?: string, signal?: AbortSignal): Promise<TerminalRecord> {
     checkSignal(signal)
@@ -546,7 +562,8 @@ export class MaestroTransactionStore {
     }
   }
 
-  async execute(raw: TransactionInput, options: TransactionExecuteOptions = {}): Promise<TransactionStatus> {
+  async execute(raw: TransactionInput, options: TransactionExecuteOptions): Promise<TransactionStatus> {
+    fail(typeof options?.validateMember === 'function', 'transaction_validator_required')
     const input = validateInput(raw)
     const owner = `transaction/${input.transaction_id}/${input.actor}`
     const lockPaths = [txPath(input.transaction_id, 'terminal'), ...input.members.map((member) => member.path)]
@@ -573,8 +590,10 @@ export class MaestroTransactionStore {
       prepared ??= await this.prepare(input, options)
       for (let index = 0; index < prepared.intent.members.length; index += 1) {
         checkSignal(options.signal)
-        await options.validateMember?.(prepared.intent.members[index]!, prepared.staged[index]!)
+        await options.validateMember(prepared.intent.members[index]!, prepared.staged[index]!)
       }
+      checkSignal(options.signal)
+      await this.revalidateCanonicalPreconditions(prepared)
       checkSignal(options.signal)
       prepared.terminal = await this.terminal(input.transaction_id, 'committed', prepared.intentText,
         input.actor, undefined, options.signal)

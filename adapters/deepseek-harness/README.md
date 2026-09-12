@@ -141,7 +141,7 @@ export function apply(ctx, config) {
 | 独占锁 create-if-absent | `ctx.fs.writeText(lockTarget, owner, { kind: 'createIfAbsent' })`；已存在抛 `FS_NOT_OBSERVED` |
 | 状态路径边界 | 每次解析都走 `ctx.fs.contains(.maestro/, target)` 做权威 containment 校验，`lockPathFor` / 状态路径再拒绝 `..` 与绝对路径 |
 | schema 校验 | 复用 `maestro/references/schemas/*.json`（JSON Schema draft 2020-12），用 `ajv` 校验 |
-| create/replace 多文件事务 | 不可变 before/staged/intent + 互斥 terminal marker + overlay + CAS materialization；内部 service，尚无通用模型工具 |
+| create/replace 多文件事务 | 不可变 before/staged/intent + 互斥 terminal marker + overlay + CAS materialization；`execute` 强制调用方提供 fail-closed validator seam，缺失时不写入；内部 service，尚无通用模型工具 |
 | lifecycle move | 当前 filesystem 无 delete/rename，明确 unsupported，不用残留 source 文件伪装 move |
 | Worker 指令与上下文注入 | 尚未接线；独立 Worker 必须报告 `unsupported`，不能静默继承父上下文 |
 

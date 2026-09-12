@@ -2,7 +2,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import type { FsDirEntry, FsInfo, FsTarget, FsVersion, FsWriteIntent, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
-import { MaestroTransactionStore, TransactionError, type TransactionFileSystem, type TransactionInput } from './transaction'
+import {
+  MaestroTransactionStore,
+  TransactionError,
+  type TransactionExecuteOptions,
+  type TransactionFileSystem,
+  type TransactionInput,
+} from './transaction'
 
 const target = (key: string): FsTarget => ({ targetKey: key, displayPath: key }) as unknown as FsTarget
 const version = (n: number): FsVersion => String(n) as unknown as FsVersion
@@ -85,6 +91,11 @@ function input(): TransactionInput {
   }
 }
 
+function execute(tx: MaestroTransactionStore, request: TransactionInput,
+  options: Partial<TransactionExecuteOptions> = {}) {
+  return tx.execute(request, { validateMember: () => {}, ...options })
+}
+
 test('rejects unsafe, duplicate, reserved, and unsupported members before writing', async () => {
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   const base = { transaction_id: 'tx', operation: 'test', actor: 'agent', members: [] } as unknown as TransactionInput
@@ -93,7 +104,7 @@ test('rejects unsafe, duplicate, reserved, and unsupported members before writin
     [{ kind: 'create', path: '.maestro/transactions/evil', staged: 'x' }],
     [{ kind: 'delete', path: '.maestro/a', staged: '' }],
     [{ kind: 'create', path: '.maestro/a', staged: 'x' }, { kind: 'create', path: '.maestro/a', staged: 'y' }],
-  ]) await assert.rejects(() => tx.execute({ ...base, members } as TransactionInput), TransactionError)
+  ]) await assert.rejects(() => execute(tx, { ...base, members } as TransactionInput), TransactionError)
   assert.equal(f.files.size, 0)
 })
 
@@ -103,7 +114,7 @@ test('commits before materialization and completes create/replace members', asyn
   const request = input()
   request.members[1]!.base_hash = h('before')
   const steps: string[] = []
-  const result = await tx.execute(request, { afterStep: (step) => { steps.push(step) } })
+  const result = await execute(tx, request, { afterStep: (step) => { steps.push(step) } })
   assert.deepEqual(result, { status: 'committed', transaction_id: 'tx-1', materialization: 'complete', applied: 2, members: 2 })
   assert.equal(f.files.get('.maestro/memory/current.md')?.content, 'after')
   assert.equal(f.files.get('.maestro/tasks/new/progress.md')?.content, 'new')
@@ -120,11 +131,21 @@ test('validator failure publishes failed terminal and preserves canonical bytes'
   assert.equal(f.files.has('.maestro/transactions/tx-1/committed.yaml'), false)
 })
 
+test('execute fails closed when the required validation seam is missing', async () => {
+  const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
+  f.put('.maestro/memory/current.md', 'before')
+  const request = input(); request.members[1]!.base_hash = h('before')
+  await assert.rejects(() => tx.execute(request, undefined as unknown as TransactionExecuteOptions),
+    (e: unknown) => (e as TransactionError).code === 'transaction_validator_required')
+  assert.equal([...f.files.keys()].some((path) => path.startsWith('.maestro/transactions/')), false)
+  assert.equal(f.files.get('.maestro/memory/current.md')?.content, 'before')
+})
+
 test('committed interruption exposes overlay and recover materializes idempotently', async () => {
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  const result = await tx.execute(request, { afterStep: (step) => {
+  const result = await execute(tx, request, { afterStep: (step) => {
     if (step === 'committed') throw new Error('simulated crash')
   } })
   assert.equal(result.status, 'committed')
@@ -141,7 +162,7 @@ test('recovery refuses canonical bytes matching neither before nor staged', asyn
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await tx.execute(request, { afterStep: (step) => { if (step === 'committed') throw new Error('stop') } })
+  await execute(tx, request, { afterStep: (step) => { if (step === 'committed') throw new Error('stop') } })
   f.put('.maestro/memory/current.md', 'newer')
   const status = await tx.recover('tx-1', { actor: 'recovery-agent' })
   assert.equal(status.status === 'committed' && status.materialization, 'conflict')
@@ -152,7 +173,7 @@ test('missing applied record is repaired without rewriting staged canonical byte
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await tx.execute(request)
+  await execute(tx, request)
   f.files.delete('.maestro/transactions/tx-1/applied/0001.yaml')
   const versionBefore = f.files.get('.maestro/tasks/new/progress.md')?.version
   assert.equal((await tx.status('tx-1')).status === 'committed', true)
@@ -165,14 +186,14 @@ test('tampered immutable snapshot and dual terminals are rejected', async () => 
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await tx.execute(request)
+  await execute(tx, request)
   f.put('.maestro/transactions/tx-1/staged/0001.txt', 'tampered')
   await assert.rejects(() => tx.status('tx-1'), (e: unknown) => (e as TransactionError).code === 'invalid_staged_snapshot')
 
   const clean = memoryFs(), cleanTx = new MaestroTransactionStore(clean.fs)
   clean.put('.maestro/memory/current.md', 'before')
   const cleanRequest = input(); cleanRequest.members[1]!.base_hash = h('before')
-  await cleanTx.execute(cleanRequest)
+  await execute(cleanTx, cleanRequest)
   clean.put('.maestro/transactions/tx-1/failed.yaml', clean.files.get('.maestro/transactions/tx-1/committed.yaml')!.content
     .replace('result: committed', 'result: failed'))
   await assert.rejects(() => cleanTx.status('tx-1'),
@@ -183,12 +204,12 @@ test('an unfinished committed overlay blocks a newer transaction on the same mem
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const first = input(); first.members[1]!.base_hash = h('before')
-  await tx.execute(first, { afterStep: (step) => { if (step === 'committed') throw new Error('stop') } })
+  await execute(tx, first, { afterStep: (step) => { if (step === 'committed') throw new Error('stop') } })
   const second: TransactionInput = {
     transaction_id: 'tx-2', operation: 'overlap', actor: 'other-agent',
     members: [{ kind: 'replace', path: '.maestro/memory/current.md', staged: 'later', base_hash: h('before') }],
   }
-  await assert.rejects(() => tx.execute(second),
+  await assert.rejects(() => execute(tx, second),
     (e: unknown) => (e as TransactionError).code === 'transaction_overlay_conflict')
   assert.equal(f.files.has('.maestro/transactions/tx-2/intent.yaml'), false)
 })
@@ -197,7 +218,7 @@ test('precommit cancellation stops new transaction writes and leaves canonical b
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs), controller = new AbortController()
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await assert.rejects(() => tx.execute(request, {
+  await assert.rejects(() => execute(tx, request, {
     signal: controller.signal,
     afterStep: (step) => { if (step === 'intent') controller.abort() },
   }), (e: unknown) => (e as TransactionError).code === 'transaction_cancelled')
@@ -205,7 +226,7 @@ test('precommit cancellation stops new transaction writes and leaves canonical b
   assert.equal(f.files.has('.maestro/transactions/tx-1/committed.yaml'), false)
   assert.equal(f.files.has('.maestro/transactions/tx-1/failed.yaml'), false)
   assert.equal((await tx.status('tx-1')).status, 'prepared')
-  const resumed = await tx.execute(request)
+  const resumed = await execute(tx, request)
   assert.equal(resumed.status === 'committed' && resumed.materialization, 'complete')
 })
 
@@ -213,7 +234,7 @@ test('postcommit cancellation reports pending and remains recoverable', async ()
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs), controller = new AbortController()
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  const result = await tx.execute(request, {
+  const result = await execute(tx, request, {
     signal: controller.signal,
     afterStep: (step) => { if (step === 'committed') controller.abort() },
   })
@@ -226,13 +247,30 @@ test('prepared retry rejects a different request with the same transaction id', 
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs), controller = new AbortController()
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await assert.rejects(() => tx.execute(request, {
+  await assert.rejects(() => execute(tx, request, {
     signal: controller.signal,
     afterStep: (step) => { if (step === 'intent') controller.abort() },
   }))
   request.members[0]!.staged = 'different'
-  await assert.rejects(() => tx.execute(request),
+  await assert.rejects(() => execute(tx, request),
     (e: unknown) => (e as TransactionError).code === 'transaction_request_conflict')
+})
+
+test('prepared retry revalidates canonical preconditions before publishing commit', async () => {
+  const f = memoryFs(), tx = new MaestroTransactionStore(f.fs), controller = new AbortController()
+  f.put('.maestro/memory/current.md', 'before')
+  const request = input(); request.members[1]!.base_hash = h('before')
+  await assert.rejects(() => execute(tx, request, {
+    signal: controller.signal,
+    afterStep: (step) => { if (step === 'intent') controller.abort() },
+  }))
+  f.put('.maestro/memory/current.md', 'newer')
+  await assert.rejects(() => execute(tx, request),
+    (e: unknown) => (e as TransactionError).code === 'precondition_conflict')
+  assert.equal(f.files.has('.maestro/transactions/tx-1/committed.yaml'), false)
+  assert.equal(f.files.get('.maestro/memory/current.md')?.content, 'newer')
+  const status = await tx.status('tx-1')
+  assert.equal(status.status, 'failed')
 })
 
 test('every persisted precommit boundary can be retried with the same request', async () => {
@@ -240,11 +278,11 @@ test('every persisted precommit boundary can be retried with the same request', 
     const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
     f.put('.maestro/memory/current.md', 'before')
     const request = input(); request.members[1]!.base_hash = h('before')
-    await assert.rejects(() => tx.execute(request, {
+    await assert.rejects(() => execute(tx, request, {
       afterStep: (step) => { if (step === boundary) throw new Error(`stop at ${boundary}`) },
     }))
     assert.equal(f.files.get('.maestro/memory/current.md')?.content, 'before')
-    const result = await tx.execute(request)
+    const result = await execute(tx, request)
     assert.equal(result.status === 'committed' && result.materialization, 'complete')
   }
 })
@@ -254,7 +292,7 @@ test('every postcommit boundary can be recovered deterministically', async () =>
     const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
     f.put('.maestro/memory/current.md', 'before')
     const request = input(); request.members[1]!.base_hash = h('before')
-    const interrupted = await tx.execute(request, {
+    const interrupted = await execute(tx, request, {
       afterStep: (step) => { if (step === boundary) throw new Error(`stop at ${boundary}`) },
     })
     assert.equal(interrupted.status, 'committed')
@@ -269,7 +307,7 @@ test('locks are acquired in stable member order and released as tombstones', asy
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await tx.execute(request)
+  await execute(tx, request)
   const held = f.writeLog.filter(({ path, content }) => path.startsWith('.maestro/locks/')
     && JSON.parse(content).state === 'held').map(({ path }) => path)
   assert.deepEqual(held, [
@@ -284,7 +322,7 @@ test('missing staged members and forged persisted paths fail closed', async () =
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const request = input(); request.members[1]!.base_hash = h('before')
-  await tx.execute(request)
+  await execute(tx, request)
   f.files.delete('.maestro/transactions/tx-1/staged/0001.txt')
   await assert.rejects(() => tx.status('tx-1'),
     (e: unknown) => (e as TransactionError).code === 'invalid_staged_snapshot')
@@ -292,7 +330,7 @@ test('missing staged members and forged persisted paths fail closed', async () =
   const forged = memoryFs(), forgedTx = new MaestroTransactionStore(forged.fs)
   forged.put('.maestro/memory/current.md', 'before')
   const forgedRequest = input(); forgedRequest.members[1]!.base_hash = h('before')
-  await forgedTx.execute(forgedRequest)
+  await execute(forgedTx, forgedRequest)
   const intentPath = '.maestro/transactions/tx-1/intent.yaml'
   forged.put(intentPath, forged.files.get(intentPath)!.content.replace('.maestro/memory/current.md', '../escape'))
   await assert.rejects(() => forgedTx.status('tx-1'),
@@ -310,12 +348,12 @@ test('member and transaction byte limits fail before transaction records are wri
     transaction_id: 'tx-size', operation: 'size limit', actor: 'test-agent',
     members: [{ kind: 'create', path: '.maestro/large.md', staged: 'x'.repeat(128 * 1024 + 1) }],
   }
-  await assert.rejects(() => oversizedTx.execute(request),
+  await assert.rejects(() => execute(oversizedTx, request),
     (e: unknown) => (e as TransactionError).code === 'member_too_large')
   assert.equal([...oversized.files.keys()].some((path) => path.startsWith('.maestro/transactions/')), false)
 
   const total = memoryFs(), totalTx = new MaestroTransactionStore(total.fs)
-  await assert.rejects(() => totalTx.execute({
+  await assert.rejects(() => execute(totalTx, {
     transaction_id: 'tx-total-size', operation: 'total size limit', actor: 'test-agent',
     members: Array.from({ length: 5 }, (_, index) => ({
       kind: 'create' as const, path: `.maestro/large-${index}.md`, staged: 'x'.repeat(120 * 1024),
@@ -326,7 +364,7 @@ test('member and transaction byte limits fail before transaction records are wri
   const before = memoryFs(), beforeTx = new MaestroTransactionStore(before.fs)
   const hugeBefore = 'x'.repeat(128 * 1024 + 1)
   before.put('.maestro/large.md', hugeBefore)
-  await assert.rejects(() => beforeTx.execute({
+  await assert.rejects(() => execute(beforeTx, {
     transaction_id: 'tx-before-size', operation: 'before size limit', actor: 'test-agent',
     members: [{ kind: 'replace', path: '.maestro/large.md', staged: 'small', base_hash: h(hugeBefore) }],
   }), (e: unknown) => (e as TransactionError).code === 'before_member_too_large')
@@ -337,14 +375,14 @@ test('a completed historical transaction never overlays or overwrites a later le
   const f = memoryFs(), tx = new MaestroTransactionStore(f.fs)
   f.put('.maestro/memory/current.md', 'before')
   const first = input(); first.members[1]!.base_hash = h('before')
-  await tx.execute(first)
+  await execute(tx, first)
   const second: TransactionInput = {
     transaction_id: 'tx-2', operation: 'later update', actor: 'test-agent',
     members: [{
       kind: 'replace', path: '.maestro/memory/current.md', staged: 'later', base_hash: h('after'),
     }],
   }
-  const secondResult = await tx.execute(second)
+  const secondResult = await execute(tx, second)
   assert.equal(secondResult.status === 'committed' && secondResult.materialization, 'complete')
   const historical = await tx.status('tx-1')
   assert.equal(historical.status === 'committed' && historical.materialization, 'complete')

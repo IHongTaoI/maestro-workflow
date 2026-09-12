@@ -53,8 +53,9 @@ intent hash、actor 和时间，绑定准确 intent。
 ## 执行与恢复
 
 `execute` 依次执行：规范化成员并拒绝重复路径；按路径获取全部锁；在锁下读取 before observation；
-核对 create/replace 前置条件、base hash/revision；持久化 snapshots 与 intent；调用方 validator 校验
-每个 staged member；互斥发布 committed；逐成员 materialize；回读 staged hash；发布 applied 记录；
+核对 create/replace 前置条件、base hash/revision；持久化 snapshots 与 intent；强制调用方 validator seam
+校验每个 staged member；发布前重新核对全部 canonical 前置条件；互斥发布 committed；逐成员
+materialize；回读 staged hash；发布 applied 记录；
 反向释放锁。
 
 提交前失败可以发布 failed，before 视图继续权威。committed 发布后不能回滚；后续错误返回
