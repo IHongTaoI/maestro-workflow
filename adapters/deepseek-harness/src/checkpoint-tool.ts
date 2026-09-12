@@ -2,7 +2,7 @@ import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import path from 'node:path'
 import os from 'node:os'
-import { CheckpointError, CheckpointWriter, hash, type CheckpointConfig, type CheckpointFs, type CheckpointInput } from './checkpoint'
+import { CheckpointError, CheckpointWriter, type CheckpointConfig, type CheckpointFs, type CheckpointInput } from './checkpoint'
 import { MaestroSchemaValidator } from './validate'
 
 export interface CheckpointToolConfig {
@@ -62,7 +62,9 @@ export function checkpointTool(fs: CheckpointFs, validator: MaestroSchemaValidat
           if (fs.contains(root, baseTarget) || fs.contains(baseTarget, root)) {
             throw new CheckpointError('recovery_root_overlaps_project')
           }
-          resolved = { projectRoot: cwd, recoveryRoot: path.join(base, hash(String(root.targetKey))),
+          // CheckpointWriter owns project partitioning so configured and default
+          // recovery roots share one canonical on-disk layout.
+          resolved = { projectRoot: cwd, recoveryRoot: base,
             optionalRecovery: config.recoveryRoot === undefined }
         }
         const session = exec.agent.session

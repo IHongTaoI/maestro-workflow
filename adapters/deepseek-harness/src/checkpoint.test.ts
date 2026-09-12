@@ -123,6 +123,7 @@ test('source/target write-ahead archive survives primary writes failing before r
   let failure: unknown
   try { await w.save(f.input) } catch (e) { failure = e }
   assert.equal(w.failure(failure).recovery, 'secondary')
+  assert.equal(w.failure(failure).failure_stage, 'project_request')
   assert.equal(f.files.get(f.key(statePath))!.content, initial)
   assert.ok([...f.files.keys()].some((p) => p.startsWith(backup + path.sep)))
   f.setBefore()
@@ -132,7 +133,10 @@ test('source/target write-ahead archive survives primary writes failing before r
 test('both storage channels unavailable never claim recoverability or change current state', async () => {
   const f = fixture(), w = await f.writer(true)
   f.setBefore(() => { throw error('FS_IO_ERROR') })
-  try { await w.save(f.input); assert.fail('must fail') } catch (e) { assert.equal(w.failure(e).recovery, 'none') }
+  try { await w.save(f.input); assert.fail('must fail') } catch (e) {
+    assert.equal(w.failure(e).recovery, 'none')
+    assert.equal(w.failure(e).failure_stage, 'secondary_write')
+  }
   assert.equal(f.files.size, 2)
 })
 
@@ -363,6 +367,7 @@ test('one automatic tool isolates simultaneous projects and recovery archives, w
     const retried = await fresh.execute({ operation: 'retry', kind: 'temporary', target_id: 'test', request_id: 'save_1' }, context(cwd))
     assert.equal((retried as { status: string }).status, 'already_committed')
   }
+  assert.ok(![...f.files.keys()].some((p) => p.startsWith(path.join(backup, hash(project), hash(project)) + path.sep)))
 })
 
 test('automatic binding rejects absent/relative session and model root overrides without writing', async () => {
