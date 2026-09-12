@@ -113,6 +113,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 !.maestro/
 !.maestro/config.yaml
 !.maestro/playbooks/
+!.maestro/workers/approvals/
 !.maestro/workers/registry.yaml
 !.maestro/instructions/registry.yaml
 !.maestro/memory/long-term/

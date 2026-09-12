@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "record_type": "worker-approval",
+  "approval_id": "approve-runtime-investigator-r3",
+  "worker_id": "runtime-investigator",
+  "worker_name": "   ",
+  "registry_id": "project-workers",
+  "registry_revision": 3,
+  "worker_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "approved_at": "2026-09-12T10:00:00Z",
+  "approved_by": "   "
+}

@@ -1150,7 +1150,9 @@ def validate_worker_approval(value: Any, errors: list[Diagnostic]) -> None:
                     add_error(errors, f"$.{key}", "must be a lowercase kebab-case id")
     for key in ("worker_name", "approved_by"):
         if key in value:
-            check_string(value[key], f"$.{key}", errors, min_length=1)
+            if check_string(value[key], f"$.{key}", errors, min_length=1):
+                if not value[key].strip():
+                    add_error(errors, f"$.{key}", "must contain a non-whitespace character")
     if "registry_revision" in value:
         revision = value["registry_revision"]
         if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:

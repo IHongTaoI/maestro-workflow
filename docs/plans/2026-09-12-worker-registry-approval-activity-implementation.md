@@ -17,7 +17,7 @@
 - Create: `maestro/references/scenarios/schema-fixtures/worker-approval-valid.json`
 - Create: `maestro/references/scenarios/schema-fixtures/worker-approval-invalid.json`
 - Modify: `maestro/scripts/validate.py`
-- Modify: `test/schema.test.js`
+- Modify: `scripts/verify-contracts.ps1`
 
 1. Add failing schema and native-validator fixture tests.
 2. Run the targeted schema tests and confirm the new kind is unsupported.

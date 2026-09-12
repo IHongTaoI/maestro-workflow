@@ -229,6 +229,13 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
     不得使用目标 `updated_at`、failure `recorded_at`、mtime 或 Git 时间补齐。
 19. 删除 `activity/index.json` 后重建，恢复事件 ID 不变且 checkpoint 请求、observation 与 canonical
     文件字节不变；损坏 recovery observation 或删除其绑定请求时必须明确失败。
+20. 在项目 registry 批准一个可复用 Worker 时，随同逻辑提交发布一条
+    `.maestro/workers/approvals/<approval-id>.approval.json`；查询返回一条 `worker_approved`，时间只
+    来自 `approved_at`，引用指向该不可变批准记录。
+21. 后续修改 registry 的 `updated_at`、revision、Worker 内容或可用状态，原批准事件 ID 和发生时间
+    均保持不变，也不产生重复事件；只有 registry 而没有批准记录的旧项目不投影批准事件。
+22. 无时区或非 RFC 3339 的 `approved_at`、空白 Worker 名称、非法记录及文件名与 approval ID 不一致
+    必须在发布或 Activity 重建时明确失败；不得使用 mtime 或 Git 时间补齐。
 
 ## 发布决定
 

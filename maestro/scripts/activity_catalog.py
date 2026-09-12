@@ -445,7 +445,6 @@ def derive_worker_approval_events(
     project_root: Path, sources: list[Path]
 ) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
-    seen_ids: dict[str, Path] = {}
     for path in sources:
         record, _ = read_json_object(path, "Worker approval")
         errors: list[Diagnostic] = []
@@ -457,10 +456,6 @@ def derive_worker_approval_events(
         expected_name = f"{approval_id}{WORKER_APPROVAL_SUFFIX}"
         if path.name != expected_name:
             raise CatalogError(f"{path}: filename must match approval_id as '{expected_name}'")
-        previous = seen_ids.get(approval_id)
-        if previous is not None:
-            raise CatalogError(f"duplicate Worker approval id '{approval_id}' in {previous} and {path}")
-        seen_ids[approval_id] = path
         approved_at = normalize_utc(record["approved_at"])
         worker_id = record["worker_id"]
         registry_id = record["registry_id"]

@@ -30,7 +30,7 @@ Replacement of an existing approval file is forbidden. This issue defines the re
 protocol but does not grant any caller permission to publish it.
 
 Historical registries without records remain valid and produce no Worker approval events. A record
-with invalid fields, filename mismatch, or duplicate ID is corrupt authority and makes Activity
+with invalid fields or filename mismatch is corrupt authority and makes Activity
 rebuilding fail visibly. Later registry edits or Worker removal do not invalidate historical facts.
 
 ## Activity projection
@@ -42,14 +42,14 @@ deterministic helper. Its source reference is the approval record itself. Regist
 duplicate the event because the immutable approval ID remains stable; a rebuild produces the same
 ID.
 
-Activity source fingerprinting includes approval files and the registry because record validation
-depends on both. Source changes invalidate and rebuild the derived index. The existing time-window
+Activity source fingerprinting includes the self-contained approval files, but not the mutable
+registry. Approval source changes invalidate and rebuild the derived index. The existing time-window
 and event-type filters work unchanged after `worker_approved` is added to the schema and CLI choice
 set.
 
 ## Verification
 
-Schema fixtures cover a valid record and malformed fields. Native-validator tests ensure JSON
-Schema and handwritten validation agree. Activity tests cover successful projection, deterministic
-rebuild, missing historical records, invalid filenames and records, duplicate IDs, missing Workers,
-and digest/revision mismatches. Protocol documentation specifies publishing and compatibility rules.
+Schema fixtures cover a valid record, malformed fields, invalid timezone forms, and whitespace-only
+display fields. Native-validator tests ensure JSON Schema and handwritten validation agree. Activity
+tests cover successful projection, deterministic rebuild, missing historical records, invalid
+filenames, and invalid records. Protocol documentation specifies publication and compatibility rules.

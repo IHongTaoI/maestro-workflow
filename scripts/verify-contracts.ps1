@@ -302,6 +302,10 @@ try {
         "maestro/references/scenarios/schema-fixtures/worker-approval-valid.json" 0
     Invoke-ProtocolSchemaParityCase $workerApprovalSchema "worker-approval" `
         "maestro/references/scenarios/schema-fixtures/worker-approval-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $workerApprovalSchema "worker-approval" `
+        "maestro/references/scenarios/schema-fixtures/worker-approval-timezone-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $workerApprovalSchema "worker-approval" `
+        "maestro/references/scenarios/schema-fixtures/worker-approval-whitespace-invalid.json" 1
     $checkpointObservationSchema = "maestro/references/schemas/checkpoint-observation.schema.json"
     Invoke-ProtocolSchemaParityCase $checkpointObservationSchema "checkpoint-observation" `
         "$validatorFixtureRoot/checkpoint-observation-recovery-valid.json" 0
@@ -728,6 +732,9 @@ try {
         @{ Path = "maestro/references/storage.md"; Text = "SHA-256" },
         @{ Path = "maestro/references/storage.md"; Text = "checkpoint-observation.schema.json" },
         @{ Path = "maestro/references/activity.md"; Text = "checkpoint_recovered" },
+        @{ Path = "maestro/references/activity.md"; Text = "worker_approved" },
+        @{ Path = "maestro/references/workers.md"; Text = "worker-approval.schema.json" },
+        @{ Path = "maestro/references/storage.md"; Text = "!.maestro/workers/approvals/" },
         @{ Path = "maestro/references/coordination.md"; Text = "Task 已是唯一逻辑活动目标" },
         @{ Path = "maestro/references/handoffs.md"; Text = '`needs_user_input: true` 要求 `status: blocked`' },
         @{ Path = "maestro/references/memory.md"; Text = "当前代码或运行时证据" },
