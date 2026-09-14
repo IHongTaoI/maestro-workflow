@@ -417,9 +417,12 @@ export async function loadBoundedRuntimeContext(
  */
 export async function injectSessionRuntimeContext(
   payload: SessionStartPayload,
-  projectRoot: string,
   fs?: StateFileSystem,
 ): Promise<boolean> {
+  const projectRoot = payload.agent.session.header.cwd
+  // DSH records the workspace on the immutable Session header. Never fall
+  // back to process.cwd(): one DSH host can serve sessions from many projects.
+  if (typeof projectRoot !== 'string' || !path.isAbsolute(projectRoot)) return false
   const runtimeContext = await loadBoundedRuntimeContext(projectRoot, fs)
   if (!runtimeContext) return false
   payload.agent.steer(createUserMessage({

@@ -123,8 +123,6 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     ctx.logger.info('maestro-adapter: checkpoint waiting for filesystem service')
   }
 
-  const projectRoot = (checkpoint && checkpoint.projectRoot) ? checkpoint.projectRoot : process.cwd()
-
   // Lifecycle hooks: agent registry provides session-start Runtime Context and optional turn-stopping checkpoint fallback
   ctx.inject(['agents'], (ctx) => {
     const coordinator = autoCheckpoint !== undefined ? new AutoCheckpointCoordinator(autoCheckpoint) : undefined
@@ -132,7 +130,7 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     registerLifecycleHooks(ctx, {
       onSessionStart: async (payload) => {
         const fs = ctx.get('fs') as FileSystem | undefined
-        const injected = await injectSessionRuntimeContext(payload, projectRoot, fs as never)
+        const injected = await injectSessionRuntimeContext(payload, fs as never)
         if (injected) {
           ctx.logger.info('maestro-adapter: injected bounded runtime context into session')
         }

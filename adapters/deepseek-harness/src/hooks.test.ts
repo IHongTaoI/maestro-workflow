@@ -45,7 +45,7 @@ function autoFixture(contextWindow = 1000) {
   ]
   const steered: any[] = []
   const agent = {
-    session: { events, requestContext: () => ({ contextWindow }) },
+    session: { header: { cwd: process.cwd() }, events, requestContext: () => ({ contextWindow }) },
     steer(message: any) {
       steered.push(message)
       events.push({ seq: events.length, type: 'user/message', data: message })
@@ -329,7 +329,8 @@ revision: 1
 `)
 
   const f = autoFixture()
-  const injected = await injectSessionRuntimeContext({ agent: f.agent }, tmp)
+  ;(f.agent as unknown as { session: { header: { cwd: string } } }).session.header.cwd = tmp
+  const injected = await injectSessionRuntimeContext({ agent: f.agent })
   assert.equal(injected, true)
   assert.equal(f.steered.length, 1)
   const steeredMsg = f.steered[0]
@@ -337,6 +338,38 @@ revision: 1
   assert.equal(steeredMsg.source?.plugin, 'maestro-runtime-context')
   assert.match(steeredMsg.content[0].text, /task-active/)
   assert.match(steeredMsg.content[0].text, /Work in progress/)
+})
+
+test('injectSessionRuntimeContext binds each session to its own project cwd', async (t) => {
+  const hostRoot = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-host-'))
+  const projectA = path.join(hostRoot, 'project-a')
+  const projectB = path.join(hostRoot, 'project-b')
+  t.after(() => rm(hostRoot, { recursive: true, force: true }))
+
+  for (const [root, id] of [[projectA, 'task-a'], [projectB, 'task-b']] as const) {
+    const taskDir = path.join(root, '.maestro/tasks', id)
+    await mkdir(taskDir, { recursive: true })
+    await writeFile(path.join(taskDir, 'task.yaml'), `id: ${id}\nobjective: ${id}\nstatus: active\ncreated_at: 2026-09-14T00:00:00Z\nupdated_at: 2026-09-14T00:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n`)
+  }
+
+  const sessionA = autoFixture()
+  ;(sessionA.agent as unknown as { session: { header: { cwd: string } } }).session.header.cwd = projectA
+  const sessionB = autoFixture()
+  ;(sessionB.agent as unknown as { session: { header: { cwd: string } } }).session.header.cwd = projectB
+
+  assert.equal(await injectSessionRuntimeContext({ agent: sessionA.agent }), true)
+  assert.equal(await injectSessionRuntimeContext({ agent: sessionB.agent }), true)
+  assert.match(sessionA.steered[0].content[0].text, /task-a/)
+  assert.doesNotMatch(sessionA.steered[0].content[0].text, /task-b/)
+  assert.match(sessionB.steered[0].content[0].text, /task-b/)
+  assert.doesNotMatch(sessionB.steered[0].content[0].text, /task-a/)
+})
+
+test('injectSessionRuntimeContext does not fall back to the DSH launch cwd', async () => {
+  const f = autoFixture()
+  ;(f.agent as unknown as { session: { header: { cwd?: string } } }).session.header.cwd = undefined
+  assert.equal(await injectSessionRuntimeContext({ agent: f.agent }), false)
+  assert.equal(f.steered.length, 0)
 })
 
 test('loadBoundedRuntimeContext discovers recoverable checkpoint and returns context even without active tasks', async (t) => {
@@ -553,7 +586,6 @@ revision: 1
   assert.match(result, /binding: task-dsh-current/)
   assert.match(result, /revision: 1/)
 })
-
 
 
 
