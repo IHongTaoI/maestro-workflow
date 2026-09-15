@@ -26,6 +26,11 @@
 Skill 搜索规则，也不会因为项目内缺少 `.agents/skills/maestro/SKILL.md` 而跳过状态恢复。
 卸载插件后，裸 Skills 仍然可用。
 
+Hook 查找 Memory Catalog 时优先使用项目级 Core，随后兼容 Codex 专属用户目录
+`~/.codex/skills/maestro/`，并以官方用户级 Skill 目录 `~/.agents/skills/maestro/` 作为兜底。
+因此 Core 只安装在 Codex 专属用户目录时，项目仍可恢复真实的 Memory / Task 总览；两个用户级
+目录无需同时安装，避免出现同名 Skill。
+
 ### Codex Worker 宿主映射
 
 在已安装、启用并信任该插件，且 `SessionStart` Hook 已为有效 Maestro 项目运行的会话中，
@@ -115,7 +120,7 @@ Codex 使用安装缓存，不应假设修改来源文件会立即影响已安�
 | 场景 | 应观察到的结果 |
 | --- | --- |
 | 有效 Maestro 项目且存在项目级 Core | Hook 输出共享状态路径，并额外包含项目级 Core 路径；不会自动创建 Task |
-| 只有用户级 / 全局 Core，项目内没有 Core | Hook 仍输出项目 `.maestro/` 状态路径；Core 由 Codex 自己发现 |
+| 只有用户级 / 全局 Core，项目内没有 Core | Hook 从 `~/.codex/skills/maestro/` 或 `~/.agents/skills/maestro/` 调用 Catalog，并输出项目 `.maestro/` 的真实状态总览 |
 | `.maestro/` 状态由其他宿主创建 | 即使 `tools` 不含 `codex`，Hook 仍恢复 Memory / Task 入口 |
 | 明确要求 Maestro 派一个有界 Worker | 有原生 subagent capability 时直接使用它，不先尝试 `create_thread` |
 | 明确要求新开独立 Codex task / conversation | 可以使用 `create_thread`，不误判为 Maestro Worker |

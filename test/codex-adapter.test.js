@@ -7,10 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 
-import { recoveryContext, run } from '../adapters/codex/maestro-codex/scripts/session-start.mjs';
+import {
+  loadBoundedRuntimeContext,
+  recoveryContext,
+  run,
+} from '../adapters/codex/maestro-codex/scripts/session-start.mjs';
 import { installLocal } from '../adapters/codex/install-local.mjs';
 
 const pluginSource = fileURLToPath(new URL('../adapters/codex/maestro-codex/', import.meta.url));
+const coreScripts = fileURLToPath(new URL('../maestro/scripts/', import.meta.url));
 const event = (cwd, source = 'compact') => ({ hook_event_name: 'SessionStart', cwd, source });
 const metadata = { package: 'maestro-ai-workflow', schema_version: 1, tools: ['codex'] };
 
@@ -104,6 +109,27 @@ test('Codex restores cross-host state without a project-local Core or codex tool
     assert.match(context, /manifest\.md/);
     assert.doesNotMatch(context, /SKILL\.md|SHARED_MEMORY|SHARED_TASK/);
   }
+});
+
+test('Codex loads Memory Catalog from a Codex-specific user Core', async t => {
+  const root = await fixture(t);
+  const homeDir = await fixture(t);
+  await project(root, metadata, { core: false });
+  await put(root, '.maestro/tasks/task-user-core/task.yaml', `id: task-user-core
+objective: Restore through user Core
+status: active
+created_at: 2026-09-15T00:00:00Z
+updated_at: 2026-09-15T00:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`);
+  await cp(coreScripts, path.join(homeDir, '.codex/skills/maestro/scripts'), { recursive: true });
+
+  const context = await loadBoundedRuntimeContext(root, {}, homeDir);
+  assert.ok(context);
+  assert.match(context, /task-user-core/);
+  assert.match(context, /Restore through user Core/);
+  assert.doesNotMatch(context, /Memory Catalog 缺失或刷新失败/);
 });
 
 test('Codex does not cross a nested repository or worktree boundary', async t => {
@@ -500,6 +526,5 @@ revision: 1
   assert.match(context, /binding: task-current/);
   assert.match(context, /revision: 1/);
 });
-
 
 

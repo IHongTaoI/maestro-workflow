@@ -1,5 +1,6 @@
 import { open, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -287,7 +288,7 @@ function formatBoundedRuntimeContext({ tasks = [], temporaries = [], followups =
   return lines.join('\n');
 }
 
-export async function loadBoundedRuntimeContext(root, paths = {}) {
+export async function loadBoundedRuntimeContext(root, paths = {}, homeDir = homedir()) {
   try {
     if (!(await hasAuthoritativeSources(root))) {
       return null;
@@ -298,6 +299,10 @@ export async function loadBoundedRuntimeContext(root, paths = {}) {
       path.join(root, 'maestro/scripts/memory_catalog.py'),
       path.join(root, '.agents/skills/maestro/scripts/memory_catalog.py'),
       path.join(root, '.maestro/scripts/memory_catalog.py'),
+      // Codex-specific user Core observed in desktop/CLI installations, followed
+      // by the documented cross-agent user Skill location.
+      path.join(homeDir, '.codex/skills/maestro/scripts/memory_catalog.py'),
+      path.join(homeDir, '.agents/skills/maestro/scripts/memory_catalog.py'),
       path.resolve(currentDir, '../../../../maestro/scripts/memory_catalog.py'),
     ].filter(Boolean);
 
