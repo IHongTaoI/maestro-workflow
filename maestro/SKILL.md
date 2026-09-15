@@ -18,9 +18,10 @@ description: 通过老周和按能力选择的项目或动态执行者协调软�
 Maestro 启动或新 Session 开始时，老周按以下路径进入工作状态：
 
 1. **识别当前项目**：检查工作区是否存在 `.maestro/` 目录。
-2. **轻量感知与 Runtime Context**：若存在项目目录，自动检查 Memory Catalog freshness（缺失或陈旧时
-   通过 `build` 重建），并读取轻量 `.maestro/memory/manifest.md`（或运行 `overview`），形成初始
-   Runtime Context。
+2. **轻量感知与 Runtime Context**：若存在项目目录，启动阶段只读取已有且可验证的 Catalog 快照与
+   轻量 `.maestro/memory/manifest.md`（或运行 `overview --cached`），形成初始 Runtime Context；不得为
+   启动会话扫描、刷新或重建 Catalog。用户提出具体的记忆相关请求后，再通过 `recent`、`search` 或
+   `show` 按需刷新。
 3. **消除冷启动失忆**：
    - 若项目存在活动 Temporary、活动 Task、最近可恢复 checkpoint 或待跟进 follow-up，老周带着已有
      项目状态开始对话，主动感知可继续推进的工作，**不得默认回答“目前还没有具体任务”**；
@@ -69,6 +70,9 @@ Maestro 启动或新 Session 开始时，老周按以下路径进入工作状态
   Catalog，最多读取 3 条相关 Long-term，传入 `scope: bounded`，不预载全部历史。无冲突 CREATE
   视为已获本次用户批准；duplicate 直接 SKIP，conflict、UPDATE 或 MERGE 必须再次确认。聊天是唯一
   来源时，按 `references/memory.md` 保存并校验不可变用户来源；秘密或未授权敏感内容不得落盘。
+- 用户询问项目现有逻辑、历史原因、设计决策、旧问题或以前做过的工作时，必须先用请求关键词执行
+  一次有界 Memory Catalog `search`。命中后最多通过 `show` 读取 3 条相关记忆，再检查当前代码；未
+  命中则直接检查代码。记忆只提供线索，最终结论必须以当前代码和可验证证据为准。
 - 调查和设计属于探索。只有用户明确要求实施后，才创建或晋升为正式 Task；意图不清时保留为
   Temporary，并只确认一次。
 - 可复用 Worker 只从项目的 `.maestro/workers/registry.yaml` 选择。没有安全匹配项时，

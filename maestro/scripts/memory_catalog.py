@@ -1341,6 +1341,7 @@ def catalog_overview_summary(
     refreshed: bool,
     *,
     limit: int = 3,
+    cached: bool = False,
 ) -> dict[str, Any]:
     visible = [
         entry for entry in index["entries"]
@@ -1393,6 +1394,7 @@ def catalog_overview_summary(
 
     return {
         "catalog_refreshed": refreshed,
+        "catalog_cached": cached,
         "has_active_work": has_active_work,
         "recoverable_checkpoint": recoverable_checkpoint,
         "active_temporary_count": len(all_temporaries),
@@ -1414,6 +1416,9 @@ def catalog_overview_summary(
 
 def bounded_runtime_context_text(summary: dict[str, Any]) -> str:
     lines = ["# Memory Overview (Runtime Context)", ""]
+    if summary.get("catalog_cached"):
+        lines.append("> 启动时使用现有 Catalog 快照；处理具体问题时请先用 search / show 按需确认最新状态。")
+        lines.append("")
     if summary["has_active_work"]:
         lines.append("当前检测到项目存在活动工作：")
     else:
@@ -1778,7 +1783,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     overview.add_argument("--format", choices=("text", "json"), default="text")
     overview.add_argument("--limit", type=int, default=3, help="Max entries per section for bounded runtime context (1-5, default 3)")
     overview.add_argument("--full", action="store_true", help="Print full un-truncated manifest.md instead of bounded summary")
-    overview.add_argument("--no-refresh", action="store_true")
+    overview_mode = overview.add_mutually_exclusive_group()
+    overview_mode.add_argument("--no-refresh", action="store_true")
+    overview_mode.add_argument(
+        "--cached",
+        action="store_true",
+        help="Read and validate the existing index without scanning authoritative sources",
+    )
 
     recent = subparsers.add_parser("recent", parents=[common])
     recent.add_argument("--limit", type=int, default=5)
@@ -1835,11 +1846,24 @@ def main(argv: list[str] | None = None) -> int:
             result = migrate_long_term(project_root, actor=args.actor, apply=args.apply)
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
-        index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh, now=reference_time)
+        cached = args.command == "overview" and getattr(args, "cached", False)
+        if cached:
+            index = load_index(project_root)
+            if index is None:
+                raise CatalogError("Memory catalog cache is missing or invalid; refresh it on demand")
+            refreshed = False
+        else:
+            index, refreshed = ensure_current_index(project_root, refresh=not args.no_refresh, now=reference_time)
         if args.command == "overview":
             if args.limit < 1 or args.limit > 5:
                 raise CatalogError("--limit must be between 1 and 5")
-            summary = catalog_overview_summary(project_root, index, refreshed, limit=args.limit)
+            summary = catalog_overview_summary(
+                project_root,
+                index,
+                refreshed,
+                limit=args.limit,
+                cached=cached,
+            )
             if args.format == "json":
                 print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
                 return 0

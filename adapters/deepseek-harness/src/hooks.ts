@@ -30,6 +30,10 @@ import type { AutoCheckpointConfig } from './types'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
+const MEMORY_FIRST_RUNTIME_RULE = `## Maestro 工作规则
+
+当用户询问项目现有逻辑、历史原因、设计决策、旧问题或以前做过的工作时，必须先加载 Maestro Skill，使用用户问题中的关键词执行一次有界 Memory Catalog \`search\`。命中后最多 \`show\` 3 条相关记忆，再检查当前代码；未命中再直接检查代码。不得因为可以搜索代码而跳过记忆搜索。记忆只提供线索，最终以当前代码和可验证证据为准。`
+
 interface RecoverableCheckpointInfo {
   status?: 'committed' | 'pending'
   scope: string
@@ -351,7 +355,9 @@ export async function loadBoundedRuntimeContext(
       return null
     }
 
-    // Always attempt Python memory_catalog.py overview --limit 3 on physical projectRoot, even if fs is provided
+    // Session startup is latency-sensitive. Read the existing validated Catalog
+    // snapshot without deriving or refreshing it; normal search/show operations
+    // refresh on demand once the user asks for real work.
     if (path.isAbsolute(projectRoot)) {
       const candidateScripts = [
         path.resolve(currentDir, 'core/scripts/memory_catalog.py'),
@@ -374,7 +380,7 @@ export async function loadBoundedRuntimeContext(
           const pyCandidates = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python']
           for (const python of pyCandidates) {
             try {
-              const res = spawnSync(python, [scriptPath, '--project-root', projectRoot, 'overview', '--limit', '3'], {
+              const res = spawnSync(python, [scriptPath, '--project-root', projectRoot, 'overview', '--limit', '3', '--cached'], {
                 encoding: 'utf8',
                 timeout: 5000,
                 windowsHide: true,
@@ -399,12 +405,13 @@ export async function loadBoundedRuntimeContext(
       }
     }
 
-    // 2. Degradation fallback: refresh failed or freshness unknown
-    // Do NOT consume unverified or stale index.json! Output degraded warning while preserving authoritative checkpoint.
+    // 2. Degradation fallback: no valid cached snapshot is available. Do not
+    // rebuild during SessionStart; preserve authoritative checkpoint recovery
+    // and let the first memory-relevant user request refresh the Catalog.
     const checkpoint = await findRecoverableCheckpointDsh(projectRoot)
     return formatBoundedRuntimeContextDsh({
       checkpoint,
-      degradedWarning: '检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败。请运行 `python maestro/scripts/memory_catalog.py build` 重建索引。',
+      degradedWarning: '检测到项目存在 Maestro 权威工作源，但启动时没有可用的 Catalog 快照。无需在新会话中自动重建；处理具体问题时再按需刷新。',
     })
   } catch {
     return null
@@ -426,11 +433,18 @@ export async function injectSessionRuntimeContext(
   // back to process.cwd(): one DSH host can serve sessions from many projects.
   if (typeof projectRoot !== 'string' || !path.isAbsolute(projectRoot)) return false
   const runtimeContext = await loadBoundedRuntimeContext(projectRoot, fs)
-  if (!runtimeContext) return false
+  // Even a Maestro project without active work still needs the memory-first
+  // routing rule. This check is metadata-only and never scans memory sources.
+  if (!runtimeContext && !existsSync(path.join(projectRoot, '.maestro'))) return false
   payload.agent.inject(createUserMessage({
     content: [{
       type: 'text',
-      text: runtimeContext,
+      // Keep this routing rule in the always-injected plugin context. Putting
+      // it only in Core SKILL.md is insufficient when the host starts solving
+      // a code question before explicitly loading the Maestro Skill.
+      text: runtimeContext
+        ? `${runtimeContext}\n\n${MEMORY_FIRST_RUNTIME_RULE}`
+        : MEMORY_FIRST_RUNTIME_RULE,
     }],
     source: {
       kind: 'plugin',

@@ -984,7 +984,14 @@ revision: 1
   assert.equal(unrefreshedErr.code, 2);
   assert.match(unrefreshedErr.stderr, /missing or stale/);
 
-  // 5. Corrupt catalog fails with explicit diagnostic instead of silently reporting empty memory
+  // 5. Cached startup overview validates and reads the existing snapshot without deriving sources
+  const cachedJson = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json', '--cached'])).stdout);
+  assert.equal(cachedJson.catalog_cached, true);
+  assert.equal(cachedJson.catalog_refreshed, false);
+  assert.equal(cachedJson.active_task_count, 1);
+  assert.ok(!cachedJson.active_tasks.some((entry) => entry.memory_id === 'task-cache-2'));
+
+  // 6. Corrupt catalog fails with explicit diagnostic instead of silently reporting empty memory
   await writeProjectFile(projectRoot, '.maestro/tasks/task-corrupt/task.yaml', `id: wrong-id
 objective: Invalid task id mismatch
 status: active
@@ -1104,4 +1111,3 @@ test('overview discovers recoverable checkpoints and marks has_active_work even 
   assert.match(textOutput, /binding: task-recovery/);
   assert.match(textOutput, /revision: 3/);
 });
-
