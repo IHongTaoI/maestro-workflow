@@ -36,6 +36,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
       archive/
       trash/
     pending/
+    sources/<source-id>.json
     long-term/
       current.md
       entries/<entry-id>.md
@@ -88,6 +89,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
   - `activity/index.json`：从本地 Task 和不可变 Decision 权威记录重建的派生时间线目录；
 
 - **团队共享 Memory（纳入 Git）：**
+  - `memory/sources/`：仅在聊天是唯一证据时保存用户明确授权持久化的、内容寻址且不可变的来源记录；
   - `memory/long-term/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
     `conflicts/` 和显式迁移审计；
   - `memory/followups/`：团队共享决策待办跟进项（`pending/` 与 `resolved/`）；
@@ -118,6 +120,7 @@ Maestro 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 !.maestro/instructions/registry.yaml
 !.maestro/memory/long-term/
 !.maestro/memory/followups/
+!.maestro/memory/sources/
 ```
 
 内置 Worker 注册表是不可变的已安装参考数据。只有需要可复用的项目特定 Worker 或能力别名时，

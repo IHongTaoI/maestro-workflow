@@ -415,6 +415,7 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 2. 用户确认 Session Handoff。
 3. 从 Temporary Memory 创建正式 Task。
 4. Task 完成或归档。
+5. 用户明确要求“创建这条 Memory”或“记住这条信息”。
 
 宿主支持模型选择时使用配置的 memory model。瞬时故障或无效输出后重试一次，再回退到主模型。
 宿主具备原生隔离子代理（如 Codex `spawn_agent`）时，委派给独立原生 Memory Worker（中文称呼“记忆整理员”）；
@@ -433,6 +434,39 @@ Memory Worker 负责整理 memory 和有界 Experience Review。它按 memory �
 包含稳定 `playbook_id`、规范 `file_path`、标题、触发条件、有序步骤、检查、active 状态、
 revision 元数据和可达 `source_refs`，使 Worker 在提出新指导前比较已有流程。省略
 `current_playbooks` 的生产者必须迁移，否则请求校验失败。
+
+### 显式 CREATE 轻量路径
+
+用户明确要求创建或记住一条内容，且 `memory_kind` 与来源清楚、不需要从历史推导时，请求使用
+`operation: explicit-create`。先以待保存内容查询 Catalog，最多通过 `show` 读取 3 条相关 Long-term
+详情，然后构造：
+
+```json
+{
+  "current_memory": {
+    "scope": "bounded",
+    "query": "待保存内容",
+    "limit": 3,
+    "long_term_entries": []
+  }
+}
+```
+
+`scope: full` 表示完整镜像；旧请求省略 `scope` 时按 `full` 解释，以保持兼容。只有
+`explicit-create` 可以使用 `bounded`，并且 `query`、`limit` 必填，`limit` 与实际条目数均不得超过
+3。其他持久边界继续使用 `full`，不能用轻量路径规避 UPDATE、MERGE 或冲突检查。
+
+用户明确的创建指令同时授权无冲突的 `CREATE`：Memory Worker 仍只输出候选，由老周独立校验、
+发布 Decision Record 并写入 entry，无需重复询问。duplicate 直接 `SKIP`；任何 conflict、UPDATE
+或 MERGE 都停止轻量写入并请求用户确认。
+
+用户提供文件时直接引用该文件；来自 Task 时引用 Task source。只有聊天内容可作为来源时，将用户
+原话保存到 `.maestro/memory/sources/<source-id>.json`，使用
+[memory-source.schema.json](schemas/memory-source.schema.json) 校验后再放入 `source_files` 与
+`source_refs`，Memory Worker 候选的 `source.type` 使用 `user-message`，`source.id` 使用同一个
+`source_id`。`source_id` 是正文 SHA-256 前 16 位，正文摘要必须匹配；文件使用独占创建，已存在时
+只允许字节完全相同，禁止覆盖。不得保存秘密、凭据或用户未授权持久化的敏感内容；遇到此类内容时
+改用安全的项目来源或请求用户提供可持久化版本。
 
 合并流程有界且有序：
 
@@ -461,12 +495,14 @@ match.playbook_ids ⊆ current_playbooks.playbook_id
 
 - [memory-worker-request.schema.json](schemas/memory-worker-request.schema.json)
 - [memory-worker-response.schema.json](schemas/memory-worker-response.schema.json)
+- [memory-source.schema.json](schemas/memory-source.schema.json)
 
 持久化任一正式工件前，立即运行对应的工件触发协议守卫：
 
 ```bash
 python maestro/scripts/validate.py memory-request <file> --project-root <project-root>
 python maestro/scripts/validate.py memory-response <file> --request <request-file> --project-root <project-root>
+python maestro/scripts/validate.py memory-source <file> --project-root <project-root>
 ```
 
 只有校验成功才能持久化规范工件。失败后修复并再校验一次；第二次仍失败时，将完整原始结果以

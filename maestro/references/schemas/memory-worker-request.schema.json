@@ -12,7 +12,7 @@
   ],
   "properties": {
     "operation": {
-      "enum": ["worker-compress", "session-handoff", "task-bootstrap", "task-complete"]
+      "enum": ["worker-compress", "session-handoff", "task-bootstrap", "task-complete", "explicit-create"]
     },
     "source_files": {
       "type": "array",
@@ -24,12 +24,35 @@
       "type": "object",
       "required": ["long_term_entries"],
       "properties": {
+        "scope": { "enum": ["full", "bounded"] },
+        "query": { "type": "string", "minLength": 1 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 3 },
         "long_term_entries": {
           "type": "array",
           "items": { "$ref": "#/$defs/longTermEntry" }
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "scope": { "const": "bounded" } },
+            "required": ["scope"]
+          },
+          "then": {
+            "required": ["query", "limit"],
+            "properties": {
+              "long_term_entries": { "type": "array", "maxItems": 3 }
+            }
+          },
+          "else": {
+            "properties": {
+              "query": false,
+              "limit": false
+            }
+          }
+        }
+      ]
     },
     "current_playbooks": {
       "type": "array",
@@ -40,6 +63,31 @@
     "source_content": { "type": "object" }
   },
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "operation": { "const": "explicit-create" } },
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {
+          "current_memory": {
+            "type": "object",
+            "properties": { "scope": { "const": "bounded" } },
+            "required": ["scope"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "current_memory": {
+            "type": "object",
+            "properties": { "scope": { "enum": ["full"] } }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "stableId": {
       "type": "string",

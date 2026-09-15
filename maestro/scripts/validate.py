@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -523,7 +524,7 @@ def validate_memory_request(
             value["operation"],
             "$.operation",
             errors,
-            {"worker-compress", "session-handoff", "task-bootstrap", "task-complete"},
+            {"worker-compress", "session-handoff", "task-bootstrap", "task-complete", "explicit-create"},
         )
     if "source_files" in value:
         if check_array(
@@ -537,6 +538,27 @@ def validate_memory_request(
     if "current_memory" in value:
         current_memory = value["current_memory"]
         if require_object(current_memory, "$.current_memory", errors):
+            scope = current_memory.get("scope", "full")
+            if "scope" in current_memory:
+                check_enum(scope, "$.current_memory.scope", errors, {"full", "bounded"})
+            if scope == "bounded":
+                if "query" not in current_memory:
+                    add_error(errors, "$.current_memory.query", "is required for bounded input")
+                else:
+                    check_string(current_memory["query"], "$.current_memory.query", errors, min_length=1)
+                if "limit" not in current_memory:
+                    add_error(errors, "$.current_memory.limit", "is required for bounded input")
+                elif (
+                    not isinstance(current_memory["limit"], int)
+                    or isinstance(current_memory["limit"], bool)
+                    or current_memory["limit"] < 1
+                    or current_memory["limit"] > 3
+                ):
+                    add_error(errors, "$.current_memory.limit", "must be an integer between 1 and 3")
+            else:
+                for key in ("query", "limit"):
+                    if key in current_memory:
+                        add_error(errors, f"$.current_memory.{key}", "is allowed only for bounded input")
             if "long_term_entries" not in current_memory:
                 add_error(
                     errors,
@@ -553,6 +575,23 @@ def validate_memory_request(
                         item, item_path, item_errors, file_reference
                     ),
                 ):
+                    if scope == "bounded" and len(entries) > 3:
+                        add_error(
+                            errors,
+                            "$.current_memory.long_term_entries",
+                            "must contain at most 3 entries for bounded input",
+                        )
+                    if (
+                        scope == "bounded"
+                        and isinstance(current_memory.get("limit"), int)
+                        and not isinstance(current_memory.get("limit"), bool)
+                        and len(entries) > current_memory["limit"]
+                    ):
+                        add_error(
+                            errors,
+                            "$.current_memory.long_term_entries",
+                            "must not contain more entries than limit",
+                        )
                     seen_entry_ids: set[str] = set()
                     for index, entry in enumerate(entries):
                         if not is_object(entry):
@@ -567,6 +606,22 @@ def validate_memory_request(
                                 "must be unique within current memory",
                             )
                         seen_entry_ids.add(entry_id)
+    operation = value.get("operation")
+    current_memory = value.get("current_memory")
+    if is_object(current_memory):
+        scope = current_memory.get("scope", "full")
+        if operation == "explicit-create" and scope != "bounded":
+            add_error(
+                errors,
+                "$.current_memory.scope",
+                "must be 'bounded' for explicit-create",
+            )
+        elif operation != "explicit-create" and scope == "bounded":
+            add_error(
+                errors,
+                "$.current_memory.scope",
+                "bounded input is allowed only for explicit-create",
+            )
     if "current_playbooks" in value:
         playbooks = value["current_playbooks"]
         if check_array(
@@ -596,11 +651,60 @@ def validate_memory_request(
             check_plain_object(value[key], f"$.{key}", errors)
 
 
+def validate_memory_source(
+    value: Any,
+    errors: list[Diagnostic],
+    output_file: Path,
+    project_root: Path,
+) -> None:
+    if not require_object(value, "$", errors):
+        return
+    required = {
+        "schema_version", "source_id", "source_kind", "recorded_at",
+        "recorded_by", "content", "content_sha256",
+    }
+    check_object_shape(value, "$", errors, required=required, allowed=required)
+    if "schema_version" in value and value["schema_version"] != 1:
+        add_error(errors, "$.schema_version", "must be 1")
+    if "source_kind" in value and value["source_kind"] != "user-message":
+        add_error(errors, "$.source_kind", "must be 'user-message'")
+    if "recorded_at" in value:
+        check_date_time(value["recorded_at"], "$.recorded_at", errors)
+    if "recorded_by" in value:
+        check_string(value["recorded_by"], "$.recorded_by", errors, min_length=1)
+    content_valid = "content" in value and check_string(
+        value["content"], "$.content", errors, min_length=1
+    )
+    digest = value.get("content_sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        add_error(errors, "$.content_sha256", "must be a lowercase SHA-256 digest")
+        digest = None
+    if content_valid and digest is not None:
+        expected = hashlib.sha256(value["content"].encode("utf-8")).hexdigest()
+        if digest != expected:
+            add_error(errors, "$.content_sha256", "must match the UTF-8 content digest")
+    source_id = value.get("source_id")
+    if not isinstance(source_id, str) or not re.fullmatch(r"src-[0-9a-f]{16}", source_id):
+        add_error(errors, "$.source_id", "must use 'src-' plus 16 lowercase hex characters")
+    elif digest is not None and source_id != f"src-{digest[:16]}":
+        add_error(errors, "$.source_id", "must be derived from content_sha256")
+    if isinstance(source_id, str):
+        expected_path = (
+            project_root / ".maestro" / "memory" / "sources" / f"{source_id}.json"
+        ).resolve()
+        if output_file != expected_path:
+            add_error(
+                errors,
+                "$",
+                "must be stored at .maestro/memory/sources/<source_id>.json",
+            )
+
+
 def load_memory_request(
     request_path: Path,
     errors: list[Diagnostic],
     file_reference: FileReferenceValidator,
-) -> set[str] | None:
+) -> tuple[set[str], set[str], str] | None:
     reference_path = "--request"
     try:
         request_value = json.loads(
@@ -637,12 +741,20 @@ def load_memory_request(
         return None
 
     assert isinstance(request_value, dict)
+    memory_entries = request_value["current_memory"]["long_term_entries"]
     playbooks = request_value["current_playbooks"]
-    return {
+    memory_ids = {
+        entry["entry_id"]
+        for entry in memory_entries
+        if isinstance(entry, dict) and isinstance(entry.get("entry_id"), str)
+    }
+    playbook_ids = {
         playbook["playbook_id"]
         for playbook in playbooks
         if isinstance(playbook, dict) and isinstance(playbook.get("playbook_id"), str)
     }
+    scope = request_value["current_memory"].get("scope", "full")
+    return memory_ids, playbook_ids, scope
 
 
 def validate_request_audit_reference(
@@ -1620,7 +1732,7 @@ def validate_long_term_candidate(
                 source["type"],
                 f"{path}.source.type",
                 errors,
-                {"temporary", "task"},
+                {"temporary", "task", "user-message"},
             )
         if "id" in source:
             check_storage_id(source["id"], f"{path}.source.id", errors)
@@ -1772,7 +1884,7 @@ def validate_playbook_candidate(
                 source["type"],
                 f"{path}.source.type",
                 errors,
-                {"temporary", "task"},
+                {"temporary", "task", "user-message"},
             )
         if "id" in source:
             check_storage_id(source["id"], f"{path}.source.id", errors)
@@ -1829,7 +1941,10 @@ def validate_memory_response(
     }
     check_object_shape(value, path, errors, required=required, allowed=allowed)
 
-    current_playbook_ids = load_memory_request(request_path, errors, file_reference)
+    request_targets = load_memory_request(request_path, errors, file_reference)
+    current_memory_ids, current_playbook_ids, current_memory_scope = (
+        request_targets if request_targets is not None else (None, None, None)
+    )
     if "request_file" in value:
         validate_request_audit_reference(
             value["request_file"], request_path, errors, file_reference
@@ -1889,6 +2004,21 @@ def validate_memory_response(
                         "must be unique within the response",
                     )
                 seen_candidate_ids.add(candidate_id)
+            if current_memory_ids is not None and current_memory_scope == "bounded":
+                for index, candidate in enumerate(candidates):
+                    if not is_object(candidate) or not is_object(candidate.get("match")):
+                        continue
+                    entry_ids = candidate["match"].get("entry_ids")
+                    if not is_array(entry_ids):
+                        continue
+                    for entry_index, entry_id in enumerate(entry_ids):
+                        if isinstance(entry_id, str) and entry_id not in current_memory_ids:
+                            add_error(
+                                errors,
+                                f"$.long_term_candidates[{index}].match."
+                                f"entry_ids[{entry_index}]",
+                                "must reference Long-term Memory from the externally supplied request",
+                            )
     if "playbook_candidates" in value:
         candidates = value["playbook_candidates"]
         if check_array(
@@ -2256,6 +2386,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "memory-merge-request",
             "memory-merge-response",
             "memory-followup",
+            "memory-source",
             "decision-record",
             "activity-event",
             "activity-index",
@@ -2352,6 +2483,8 @@ def main(argv: list[str] | None = None) -> int:
         validate_memory_merge_response(value, errors, file_reference)
     elif args.kind == "memory-followup":
         validate_memory_followup(value, errors, file_reference)
+    elif args.kind == "memory-source":
+        validate_memory_source(value, errors, output_file, project_root)
     elif args.kind == "decision-record":
         validate_decision_record(value, errors, file_reference)
     elif args.kind == "activity-event":

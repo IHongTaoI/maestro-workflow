@@ -1,0 +1,26 @@
+{
+  "status": "completed",
+  "request_file": "memory-request-bounded-valid.json",
+  "current": { "content": {} },
+  "long_term_candidates": [
+    {
+      "candidate_id": "candidate-unknown-update",
+      "title": "Unknown update",
+      "memory_kind": "fact",
+      "action": "UPDATE",
+      "match": {
+        "classification": "overlap",
+        "entry_ids": ["lt-not-in-bounded-input"]
+      },
+      "conflict_status": "none",
+      "content": "Updated claim.",
+      "rationale": "The candidate attempts to target an entry outside the bounded input.",
+      "source": {
+        "type": "task",
+        "id": "task-source",
+        "created_at": "2026-09-15T04:00:00Z"
+      },
+      "source_refs": ["files/source.md"]
+    }
+  ]
+}
