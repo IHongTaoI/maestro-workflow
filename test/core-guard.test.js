@@ -82,6 +82,10 @@ test('Memory Worker request and response schemas enforce bounded input and propo
   assert.ok(requestSchema.required.includes('operation'));
   assert.ok(requestSchema.required.includes('source_files'));
   assert.ok(requestSchema.required.includes('current_memory'));
+  assert.equal(requestSchema.$defs.longTermEntry.properties.valid_from.format, 'date-time');
+  assert.equal(requestSchema.$defs.longTermEntry.properties.valid_until.format, 'date-time');
+  assert.equal(responseSchema.$defs.longTermCandidate.properties.valid_from.format, 'date-time');
+  assert.equal(responseSchema.$defs.longTermCandidate.properties.valid_until.format, 'date-time');
   assert.ok(requestSchema.required.includes('current_playbooks'));
 
   // Response schema properties only contain proposals (candidates), never direct mutations

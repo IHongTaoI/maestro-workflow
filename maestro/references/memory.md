@@ -135,6 +135,13 @@ updated_by: old-zhou/session-or-run-id
 
 `search_hints`（可选，字符串数组）定义“问什么问题时本条知识应被召回”，作为检索提示词匹配，不作为事实正文内容。检索打分命中 `search_hints` 时享受相关性加权并在候选理由中输出 `"search hint"`。
 
+`fact` 和 `constraint` 可选携带带时区的 `valid_from`、`valid_until`（RFC 3339）。两者同时存在时
+必须满足 `valid_from < valid_until`。Catalog 按查询基准时间派生 `timeless`、`not-yet-valid`、
+`current` 或 `expired`；状态不写回 entry，也不使用文件 `mtime`。普通 `overview`、`recent`、
+`search` 只把 `timeless` 和 `current` 当作当前知识。审计时使用 `--include-inactive` 查看尚未生效、
+过期或生命周期非活动的条目。过期不会删除、移动或改写原文件；恢复为当前事实必须提供新证据并走
+现有 Memory Worker 候选和独立评审。
+
 `entries/` 只允许 `active` 或 `disputed`。经评审变为 `superseded` 或 `rejected` 的 entry snapshot
 移动到 `long-term/history/<entry_id>.md`，同时保留 decisions、conflicts 和 source refs。历史仍可通过
 Catalog 的 `show --include-inactive` 审计，但不会进入常规检索。`long-term/current.md` 在新格式中只
@@ -231,7 +238,8 @@ Activity。Decision Record 本身是评审权威，不依赖 Activity 存在。�
 
 对每个提取出的 Long-term 候选，将其持久声明与索引条目比较，并在 `long_term_candidates` 中
 输出一项提案。提案记录稳定 `candidate_id`、`memory_kind`、匹配分类、动作、冲突状态、理由、
-结构化来源元数据和可达 `source_refs`。
+结构化来源元数据和可达 `source_refs`。`fact` / `constraint` 候选可以携带 `valid_from`、
+`valid_until`，但时间字段不能替代来源证据。更新已过期事实时必须引用新证据并正常评审。
 
 先分类，再选择动作：
 
@@ -343,10 +351,10 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 
 - **有界输出：** 默认最多返回 5 条（`--limit` 必须在 1 到 5 之间）。输出仅包含路由所需的有界
   元数据（`memory_id`、`layer`、`record_type`、`title`、`summary`、`status`、`path`、`locator`、
-  `updated_at`、可选的 `memory_kind` 与 `stale`），不展开完整 `content`、`search_hints` 或
+  `updated_at`、可选的 `memory_kind`、`stale`、有效期与派生 `temporal_state`），不展开完整 `content`、`search_hints` 或
   Reference 树。需要详情时通过 `show <memory-id>` 单条加载。
 - **支持过滤：** 支持 `--layer {temporary,task,long-term}` 过滤特定层级；默认仅返回 `active`
-  条目，传入 `--include-inactive` 可包含历史或非活跃条目；支持 `--no-refresh`。
+  且时间有效的条目，传入 `--include-inactive` 可包含历史、非活跃、尚未生效或过期条目；支持 `--no-refresh`。
 - **时间语义与降级规则：** 排序基于权威记录中的 `updated_at`（规范 ISO-8601 UTC）降序排列，时间
   相同时以 `memory_id` 升序决胜。**绝不使用文件系统不可靠的 `mtime`、Git 提交时间或当前时间伪造
   Memory 时间**。没有可靠时间字段的记录（如未标注时间的 worker-state 或旧记录）排在所有具备可靠
@@ -368,6 +376,9 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 ```bash
 python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-root> show <memory-id>
 ```
+
+审计查询在 `search`、`recent` 或 `show` 后增加 `--include-inactive`；返回结果会明确携带
+`temporal_state`，避免把历史事实误当作当前证据。
 
 `show` 从旧聚合或对应单文件提取一个 Long-term JSON block，或提取 Temporary、Task、Worker 的
 有界当前章节。这是只使用一个条目而不注入全部 Long-term entries 的受支持方式。

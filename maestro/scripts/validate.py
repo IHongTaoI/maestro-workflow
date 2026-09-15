@@ -706,6 +706,35 @@ def validate_rejected_alternative(
             check_string(value[key], f"{path}.{key}", errors, min_length=1)
 
 
+def validate_temporal_fields(
+    value: dict[str, Any],
+    path: str,
+    errors: list[Diagnostic],
+) -> None:
+    parsed: dict[str, datetime] = {}
+    for key in ("valid_from", "valid_until"):
+        if key not in value:
+            continue
+        field_path = f"{path}.{key}"
+        if check_date_time(value[key], field_path, errors):
+            raw = value[key]
+            normalized = raw[:-1] + "+00:00" if raw[-1] in "Zz" else raw
+            parsed[key] = datetime.fromisoformat(normalized)
+    if parsed and value.get("memory_kind") not in {"fact", "constraint"}:
+        for key in parsed:
+            add_error(
+                errors,
+                f"{path}.{key}",
+                "is allowed only when memory_kind is 'fact' or 'constraint'",
+            )
+    if (
+        "valid_from" in parsed
+        and "valid_until" in parsed
+        and parsed["valid_from"] >= parsed["valid_until"]
+    ):
+        add_error(errors, f"{path}.valid_until", "must be later than valid_from")
+
+
 def validate_long_term_entry(
     value: Any,
     path: str,
@@ -715,7 +744,10 @@ def validate_long_term_entry(
     if not require_object(value, path, errors):
         return
     required = {"entry_id", "title", "memory_kind", "content", "source_refs"}
-    allowed = required | {"status", "decision_context", "tags", "aliases", "search_hints"}
+    allowed = required | {
+        "status", "decision_context", "tags", "aliases", "search_hints",
+        "valid_from", "valid_until",
+    }
     check_object_shape(value, path, errors, required=required, allowed=allowed)
     if "entry_id" in value:
         check_stable_id(value["entry_id"], f"{path}.entry_id", errors)
@@ -762,6 +794,7 @@ def validate_long_term_entry(
             make_string_validator(min_length=1),
         ):
             check_unique_strings(value[key], f"{path}.{key}", errors)
+    validate_temporal_fields(value, path, errors)
 
 
 def validate_memory_index_entry(
@@ -788,7 +821,8 @@ def validate_memory_index_entry(
         "updated_at",
         "stale",
     }
-    check_object_shape(value, path, errors, required=required, allowed=required)
+    temporal = {"valid_from", "valid_until", "temporal_state"}
+    check_object_shape(value, path, errors, required=required, allowed=required | temporal)
     if "memory_id" in value:
         check_storage_id(value["memory_id"], f"{path}.memory_id", errors)
     if "layer" in value:
@@ -819,6 +853,14 @@ def validate_memory_index_entry(
             check_unique_strings(value[key], f"{path}.{key}", errors)
     if "updated_at" in value and value["updated_at"] is not None:
         check_date_time(value["updated_at"], f"{path}.updated_at", errors)
+    for key in ("valid_from", "valid_until"):
+        if key in value and value[key] is not None:
+            check_date_time(value[key], f"{path}.{key}", errors)
+    if "temporal_state" in value:
+        check_enum(
+            value["temporal_state"], f"{path}.temporal_state", errors,
+            {"timeless", "not-yet-valid", "current", "expired"},
+        )
 
     layer = value.get("layer")
     record_type = value.get("record_type")
@@ -835,7 +877,13 @@ def validate_memory_index_entry(
             add_error(errors, f"{path}.memory_kind", "is required for a Long-term entry")
         if stale is not None:
             add_error(errors, f"{path}.stale", "must be null outside the Temporary layer")
+        for key in temporal:
+            if key not in value:
+                add_error(errors, f"{path}.{key}", "is required for a Long-term entry")
     elif layer == "temporary":
+        for key in temporal:
+            if key in value:
+                add_error(errors, f"{path}.{key}", "is allowed only for Long-term Memory")
         if record_type != "temporary":
             add_error(errors, f"{path}.record_type", "must be 'temporary' for Temporary Memory")
         if memory_kind is not None:
@@ -843,6 +891,9 @@ def validate_memory_index_entry(
         if not is_boolean(stale):
             add_error(errors, f"{path}.stale", "must be a boolean for Temporary Memory")
     elif layer == "task":
+        for key in temporal:
+            if key in value:
+                add_error(errors, f"{path}.{key}", "is allowed only for Long-term Memory")
         if record_type not in {"task", "worker-state"}:
             add_error(errors, f"{path}.record_type", "must be a Task current-state record type")
         if memory_kind is not None:
@@ -1418,7 +1469,10 @@ def validate_long_term_candidate(
         "source",
         "source_refs",
     }
-    allowed = required | {"decision_context", "tags", "aliases", "search_hints"}
+    allowed = required | {
+        "decision_context", "tags", "aliases", "search_hints",
+        "valid_from", "valid_until",
+    }
     check_object_shape(value, path, errors, required=required, allowed=allowed)
 
     if "candidate_id" in value:
@@ -1468,6 +1522,7 @@ def validate_long_term_candidate(
             make_string_validator(min_length=1),
         ):
             check_unique_strings(value[key], f"{path}.{key}", errors)
+    validate_temporal_fields(value, path, errors)
 
     classification: str | None = None
     entry_ids: list[Any] | None = None

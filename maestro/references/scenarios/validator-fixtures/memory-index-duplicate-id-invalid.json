@@ -17,7 +17,10 @@
       "aliases": [],
       "search_hints": [],
       "updated_at": null,
-      "stale": null
+      "stale": null,
+      "valid_from": null,
+      "valid_until": null,
+      "temporal_state": "timeless"
     },
     {
       "memory_id": "lt-repeated-index",
@@ -33,7 +36,10 @@
       "aliases": [],
       "search_hints": [],
       "updated_at": null,
-      "stale": null
+      "stale": null,
+      "valid_from": null,
+      "valid_until": null,
+      "temporal_state": "timeless"
     }
   ],
   "pending_followups": []
