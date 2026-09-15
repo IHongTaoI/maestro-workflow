@@ -77,6 +77,9 @@ test('Memory Worker request and response schemas enforce bounded input and propo
   const responseSchema = await json(
     'maestro/references/schemas/memory-worker-response.schema.json',
   );
+  const sourceSchema = await json(
+    'maestro/references/schemas/memory-source.schema.json',
+  );
 
   // Request schema requires bounded inputs: operation, source_files, current_memory, current_playbooks
   assert.ok(requestSchema.required.includes('operation'));
@@ -87,6 +90,12 @@ test('Memory Worker request and response schemas enforce bounded input and propo
   assert.equal(responseSchema.$defs.longTermCandidate.properties.valid_from.format, 'date-time');
   assert.equal(responseSchema.$defs.longTermCandidate.properties.valid_until.format, 'date-time');
   assert.ok(requestSchema.required.includes('current_playbooks'));
+  assert.ok(requestSchema.properties.operation.enum.includes('explicit-create'));
+  assert.deepEqual(requestSchema.properties.current_memory.properties.scope.enum, ['full', 'bounded']);
+  assert.equal(requestSchema.properties.current_memory.properties.limit.maximum, 3);
+  assert.equal(sourceSchema.properties.source_kind.const, 'user-message');
+  assert.match(sourceSchema.properties.content_sha256.pattern, /64/);
+  assert.ok(responseSchema.$defs.source.properties.type.enum.includes('user-message'));
 
   // Response schema properties only contain proposals (candidates), never direct mutations
   assert.ok(responseSchema.properties.long_term_candidates);

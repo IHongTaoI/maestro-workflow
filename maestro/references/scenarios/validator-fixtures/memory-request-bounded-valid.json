@@ -1,0 +1,14 @@
+{
+  "operation": "explicit-create",
+  "source_files": ["files/source.md"],
+  "current_memory": {
+    "scope": "bounded",
+    "query": "项目使用 Vue 3",
+    "limit": 3,
+    "long_term_entries": []
+  },
+  "current_playbooks": [],
+  "memory_hints": {
+    "memory_kind": "fact"
+  }
+}

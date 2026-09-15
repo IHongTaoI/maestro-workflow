@@ -202,8 +202,11 @@ Memory Worker 是在持久边界（委派完成、Session Handoff、Temporary �
 1. **有界输入 Payload**：
    - 严格使用 [memory-worker-request.schema.json](schemas/memory-worker-request.schema.json)
      校验输入；
-   - 包含明确的 `source_files`、当前 Long-term 镜像 `current_memory`、当前 Playbook 镜像
-     `current_playbooks` 及 `memory_hints`；不把无关的全部历史 Memory 注入输入。
+   - 包含明确的 `source_files`、当前 Long-term 输入 `current_memory`、当前 Playbook 镜像
+     `current_playbooks` 及 `memory_hints`；不把无关的全部历史 Memory 注入输入；
+   - 普通持久边界使用完整 `current_memory`。仅用户明确授权的 `explicit-create` 可以使用
+     `scope: bounded`，记录检索 query 并最多包含 3 条 Catalog 候选；省略 scope 的旧请求按
+     `full` 解释。
 2. **工具白名单（Strictly Read-only）**：
    - 仅限只读工具（如读取指定源文件、查看特定已索引条目）；
    - **严禁提供任何写工具、破坏性操作工具、命令执行工具或外部网络工具**。

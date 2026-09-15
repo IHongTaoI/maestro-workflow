@@ -187,6 +187,11 @@ Worker 不依赖父 Agent 的隐式继承。每个 Worker 声明 required 与 op
 也不能批准自己的提案。Git 并行分支间由 Memory Merger Worker 执行三方语义合并，并保留未解决
 冲突双方的完整来源。
 
+用户明确要求创建一条来源清楚的 Memory 时，轻量路径先通过 Catalog 查重，最多读取 3 条相关
+Long-term 详情，并把 `current_memory` 标记为 `bounded`。无冲突 CREATE 不重复确认；重复项直接
+SKIP，涉及冲突、UPDATE 或 MERGE 时仍需用户确认。聊天是唯一来源时，用户原话以内容摘要保护的
+不可变记录保存在项目 `.maestro/memory/sources/`，不得把秘密或未授权敏感内容写入该目录。
+
 Memory Awareness 会为活动 Temporary、Task 和 Long-term Memory 生成小型 Manifest 与机器可读
 Index。Agent 先加载 Manifest，最多检索五个相关候选，再按稳定 ID 提取一个选定记录，不注入完整
 Long-term 集合。新 Long-term Memory 按 `entries/<entry-id>.md` 独立存储，旧聚合 `current.md` 仍可

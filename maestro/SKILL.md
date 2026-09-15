@@ -65,6 +65,10 @@ Maestro 启动或新 Session 开始时，老周按以下路径进入工作状态
 - Memory Worker 仅负责整理记忆与经验审查。工具白名单严格限制为只读工具，输出严格限定为
   候选提案（UPDATE/MERGE/CREATE/SKIP），绝对禁止自我批准或直接修改正式 Long-term Memory 或
   Playbooks。宿主缺乏原生隔离子代理时，如实执行 In-Session Fallback 并标记，严禁虚报独立派工。
+- 用户明确要求“创建/记住这条 Memory”且类型与来源清楚时，使用 `explicit-create` 轻量路径：先查
+  Catalog，最多读取 3 条相关 Long-term，传入 `scope: bounded`，不预载全部历史。无冲突 CREATE
+  视为已获本次用户批准；duplicate 直接 SKIP，conflict、UPDATE 或 MERGE 必须再次确认。聊天是唯一
+  来源时，按 `references/memory.md` 保存并校验不可变用户来源；秘密或未授权敏感内容不得落盘。
 - 调查和设计属于探索。只有用户明确要求实施后，才创建或晋升为正式 Task；意图不清时保留为
   Temporary，并只确认一次。
 - 可复用 Worker 只从项目的 `.maestro/workers/registry.yaml` 选择。没有安全匹配项时，

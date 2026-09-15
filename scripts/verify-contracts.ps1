@@ -51,7 +51,7 @@ try {
         )
 
         $caseProjectRoot = $projectRoot
-        if ($Kind -in @("memory-index", "memory-request", "memory-response")) {
+        if ($Kind -in @("memory-index", "memory-request", "memory-response", "memory-source")) {
             $caseProjectRoot = $validatorFixtureRoot
         }
         $validatorArguments = @(
@@ -85,7 +85,7 @@ try {
         )
 
         $caseProjectRoot = $projectRoot
-        if ($Kind -in @("memory-index", "memory-request", "memory-response")) {
+        if ($Kind -in @("memory-index", "memory-request", "memory-response", "memory-source")) {
             $caseProjectRoot = $validatorFixtureRoot
         }
         $validatorArguments = @(
@@ -123,11 +123,12 @@ try {
             [Parameter(Mandatory = $true)][string]$Schema,
             [Parameter(Mandatory = $true)][string]$Kind,
             [Parameter(Mandatory = $true)][string]$Data,
-            [Parameter(Mandatory = $true)][int]$ExpectedExit
+            [Parameter(Mandatory = $true)][int]$ExpectedExit,
+            [string]$Request = ""
         )
 
         Invoke-AjvCase $Schema $Data $ExpectedExit
-        Invoke-ProtocolValidatorCase $Kind $Data $ExpectedExit
+        Invoke-ProtocolValidatorCase $Kind $Data $ExpectedExit $Request
     }
 
     Get-ChildItem "maestro/references/schemas" -Filter "*.json" | ForEach-Object {
@@ -142,6 +143,7 @@ try {
     $memoryIndexSchema = "maestro/references/schemas/memory-index.schema.json"
     $memoryRequestSchema = "maestro/references/schemas/memory-worker-request.schema.json"
     $memoryResponseSchema = "maestro/references/schemas/memory-worker-response.schema.json"
+    $memorySourceSchema = "maestro/references/schemas/memory-source.schema.json"
     $memoryMergeRequestSchema = "maestro/references/schemas/memory-merge-request.schema.json"
     $memoryMergeResponseSchema = "maestro/references/schemas/memory-merge-response.schema.json"
 
@@ -193,6 +195,22 @@ try {
         "$validatorFixtureRoot/memory-request-playbook-reserved-path-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
         "$validatorFixtureRoot/memory-request-empty-playbooks-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-bounded-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-bounded-invalid.json" 1
+    Invoke-ProtocolSchemaParityCase $memorySourceSchema "memory-source" `
+        "$validatorFixtureRoot/.maestro/memory/sources/src-8f10f07960b6b8d5.json" 0
+    Invoke-AjvCase $memorySourceSchema `
+        "$validatorFixtureRoot/.maestro/memory/sources/src-1111111111111111.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-source" `
+        "$validatorFixtureRoot/.maestro/memory/sources/src-1111111111111111.json" `
+        '$.content_sha256' "must match"
+    Invoke-ProtocolSchemaParityCase $memoryRequestSchema "memory-request" `
+        "$validatorFixtureRoot/memory-request-explicit-chat-valid.json" 0
+    Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
+        "$validatorFixtureRoot/memory-response-explicit-chat-valid.json" 0 `
+        "$validatorFixtureRoot/memory-request-explicit-chat-valid.json"
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
@@ -209,6 +227,12 @@ try {
         "$validatorFixtureRoot/memory-response-playbook-status-invalid.json" 1
     Invoke-ProtocolSchemaParityCase $memoryResponseSchema "memory-response" `
         "$validatorFixtureRoot/memory-response-playbook-evidence-required-invalid.json" 1
+    Invoke-AjvCase $memoryResponseSchema `
+        "$validatorFixtureRoot/memory-response-bounded-target-invalid.json" 0
+    Invoke-ProtocolDiagnosticCase "memory-response" `
+        "$validatorFixtureRoot/memory-response-bounded-target-invalid.json" `
+        '$.long_term_candidates[0].match.entry_ids[0]' "externally supplied request" `
+        "$validatorFixtureRoot/memory-request-bounded-valid.json"
     Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
         "$validatorFixtureRoot/memory-merge-request-valid.json" 0
     Invoke-ProtocolSchemaParityCase $memoryMergeRequestSchema "memory-merge-request" `
