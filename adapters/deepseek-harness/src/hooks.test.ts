@@ -359,6 +359,10 @@ revision: 1
   assert.equal(injectedMsg.source?.plugin, 'maestro-runtime-context')
   assert.match(injectedMsg.content[0].text, /task-active/)
   assert.match(injectedMsg.content[0].text, /Work in progress/)
+  assert.match(injectedMsg.content[0].text, /## Maestro 工作规则/)
+  assert.match(injectedMsg.content[0].text, /必须先加载 Maestro Skill/)
+  assert.match(injectedMsg.content[0].text, /不得因为可以搜索代码而跳过记忆搜索/)
+  assert.match(injectedMsg.content[0].text, /最多 `show` 3 条相关记忆/)
 })
 
 test('injectSessionRuntimeContext binds each session to its own project cwd', async (t) => {
@@ -394,6 +398,20 @@ test('injectSessionRuntimeContext does not fall back to the DSH launch cwd', asy
   assert.equal(await injectSessionRuntimeContext({ agent: f.agent }), false)
   assert.equal(f.steered.length, 0)
   assert.equal(f.injected.length, 0)
+})
+
+test('injectSessionRuntimeContext still injects memory-first routing when Maestro has no active work', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-routing-only-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+  await mkdir(path.join(tmp, '.maestro'), { recursive: true })
+
+  const f = autoFixture()
+  ;(f.agent as unknown as { session: { header: { cwd: string } } }).session.header.cwd = tmp
+  assert.equal(await injectSessionRuntimeContext({ agent: f.agent }), true)
+  assert.equal(f.steered.length, 0)
+  assert.equal(f.injected.length, 1)
+  assert.match(f.injected[0].content[0].text, /## Maestro 工作规则/)
+  assert.doesNotMatch(f.injected[0].content[0].text, /# Memory Overview/)
 })
 
 test('loadBoundedRuntimeContext discovers recoverable checkpoint and returns context even without active tasks', async (t) => {
@@ -609,4 +627,3 @@ revision: 1
   assert.match(result, /binding: task-dsh-current/)
   assert.match(result, /revision: 1/)
 })
-

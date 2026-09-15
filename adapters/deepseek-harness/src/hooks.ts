@@ -30,6 +30,10 @@ import type { AutoCheckpointConfig } from './types'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
+const MEMORY_FIRST_RUNTIME_RULE = `## Maestro 工作规则
+
+当用户询问项目现有逻辑、历史原因、设计决策、旧问题或以前做过的工作时，必须先加载 Maestro Skill，使用用户问题中的关键词执行一次有界 Memory Catalog \`search\`。命中后最多 \`show\` 3 条相关记忆，再检查当前代码；未命中再直接检查代码。不得因为可以搜索代码而跳过记忆搜索。记忆只提供线索，最终以当前代码和可验证证据为准。`
+
 interface RecoverableCheckpointInfo {
   status?: 'committed' | 'pending'
   scope: string
@@ -429,11 +433,18 @@ export async function injectSessionRuntimeContext(
   // back to process.cwd(): one DSH host can serve sessions from many projects.
   if (typeof projectRoot !== 'string' || !path.isAbsolute(projectRoot)) return false
   const runtimeContext = await loadBoundedRuntimeContext(projectRoot, fs)
-  if (!runtimeContext) return false
+  // Even a Maestro project without active work still needs the memory-first
+  // routing rule. This check is metadata-only and never scans memory sources.
+  if (!runtimeContext && !existsSync(path.join(projectRoot, '.maestro'))) return false
   payload.agent.inject(createUserMessage({
     content: [{
       type: 'text',
-      text: runtimeContext,
+      // Keep this routing rule in the always-injected plugin context. Putting
+      // it only in Core SKILL.md is insufficient when the host starts solving
+      // a code question before explicitly loading the Maestro Skill.
+      text: runtimeContext
+        ? `${runtimeContext}\n\n${MEMORY_FIRST_RUNTIME_RULE}`
+        : MEMORY_FIRST_RUNTIME_RULE,
     }],
     source: {
       kind: 'plugin',
