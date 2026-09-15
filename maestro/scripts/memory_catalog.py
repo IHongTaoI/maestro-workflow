@@ -57,6 +57,7 @@ LATIN_TOKEN = re.compile(r"[a-z0-9][a-z0-9._-]*", re.IGNORECASE)
 CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
 STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 ACTIVE_STATUSES = {"active"}
+CURRENT_TEMPORAL_STATES = {"current", "timeless"}
 LONG_TERM_KINDS = {"fact", "experience", "principle", "decision", "constraint", "other"}
 CURRENT_ENTRY_STATUSES = {"active", "disputed"}
 HISTORY_ENTRY_STATUSES = {"superseded", "rejected"}
@@ -340,6 +341,48 @@ def validate_decision_context(entry: dict[str, Any], source: Path) -> None:
         require_string(alternative, "reason", source)
 
 
+def parse_entry_time(entry: dict[str, Any], key: str, source: Path) -> datetime | None:
+    value = entry.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise CatalogError(f"{source}: '{key}' must be a non-empty RFC 3339 timestamp")
+    parsed = parse_iso_timestamp(value)
+    if parsed is None:
+        raise CatalogError(f"{source}: '{key}' must be an RFC 3339 timestamp with timezone")
+    return parsed
+
+
+def validate_temporal_fields(entry: dict[str, Any], source: Path) -> None:
+    present = {key for key in ("valid_from", "valid_until") if key in entry}
+    if present and entry.get("memory_kind") not in {"fact", "constraint"}:
+        names = ", ".join(sorted(present))
+        raise CatalogError(
+            f"{source}: {names} are allowed only for memory_kind 'fact' or 'constraint'"
+        )
+    valid_from = parse_entry_time(entry, "valid_from", source)
+    valid_until = parse_entry_time(entry, "valid_until", source)
+    if valid_from is not None and valid_until is not None and valid_from >= valid_until:
+        raise CatalogError(f"{source}: 'valid_from' must be earlier than 'valid_until'")
+
+
+def temporal_state(entry: dict[str, Any], now: datetime) -> str:
+    valid_from = parse_entry_time(entry, "valid_from", Path(entry.get("entry_id", "entry")))
+    valid_until = parse_entry_time(entry, "valid_until", Path(entry.get("entry_id", "entry")))
+    if valid_from is None and valid_until is None:
+        return "timeless"
+    current = now.astimezone(timezone.utc)
+    if valid_from is not None and current < valid_from:
+        return "not-yet-valid"
+    if valid_until is not None and current >= valid_until:
+        return "expired"
+    return "current"
+
+
+def is_current_knowledge(entry: dict[str, Any]) -> bool:
+    return entry.get("temporal_state", "timeless") in CURRENT_TEMPORAL_STATES
+
+
 def parse_long_term_entries(
     path: Path,
     *,
@@ -391,6 +434,7 @@ def parse_long_term_entries(
         optional_string_list(entry, "aliases", path)
         optional_string_list(entry, "search_hints", path)
         validate_decision_context(entry, path)
+        validate_temporal_fields(entry, path)
         entries.append(entry)
     return entries
 
@@ -492,8 +536,14 @@ def long_term_records(
     return records
 
 
-def long_term_index_entries(project_root: Path, source_files: set[Path]) -> list[dict[str, Any]]:
+def long_term_index_entries(
+    project_root: Path,
+    source_files: set[Path],
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
+    reference_time = now if now is not None else datetime.now(timezone.utc)
     for entry, path, updated_at in long_term_records(project_root, source_files):
         content = require_string(entry, "content", path)
         result.append(
@@ -507,6 +557,9 @@ def long_term_index_entries(project_root: Path, source_files: set[Path]) -> list
                 "locator": require_string(entry, "entry_id", path),
                 "status": entry.get("status", "active"),
                 "memory_kind": require_string(entry, "memory_kind", path),
+                "valid_from": entry.get("valid_from"),
+                "valid_until": entry.get("valid_until"),
+                "temporal_state": temporal_state(entry, reference_time),
                 "tags": optional_string_list(entry, "tags", path),
                 "aliases": optional_string_list(entry, "aliases", path),
                 "search_hints": optional_string_list(entry, "search_hints", path),
@@ -781,7 +834,7 @@ def derive_catalog(project_root: Path, *, now: datetime | None = None) -> dict[s
     if config_path.is_file():
         source_files.add(config_path)
     entries = []
-    entries.extend(long_term_index_entries(project_root, source_files))
+    entries.extend(long_term_index_entries(project_root, source_files, now=now))
     entries.extend(temporary_index_entries(project_root, source_files, now=now))
     entries.extend(task_index_entries(project_root, source_files))
     entries.sort(key=lambda item: (item["layer"], item["record_type"], item["memory_id"]))
@@ -807,7 +860,10 @@ def derive_catalog(project_root: Path, *, now: datetime | None = None) -> dict[s
 
 
 def manifest_text(index: dict[str, Any]) -> str:
-    visible = [entry for entry in index["entries"] if entry["status"] == "active"]
+    visible = [
+        entry for entry in index["entries"]
+        if entry["status"] == "active" and is_current_knowledge(entry)
+    ]
     groups = (
         (
             "Active Temporary Memory",
@@ -1017,10 +1073,13 @@ def search_index(
     contexts: list[str],
     binding: str | None,
     limit: int,
+    include_inactive: bool = False,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for entry in index["entries"]:
-        if entry["status"] not in ACTIVE_STATUSES:
+        if not include_inactive and (
+            entry["status"] not in ACTIVE_STATUSES or not is_current_knowledge(entry)
+        ):
             continue
         if layer and entry["layer"] != layer:
             continue
@@ -1064,6 +1123,9 @@ def bound_recent_entry(entry: dict[str, Any]) -> dict[str, Any]:
     }
     if entry.get("memory_kind") is not None:
         bounded["memory_kind"] = entry["memory_kind"]
+    for key in ("valid_from", "valid_until", "temporal_state"):
+        if entry.get(key) is not None:
+            bounded[key] = entry[key]
     if entry.get("stale") is not None:
         bounded["stale"] = entry["stale"]
     return bounded
@@ -1079,7 +1141,9 @@ def recent_entries(
     timed: list[dict[str, Any]] = []
     untimed: list[dict[str, Any]] = []
     for entry in index["entries"]:
-        if not include_inactive and entry.get("status") not in ACTIVE_STATUSES:
+        if not include_inactive and (
+            entry.get("status") not in ACTIVE_STATUSES or not is_current_knowledge(entry)
+        ):
             continue
         if layer and entry.get("layer") != layer:
             continue
@@ -1278,7 +1342,10 @@ def catalog_overview_summary(
     *,
     limit: int = 3,
 ) -> dict[str, Any]:
-    visible = [entry for entry in index["entries"] if entry["status"] == "active"]
+    visible = [
+        entry for entry in index["entries"]
+        if entry["status"] == "active" and is_current_knowledge(entry)
+    ]
     all_temporaries = [
         {
             "memory_id": entry["memory_id"],
@@ -1705,6 +1772,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     search.add_argument("--binding")
     search.add_argument("--limit", type=int, default=5)
     search.add_argument("--no-refresh", action="store_true")
+    search.add_argument("--include-inactive", action="store_true")
 
     overview = subparsers.add_parser("overview", parents=[common])
     overview.add_argument("--format", choices=("text", "json"), default="text")
@@ -1821,6 +1889,7 @@ def main(argv: list[str] | None = None) -> int:
                 contexts=args.context,
                 binding=args.binding,
                 limit=args.limit,
+                include_inactive=args.include_inactive,
             )
             print(
                 json.dumps(
@@ -1845,7 +1914,9 @@ def main(argv: list[str] | None = None) -> int:
             None,
         )
         if entry is not None:
-            if entry["status"] != "active" and not args.include_inactive:
+            if (
+                entry["status"] != "active" or not is_current_knowledge(entry)
+            ) and not args.include_inactive:
                 raise CatalogError(f"Memory '{args.memory_id}' is unavailable")
             print(
                 json.dumps(

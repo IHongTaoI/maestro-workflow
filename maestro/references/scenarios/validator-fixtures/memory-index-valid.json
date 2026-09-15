@@ -17,7 +17,10 @@
       "aliases": [],
       "search_hints": [],
       "updated_at": "2026-09-01T06:29:00Z",
-      "stale": null
+      "stale": null,
+      "valid_from": null,
+      "valid_until": null,
+      "temporal_state": "timeless"
     }
   ],
   "pending_followups": []

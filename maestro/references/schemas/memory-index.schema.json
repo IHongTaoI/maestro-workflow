@@ -120,6 +120,17 @@
         },
         "stale": {
           "type": ["boolean", "null"]
+        },
+        "valid_from": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "temporal_state": {
+          "enum": ["timeless", "not-yet-valid", "current", "expired"]
         }
       },
       "allOf": [
@@ -129,12 +140,16 @@
             "required": ["layer"]
           },
           "then": {
+            "required": ["valid_from", "valid_until", "temporal_state"],
             "properties": {
               "record_type": { "const": "long-term-entry" },
               "memory_kind": {
                 "enum": ["fact", "experience", "principle", "decision", "constraint", "other"]
               },
-              "stale": { "type": "null" }
+              "stale": { "type": "null" },
+              "valid_from": { "type": ["string", "null"], "format": "date-time" },
+              "valid_until": { "type": ["string", "null"], "format": "date-time" },
+              "temporal_state": { "enum": ["timeless", "not-yet-valid", "current", "expired"] }
             }
           }
         },

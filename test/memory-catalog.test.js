@@ -245,6 +245,69 @@ test('rejects decision context on a non-decision Long-term entry', async (t) => 
   assert.match(failure.stderr, /decision_context.*only.*decision/);
 });
 
+test('derives Long-term temporal states and hides non-current knowledge by default', async (t) => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-temporal-'));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await writeProjectFile(projectRoot, '.maestro/evidence/source.md', '# Evidence\n');
+  const entries = [
+    { entry_id: 'lt-timeless', title: 'Policy window timeless', memory_kind: 'fact', content: 'Timeless policy window.', source_refs: ['.maestro/evidence/source.md'], status: 'active' },
+    { entry_id: 'lt-future', title: 'Policy window future', memory_kind: 'constraint', content: 'Future policy window.', source_refs: ['.maestro/evidence/source.md'], status: 'active', valid_from: '2026-09-11T00:00:00Z' },
+    { entry_id: 'lt-current', title: 'Policy window current', memory_kind: 'fact', content: 'Current policy window.', source_refs: ['.maestro/evidence/source.md'], status: 'active', valid_from: '2026-09-01T00:00:00+08:00', valid_until: '2026-09-11T00:00:00+08:00' },
+    { entry_id: 'lt-expired', title: 'Policy window expired', memory_kind: 'fact', content: 'Expired policy window.', source_refs: ['.maestro/evidence/source.md'], status: 'active', valid_until: '2026-09-10T12:00:00Z' },
+  ];
+  for (const entry of entries) {
+    await writeProjectFile(projectRoot, `.maestro/memory/long-term/entries/${entry.entry_id}.md`, entryFile(entry));
+  }
+  const expiredPath = path.join(projectRoot, '.maestro/memory/long-term/entries/lt-expired.md');
+  const expiredBefore = await readFile(expiredPath, 'utf8');
+
+  await runCatalog(projectRoot, ['build']);
+  const index = JSON.parse(await readFile(path.join(projectRoot, '.maestro/memory/index.json'), 'utf8'));
+  assert.deepEqual(Object.fromEntries(index.entries.map((entry) => [entry.memory_id, entry.temporal_state])), {
+    'lt-current': 'current',
+    'lt-expired': 'expired',
+    'lt-future': 'not-yet-valid',
+    'lt-timeless': 'timeless',
+  });
+
+  const search = JSON.parse((await runCatalog(projectRoot, ['search', 'policy window'])).stdout);
+  assert.deepEqual(search.candidates.map((entry) => entry.memory_id).sort(), ['lt-current', 'lt-timeless']);
+  const auditSearch = JSON.parse((await runCatalog(projectRoot,
+    ['search', 'policy window', '--include-inactive'])).stdout);
+  assert.equal(auditSearch.candidates.length, 4);
+  assert.equal(auditSearch.candidates.find((entry) => entry.memory_id === 'lt-expired').temporal_state, 'expired');
+
+  const recent = JSON.parse((await runCatalog(projectRoot, ['recent', '--layer', 'long-term'])).stdout);
+  assert.deepEqual(recent.entries.map((entry) => entry.memory_id).sort(), ['lt-current', 'lt-timeless']);
+  const overview = JSON.parse((await runCatalog(projectRoot, ['overview', '--format', 'json'])).stdout);
+  assert.equal(overview.long_term_count, 2);
+  const hidden = await rejectedCommand(runCatalog(projectRoot, ['show', 'lt-expired']));
+  assert.match(hidden.stderr, /unavailable/);
+  const audited = JSON.parse((await runCatalog(projectRoot,
+    ['show', 'lt-expired', '--include-inactive'])).stdout);
+  assert.equal(audited.memory.temporal_state, 'expired');
+  assert.equal(await readFile(expiredPath, 'utf8'), expiredBefore);
+});
+
+test('rejects invalid Long-term validity fields', async (t) => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-temporal-invalid-'));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  await writeProjectFile(projectRoot, '.maestro/evidence/source.md', '# Evidence\n');
+  const base = { title: 'Invalid validity', content: 'Invalid.', source_refs: ['.maestro/evidence/source.md'], status: 'active' };
+  const cases = [
+    [{ ...base, entry_id: 'lt-no-zone', memory_kind: 'fact', valid_from: '2026-09-10T00:00:00' }, /valid_from.*timezone/],
+    [{ ...base, entry_id: 'lt-reversed', memory_kind: 'constraint', valid_from: '2026-09-11T00:00:00Z', valid_until: '2026-09-10T00:00:00Z' }, /valid_from.*earlier/],
+    [{ ...base, entry_id: 'lt-wrong-kind', memory_kind: 'principle', valid_until: '2026-09-10T00:00:00Z' }, /allowed only.*fact.*constraint/],
+  ];
+  for (const [entry, message] of cases) {
+    const target = `.maestro/memory/long-term/entries/${entry.entry_id}.md`;
+    await writeProjectFile(projectRoot, target, entryFile(entry));
+    const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
+    assert.match(failure.stderr, message);
+    await rm(path.join(projectRoot, ...target.split('/')));
+  }
+});
+
 test('indexes split Long-term files and updates one entry without rewriting another', async (t) => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'maestro-memory-split-'));
   t.after(() => rm(projectRoot, { recursive: true, force: true }));
@@ -1041,5 +1104,4 @@ test('overview discovers recoverable checkpoints and marks has_active_work even 
   assert.match(textOutput, /binding: task-recovery/);
   assert.match(textOutput, /revision: 3/);
 });
-
 

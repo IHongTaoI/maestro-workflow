@@ -129,6 +129,8 @@
           "enum": ["none", "pending-confirmation", "confirmed"]
         },
         "content": { "type": "string", "minLength": 1 },
+        "valid_from": { "type": "string", "format": "date-time" },
+        "valid_until": { "type": "string", "format": "date-time" },
         "decision_context": { "$ref": "#/$defs/decisionContext" },
         "rationale": { "type": "string", "minLength": 1 },
         "source": { "$ref": "#/$defs/source" },
@@ -157,6 +159,20 @@
             "required": ["memory_kind"]
           },
           "then": { "properties": { "decision_context": false } }
+        },
+        {
+          "if": {
+            "properties": {
+              "memory_kind": { "not": { "enum": ["fact", "constraint"] } }
+            },
+            "required": ["memory_kind"]
+          },
+          "then": {
+            "properties": {
+              "valid_from": false,
+              "valid_until": false
+            }
+          }
         },
         {
           "if": { "properties": { "action": { "const": "CREATE" } }, "required": ["action"] },
