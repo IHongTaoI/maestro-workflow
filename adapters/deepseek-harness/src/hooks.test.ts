@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -37,6 +38,19 @@ function makeCtx() {
 }
 
 const payload: TurnStopPayload = { agent: {} as never, turn: 1, signal: new AbortController().signal }
+
+function buildCatalog(projectRoot: string): void {
+  const script = path.resolve(process.cwd(), '../../maestro/scripts/memory_catalog.py')
+  const candidates = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python']
+  for (const python of candidates) {
+    const result = spawnSync(python, [script, '--project-root', projectRoot, 'build'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    })
+    if (result.status === 0) return
+  }
+  throw new Error('test fixture could not build Memory Catalog')
+}
 
 function autoFixture(contextWindow = 1000) {
   const events: any[] = [
@@ -302,6 +316,7 @@ created_at: 2026-09-12T10:00:00Z
 source_refs:
   - .maestro/tasks/task-1/task.yaml
 `)
+  buildCatalog(tmp)
 
   const result = await loadBoundedRuntimeContext(tmp)
   assert.ok(result)
@@ -331,6 +346,7 @@ updated_at: 2026-09-12T10:00:00Z
 updated_by: old-zhou/test
 revision: 1
 `)
+  buildCatalog(tmp)
 
   const f = autoFixture()
   ;(f.agent as unknown as { session: { header: { cwd: string } } }).session.header.cwd = tmp
@@ -355,6 +371,7 @@ test('injectSessionRuntimeContext binds each session to its own project cwd', as
     const taskDir = path.join(root, '.maestro/tasks', id)
     await mkdir(taskDir, { recursive: true })
     await writeFile(path.join(taskDir, 'task.yaml'), `id: ${id}\nobjective: ${id}\nstatus: active\ncreated_at: 2026-09-14T00:00:00Z\nupdated_at: 2026-09-14T00:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n`)
+    buildCatalog(root)
   }
 
   const sessionA = autoFixture()
@@ -437,7 +454,7 @@ test('loadBoundedRuntimeContext discovers recoverable checkpoint and returns con
   assert.doesNotMatch(committedResult, /proposed_revision/)
 })
 
-test('loadBoundedRuntimeContext rebuilds missing index when authoritative task exists', async (t) => {
+test('loadBoundedRuntimeContext does not rebuild a missing index during session start', async (t) => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-rebuild-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
 
@@ -456,52 +473,53 @@ revision: 1
   assert.ok(result)
   assert.match(result, /# Memory Overview \(Runtime Context\)/)
   assert.match(result, /当前检测到项目存在活动工作/)
-  assert.match(result, /## Active Tasks \(1\)/)
-  assert.match(result, /task-live/)
+  assert.match(result, /启动时没有可用的 Catalog 快照/)
+  assert.match(result, /## Active Tasks \(0\)/)
 
-  // Assert index was written
+  // SessionStart must not create the derived index.
   const indexPath = path.join(tmp, '.maestro/memory/index.json')
-  const content = await readFile(indexPath, 'utf8')
-  assert.ok(content)
+  await assert.rejects(readFile(indexPath, 'utf8'), /ENOENT/)
 })
 
-test('loadBoundedRuntimeContext refreshes stale index when authoritative task changed', async (t) => {
+test('loadBoundedRuntimeContext uses a valid cached snapshot without scanning new sources', async (t) => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-stale-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
 
-  const taskDir = path.join(tmp, '.maestro/tasks/task-live-new')
-  await mkdir(taskDir, { recursive: true })
-  await writeFile(path.join(taskDir, 'task.yaml'), `id: task-live-new
-objective: Brand new active task
+  const oldTaskDir = path.join(tmp, '.maestro/tasks/task-cached')
+  await mkdir(oldTaskDir, { recursive: true })
+  await writeFile(path.join(oldTaskDir, 'task.yaml'), `id: task-cached
+objective: Cached active task
 status: active
 created_at: 2026-09-12T10:00:00Z
 updated_at: 2026-09-12T10:00:00Z
 updated_by: old-zhou/test
 revision: 1
 `)
+  buildCatalog(tmp)
 
-  await mkdir(path.join(tmp, '.maestro/memory'), { recursive: true })
-  await writeFile(path.join(tmp, '.maestro/memory/index.json'), JSON.stringify({
-    schema_version: 1,
-    generated_at: '2026-09-01T00:00:00Z',
-    source_digest: 'obsolete',
-    entries: [
-      { memory_id: 'task-obsolete', title: 'Old obsolete task', record_type: 'task', status: 'active' },
-    ],
-    pending_followups: [],
-  }))
+  const newTaskDir = path.join(tmp, '.maestro/tasks/task-live-new')
+  await mkdir(newTaskDir, { recursive: true })
+  await writeFile(path.join(newTaskDir, 'task.yaml'), `id: task-live-new
+objective: Brand new active task
+status: active
+created_at: 2026-09-12T11:00:00Z
+updated_at: 2026-09-12T11:00:00Z
+updated_by: old-zhou/test
+revision: 1
+`)
 
   const result = await loadBoundedRuntimeContext(tmp)
   assert.ok(result)
-  assert.match(result, /task-live-new/)
-  assert.doesNotMatch(result, /task-obsolete/)
+  assert.match(result, /启动时使用现有 Catalog 快照/)
+  assert.match(result, /task-cached/)
+  assert.doesNotMatch(result, /task-live-new/)
 
-  const refreshed = JSON.parse(await readFile(path.join(tmp, '.maestro/memory/index.json'), 'utf8'))
-  assert.ok(refreshed.entries.some((e: any) => e.memory_id === 'task-live-new'))
-  assert.ok(!refreshed.entries.some((e: any) => e.memory_id === 'task-obsolete'))
+  const cached = JSON.parse(await readFile(path.join(tmp, '.maestro/memory/index.json'), 'utf8'))
+  assert.ok(cached.entries.some((e: any) => e.memory_id === 'task-cached'))
+  assert.ok(!cached.entries.some((e: any) => e.memory_id === 'task-live-new'))
 })
 
-test('loadBoundedRuntimeContext with fs does not bypass freshness/rebuild when authoritative task exists', async (t) => {
+test('loadBoundedRuntimeContext with fs still avoids rebuilding during session start', async (t) => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-fs-rebuild-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
 
@@ -528,13 +546,11 @@ revision: 1
   assert.ok(result)
   assert.match(result, /# Memory Overview \(Runtime Context\)/)
   assert.match(result, /当前检测到项目存在活动工作/)
-  assert.match(result, /## Active Tasks \(1\)/)
-  assert.match(result, /task-with-fs/)
+  assert.match(result, /启动时没有可用的 Catalog 快照/)
 
-  // Assert index was written even though fs was passed
+  // The optional fs service does not permit startup to create the index.
   const indexPath = path.join(tmp, '.maestro/memory/index.json')
-  const content = await readFile(indexPath, 'utf8')
-  assert.ok(content)
+  await assert.rejects(readFile(indexPath, 'utf8'), /ENOENT/)
 })
 
 test('loadBoundedRuntimeContext does not consume stale index when refresh/rebuild fails and outputs degraded warning', async (t) => {
@@ -584,7 +600,7 @@ revision: 1
   assert.doesNotMatch(result, /Stale task that must not be consumed/)
 
   // Explicit degraded warning MUST be output
-  assert.match(result, /警告：检测到项目存在 Maestro 权威工作源，但 Memory Catalog 缺失或刷新失败/)
+  assert.match(result, /警告：检测到项目存在 Maestro 权威工作源，但启动时没有可用的 Catalog 快照/)
 
   // Authoritative checkpoint MUST still be presented
   assert.match(result, /## Recoverable Checkpoint/)
@@ -593,5 +609,4 @@ revision: 1
   assert.match(result, /binding: task-dsh-current/)
   assert.match(result, /revision: 1/)
 })
-
 

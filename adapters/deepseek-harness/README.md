@@ -130,7 +130,9 @@ export function apply(ctx, config) {
 | agent registry | `ctx.agents` | 启用 `hooks`（session 生命周期） | 降级：不监听 agent 事件 |
 
 Session 启动时，Adapter 只通过 DSH 的非唤醒 `agent.inject()` 排队一份有界运行时概览；它会随
-用户下一次真实请求进入上下文，但不会因为项目存在 `.maestro/` 状态而自行开启模型轮次。
+用户下一次真实请求进入上下文，但不会因为项目存在 `.maestro/` 状态而自行开启模型轮次。启动 Hook
+只读取并验证已有 Catalog 快照，不扫描或重建项目状态；具体请求需要记忆时，由 Core 的有界
+`search` / `show` 流程刷新并确认最新内容。
 
 降级到纯 skill 模式时，Maestro Core 仍可用——只是锁 / 原子写 / 校验由模型自行按 Core 里的
 文字协议执行，可靠性下降但不丢失功能。这对应 Issue #14 的「无 Plugin 也必须能运行」。
