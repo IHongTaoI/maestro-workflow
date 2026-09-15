@@ -44,14 +44,18 @@ function autoFixture(contextWindow = 1000) {
     { seq: 1, type: 'assistant/message', data: { usage: { inputTokens: 750, outputTokens: 100 } } },
   ]
   const steered: any[] = []
+  const injected: any[] = []
   const agent = {
     session: { header: { cwd: process.cwd() }, events, requestContext: () => ({ contextWindow }) },
     steer(message: any) {
       steered.push(message)
       events.push({ seq: events.length, type: 'user/message', data: message })
     },
+    inject(message: any) {
+      injected.push(message)
+    },
   }
-  return { events, steered, agent: agent as never }
+  return { events, steered, injected, agent: agent as never }
 }
 
 test('registerLifecycleHooks registers nothing when no handler is given', () => {
@@ -313,8 +317,8 @@ source_refs:
   assert.match(result, /## Long-term Memory \(1 项已索引\)/)
 })
 
-test('injectSessionRuntimeContext steers agent with bounded runtime context on session start', async (t) => {
-  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-steer-'))
+test('injectSessionRuntimeContext queues non-waking bounded context on session start', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-inject-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))
 
   const taskDir = path.join(tmp, '.maestro/tasks/task-active')
@@ -332,12 +336,13 @@ revision: 1
   ;(f.agent as unknown as { session: { header: { cwd: string } } }).session.header.cwd = tmp
   const injected = await injectSessionRuntimeContext({ agent: f.agent })
   assert.equal(injected, true)
-  assert.equal(f.steered.length, 1)
-  const steeredMsg = f.steered[0]
-  assert.equal(steeredMsg.source?.kind, 'plugin')
-  assert.equal(steeredMsg.source?.plugin, 'maestro-runtime-context')
-  assert.match(steeredMsg.content[0].text, /task-active/)
-  assert.match(steeredMsg.content[0].text, /Work in progress/)
+  assert.equal(f.steered.length, 0, 'session startup must not wake an idle agent')
+  assert.equal(f.injected.length, 1)
+  const injectedMsg = f.injected[0]
+  assert.equal(injectedMsg.source?.kind, 'plugin')
+  assert.equal(injectedMsg.source?.plugin, 'maestro-runtime-context')
+  assert.match(injectedMsg.content[0].text, /task-active/)
+  assert.match(injectedMsg.content[0].text, /Work in progress/)
 })
 
 test('injectSessionRuntimeContext binds each session to its own project cwd', async (t) => {
@@ -359,10 +364,11 @@ test('injectSessionRuntimeContext binds each session to its own project cwd', as
 
   assert.equal(await injectSessionRuntimeContext({ agent: sessionA.agent }), true)
   assert.equal(await injectSessionRuntimeContext({ agent: sessionB.agent }), true)
-  assert.match(sessionA.steered[0].content[0].text, /task-a/)
-  assert.doesNotMatch(sessionA.steered[0].content[0].text, /task-b/)
-  assert.match(sessionB.steered[0].content[0].text, /task-b/)
-  assert.doesNotMatch(sessionB.steered[0].content[0].text, /task-a/)
+  assert.equal(sessionA.steered.length + sessionB.steered.length, 0)
+  assert.match(sessionA.injected[0].content[0].text, /task-a/)
+  assert.doesNotMatch(sessionA.injected[0].content[0].text, /task-b/)
+  assert.match(sessionB.injected[0].content[0].text, /task-b/)
+  assert.doesNotMatch(sessionB.injected[0].content[0].text, /task-a/)
 })
 
 test('injectSessionRuntimeContext does not fall back to the DSH launch cwd', async () => {
@@ -370,6 +376,7 @@ test('injectSessionRuntimeContext does not fall back to the DSH launch cwd', asy
   ;(f.agent as unknown as { session: { header: { cwd?: string } } }).session.header.cwd = undefined
   assert.equal(await injectSessionRuntimeContext({ agent: f.agent }), false)
   assert.equal(f.steered.length, 0)
+  assert.equal(f.injected.length, 0)
 })
 
 test('loadBoundedRuntimeContext discovers recoverable checkpoint and returns context even without active tasks', async (t) => {
@@ -586,6 +593,5 @@ revision: 1
   assert.match(result, /binding: task-dsh-current/)
   assert.match(result, /revision: 1/)
 })
-
 
 

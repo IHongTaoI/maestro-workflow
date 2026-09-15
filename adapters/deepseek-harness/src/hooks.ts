@@ -412,7 +412,9 @@ export async function loadBoundedRuntimeContext(
 }
 
 /**
- * Inject bounded Runtime Context into an agent session on startup if active work exists.
+ * Queue bounded Runtime Context for the next real agent request if active work exists.
+ * `agent.inject()` is intentionally non-waking: session startup must not create
+ * an autonomous model turn merely because a project has Maestro state.
  * Returns true if context was injected, false otherwise.
  */
 export async function injectSessionRuntimeContext(
@@ -425,7 +427,7 @@ export async function injectSessionRuntimeContext(
   if (typeof projectRoot !== 'string' || !path.isAbsolute(projectRoot)) return false
   const runtimeContext = await loadBoundedRuntimeContext(projectRoot, fs)
   if (!runtimeContext) return false
-  payload.agent.steer(createUserMessage({
+  payload.agent.inject(createUserMessage({
     content: [{
       type: 'text',
       text: runtimeContext,

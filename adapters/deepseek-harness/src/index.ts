@@ -123,7 +123,8 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
     ctx.logger.info('maestro-adapter: checkpoint waiting for filesystem service')
   }
 
-  // Lifecycle hooks: agent registry provides session-start Runtime Context and optional turn-stopping checkpoint fallback
+  // Lifecycle hooks: agent registry queues non-waking session-start Runtime Context
+  // and provides the optional turn-stopping checkpoint fallback.
   ctx.inject(['agents'], (ctx) => {
     const coordinator = autoCheckpoint !== undefined ? new AutoCheckpointCoordinator(autoCheckpoint) : undefined
     const pressureUnavailable = new WeakSet<object>()
@@ -132,7 +133,7 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
         const fs = ctx.get('fs') as FileSystem | undefined
         const injected = await injectSessionRuntimeContext(payload, fs as never)
         if (injected) {
-          ctx.logger.info('maestro-adapter: injected bounded runtime context into session')
+          ctx.logger.info('maestro-adapter: queued non-waking bounded runtime context for session')
         }
       },
       onTurnStopping: coordinator ? (payload) => {
@@ -149,7 +150,7 @@ export async function apply(ctx: Context, config: AdapterConfig = {}): Promise<v
       } : undefined,
     }, { timeoutMs: autoCheckpoint?.timeoutMs })
     ctx.logger.info(
-      'maestro-adapter: lifecycle hooks registered (session-start runtime context; ' +
+      'maestro-adapter: lifecycle hooks registered (non-waking session-start runtime context; ' +
       (coordinator ? `turn-stopping fallback threshold=${coordinator.threshold})` : 'turn-stopping disabled)'),
     )
   })
