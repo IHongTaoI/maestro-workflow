@@ -129,6 +129,9 @@ export function apply(ctx, config) {
 | filesystem | `ctx.fs` | 启用 `storage`（锁 + CAS 写） | 降级：Core 按 `storage.md` 文字协议自行用文件工具 |
 | agent registry | `ctx.agents` | 启用 `hooks`（session 生命周期） | 降级：不监听 agent 事件 |
 
+Session 启动时，Adapter 只通过 DSH 的非唤醒 `agent.inject()` 排队一份有界运行时概览；它会随
+用户下一次真实请求进入上下文，但不会因为项目存在 `.maestro/` 状态而自行开启模型轮次。
+
 降级到纯 skill 模式时，Maestro Core 仍可用——只是锁 / 原子写 / 校验由模型自行按 Core 里的
 文字协议执行，可靠性下降但不丢失功能。这对应 Issue #14 的「无 Plugin 也必须能运行」。
 
