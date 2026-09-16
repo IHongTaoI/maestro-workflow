@@ -382,7 +382,7 @@ export async function recoveryContext(event) {
       if (JSON.stringify(paths).length > 1600) throw new Error('Project paths exceed context limit');
       const additionalContext = [
         '检测到有效的 Maestro 项目状态。只有当前请求明确使用 Maestro 或继续 Maestro 工作时才应用本提醒；项目状态本身不会激活任务。',
-        '执行 Maestro 工作时：老周是唯一预置、直接面向用户的角色。使用简洁大白话，先报告结果和决策；常规代码搜索、实施细节和命令过程留在有界 Worker 内。没有明确实施意图时，探索保持为 Temporary。',
+        '执行 Maestro 工作时：小涛是唯一预置、直接面向用户的角色。使用简洁大白话，先报告结果和决策；常规代码搜索、实施细节和命令过程留在有界 Worker 内。没有明确实施意图时，探索保持为 Temporary。',
         '委派必须明确目标、上下文、工具、路径、权限和 Handoff。不得推断继承权限，也不得声称拥有实际不存在的隔离能力。等待运行中的 Worker；除非已取消、重新分配或终态失败，不得重复执行或接管。',
         '有界 Maestro Worker 应使用当前可见的 Codex 原生 subagent 能力，例如工具可见时使用 spawn_agent；不得用 create_thread 或其他独立任务 API 替代。',
         'Memory Worker 仅限使用只读工具，输出严格限定为 UPDATE/MERGE/CREATE/SKIP 候选提案，严禁自我批准或直接改写正式 Long-term 或 Playbook。当前环境缺乏原生隔离能力时，如实降级为 In-Session Fallback 并标记，严禁虚报独立派工。',

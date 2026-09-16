@@ -45,10 +45,10 @@ test('generated Worker examples use task-specific Chinese display names', async 
   }
 });
 
-test('Maestro entry point exposes only Old Zhou and ships no fixed role files', async () => {
+test('Maestro entry point exposes only Xiao Tao and ships no fixed role files', async () => {
   const skill = await readFile('maestro/SKILL.md', 'utf8');
   assert.doesNotMatch(skill, /\]\(references\/roles\//);
-  assert.match(skill, /老周（Old Zhou）.*唯一预置、直接面向用户的角色/);
+  assert.match(skill, /小涛（Xiao Tao）.*唯一预置、直接面向用户的角色/);
   await assert.rejects(access('maestro/references/roles'), { code: 'ENOENT' });
 });
 

@@ -25,8 +25,8 @@ test('Core Guard markdown file defines the 4 invariant boundaries and satisfies 
   );
 
   // Four invariant boundaries
-  // 1. Role (老周作为唯一预置、大白话、结果优先)
-  assert.match(canonicalPrompt, /老周.*唯一预置.*面向用户/);
+  // 1. Role (小涛作为唯一预置、大白话、结果优先)
+  assert.match(canonicalPrompt, /小涛.*唯一预置.*面向用户/);
   assert.match(canonicalPrompt, /大白话/);
   assert.match(canonicalPrompt, /先报结论|结果和决策/);
 
@@ -127,7 +127,7 @@ test('Codex SessionStart reminder satisfies Core Guard invariants and length bud
   assert.ok(context.length < 2500, `Context length (${context.length}) must be < 2500 characters`);
 
   // Role
-  assert.match(context, /老周是唯一预置、直接面向用户的角色/);
+  assert.match(context, /小涛是唯一预置、直接面向用户的角色/);
   assert.match(context, /简洁大白话/);
 
   // Authorization

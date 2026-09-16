@@ -72,7 +72,7 @@ test('Codex maps bounded Workers to native subagents without conflating separate
   assert.match(context, /只有用户明确要求时.*独立 Codex task 或 conversation/);
   assert.match(context, /工具侧标识.*当前可见工具 schema/);
   assert.match(context, /针对任务的中文 Worker 名称/);
-  assert.match(context, /老周是唯一预置、直接面向用户的角色/);
+  assert.match(context, /小涛是唯一预置、直接面向用户的角色/);
   assert.match(context, /常规代码搜索.*留在有界 Worker 内/);
 });
 
@@ -120,7 +120,7 @@ objective: Restore through user Core
 status: active
 created_at: 2026-09-15T00:00:00Z
 updated_at: 2026-09-15T00:00:00Z
-updated_by: old-zhou/test
+updated_by: xiao-tao/test
 revision: 1
 `);
   await cp(coreScripts, path.join(homeDir, '.codex/skills/maestro/scripts'), { recursive: true });
@@ -279,15 +279,15 @@ test('Codex injects bounded live Runtime Context when active Task, Temporary, or
   await project(root);
 
   await put(root, '.maestro/evidence/rules.md', '# Rules\nSome rules.\n');
-  await put(root, '.maestro/tasks/task-cache/task.yaml', 'id: task-cache\nobjective: Implement caching layer\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
-  await put(root, '.maestro/tasks/task-auth/task.yaml', 'id: task-auth\nobjective: OAuth integration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
-  await put(root, '.maestro/tasks/task-ci/task.yaml', 'id: task-ci\nobjective: Setup CI pipelines\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
-  await put(root, '.maestro/tasks/task-db/task.yaml', 'id: task-db\nobjective: DB migration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
-  await put(root, '.maestro/memory/temporary/active/temp-investigate/meta.yaml', 'id: temp-investigate\ntopic: Investigate leak\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: old-zhou/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-cache/task.yaml', 'id: task-cache\nobjective: Implement caching layer\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-auth/task.yaml', 'id: task-auth\nobjective: OAuth integration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-ci/task.yaml', 'id: task-ci\nobjective: Setup CI pipelines\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
+  await put(root, '.maestro/tasks/task-db/task.yaml', 'id: task-db\nobjective: DB migration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
+  await put(root, '.maestro/memory/temporary/active/temp-investigate/meta.yaml', 'id: temp-investigate\ntopic: Investigate leak\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
   await put(root, '.maestro/memory/long-term/entries/lt-api-boundary.md', `---
 revision: 1
 updated_at: 2026-09-12T10:00:00Z
-updated_by: old-zhou/test
+updated_by: xiao-tao/test
 ---
 
 # Entry
@@ -346,7 +346,7 @@ objective: Live active task
 status: active
 created_at: 2026-09-12T10:00:00Z
 updated_at: 2026-09-12T10:00:00Z
-updated_by: old-zhou/test
+updated_by: xiao-tao/test
 revision: 1
 `);
 
@@ -375,7 +375,7 @@ objective: Freshly updated task
 status: active
 created_at: 2026-09-12T10:00:00Z
 updated_at: 2026-09-12T10:00:00Z
-updated_by: old-zhou/test
+updated_by: xiao-tao/test
 revision: 1
 `);
 
@@ -482,7 +482,7 @@ objective: Real current task
 status: active
 created_at: 2026-09-12T10:00:00Z
 updated_at: 2026-09-12T10:00:00Z
-updated_by: old-zhou/test
+updated_by: xiao-tao/test
 revision: 1
 `);
 

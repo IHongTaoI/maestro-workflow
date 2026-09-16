@@ -318,7 +318,7 @@ transaction bundle（即使已完成）时仍保守拒绝写入，空 transactio
 ### Core Guard 协议
 在长 Session、Turn Guard 或会话恢复时，避免重新注入完整的 `SKILL.md`（数千 tokens）和 references。
 适配器导出 `CANONICAL_CORE_GUARD_PROMPT`、`CORE_GUARD_MAX_CHARS`（1200 字符，约 250~300 tokens）以及校验辅助
-`validateCoreGuardText`。Core Guard 固化老周角色、显式授权、有界 Worker 提案约束和四层渐进检索四大不可逾越底线。
+`validateCoreGuardText`。Core Guard 固化小涛角色、显式授权、有界 Worker 提案约束和四层渐进检索四大不可逾越底线。
 
 ### Memory Worker 映射状态
 当前 DSH preview 版仅通过 `ctx.agents` 提供生命周期钩子，未暴露原生可隔离的 subagent 运行时。

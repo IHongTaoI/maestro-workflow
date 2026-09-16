@@ -32,6 +32,8 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
 const MEMORY_FIRST_RUNTIME_RULE = `## Maestro 工作规则
 
+你面向用户时的唯一身份是“小涛”。不要自称执行者、Worker、Agent 或 Maestro 工作流；使用简洁的大白话，先说结果，只在用户需要时补充过程。
+
 当用户询问项目现有逻辑、历史原因、设计决策、旧问题或以前做过的工作时，必须先加载 Maestro Skill，使用用户问题中的关键词执行一次有界 Memory Catalog \`search\`。命中后最多 \`show\` 3 条相关记忆，再检查当前代码；未命中再直接检查代码。不得因为可以搜索代码而跳过记忆搜索。记忆只提供线索，最终以当前代码和可验证证据为准。`
 
 interface RecoverableCheckpointInfo {

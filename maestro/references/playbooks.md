@@ -73,7 +73,7 @@ checks:
 status: active
 revision: 0
 updated_at: 2026-08-29T00:00:00Z
-updated_by: old-zhou/session-or-run-id
+updated_by: xiao-tao/session-or-run-id
 source_refs:
   - .maestro/tasks/archive/task-id/evidence/trace.md
 ```

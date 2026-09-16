@@ -12,13 +12,13 @@
         "ref": "contract:handoff",
         "source_scope": "core",
         "source_paths": ["references/handoffs.md"],
-        "sha256": "e63642e1135f63e33888fb378b45e27b3edcd9cf91e459dd99f3e4b193c3a100"
+        "sha256": "fee6f99345414bbcf8534cf7875e2533e65f15d4cd1155b280dce6d5d079ae6f"
       },
       {
         "ref": "policy:safety-boundary",
         "source_scope": "core",
         "source_paths": ["references/workers.md", "references/coordination.md"],
-        "sha256": "87131e0f13be85669614122228b23d2ed43fe6bebcbdb49aedfe3027952e76ca"
+        "sha256": "068751e781b88434bea9f2c31a091d2f4fadd9d3ad2a5d5baeebfe016d440fb7"
       }
     ]
   },
