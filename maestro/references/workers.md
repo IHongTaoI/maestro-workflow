@@ -3,9 +3,9 @@
 本参考用于描述工作能力、解析执行单元、组合 Worker、生成有界 Worker，或恢复已委派给 Worker
 的工作。
 
-## 老周与 Workers
+## 小涛与 Workers
 
-老周是唯一预置、直接面向用户的角色。Worker 描述一次委派所需的有界执行能力。新工作复用
+小涛是唯一预置、直接面向用户的角色。Worker 描述一次委派所需的有界执行能力。新工作复用
 经过评审的项目 Worker，或生成受生命周期约束的 Worker；不再选择固定组织角色。
 
 [内置 Worker 注册表](workers/builtin-registry.json) 保留为空的版本化协议标记。可复用 Worker
@@ -25,7 +25,7 @@ Worker 不会隐式继承父 Agent 的完整 Skill、指令、Session 历史、�
 - **能做什么**是当前委派中 `capabilities`、`responsibility`、`scope`、可用 `tools`、
   `context` 和有效 `permissions` 的交集。
 - **不能做什么**是交集以外的一切。尤其是，Worker 不能重新定义需求、扩大范围、批准自己的
-  提案、直接修改 Long-term Memory、把自己提升为可复用状态，或绕过老周和用户授权。
+  提案、直接修改 Long-term Memory、把自己提升为可复用状态，或绕过小涛和用户授权。
 - **必需输入**是 `inputs` 加上 Delegation Packet 中实体化的最小当前上下文。缺少必需输入会
   阻塞运行或使其降级；Worker 不得自行虚构。
 - **预期输出**是 `outputs` 加上适用的 Detailed Result 和 Handoff。输出只报告工作，不能授予
@@ -85,7 +85,7 @@ Worker，应询问用户或返回可见的 no-match 结果，不得猜测。
 记录需求、注册表版本、解析分类、选中的 Worker ID、快照路径或 ephemeral 标记、理由和阻塞项。
 使用 [worker-selection.schema.json](schemas/worker-selection.schema.json) 校验。将持久化结果作为
 不可变事件发布到 Task 或 Temporary 的 `worker-selections/` 目录。Session 作用域的一次性结果
-保留在当前 Session，不创建项目状态。解析器输出指导老周动态委派，不会创建强制工作流状态。
+保留在当前 Session，不创建项目状态。解析器输出指导小涛动态委派，不会创建强制工作流状态。
 
 ## 执行前生成快照
 
@@ -139,7 +139,7 @@ optional refs 的子集。开始 `supported` 或 `degraded` 运行前，每个 r
 一条已解析记录。Packet 可以缩小工具、上下文和权限，但不能超出 Worker 快照。拒绝重复的已
 解析 ref，或同时存在于 required 和 optional 集合的 ref。
 
-以老周或 Host Adapter 单独提供的不可变 Worker 快照为基准校验这些关系；绝不能从 Packet
+以小涛或 Host Adapter 单独提供的不可变 Worker 快照为基准校验这些关系；绝不能从 Packet
 单方面指定的不可信路径加载校验基准。交叉检查 Worker ID、required 和 optional refs、工具、
 自主与条件权限、每个注入的 `context_ref` 是否在 `context.read_paths` 内，以及 Detailed Result
 和 Handoff 路径是否在 `context.write_paths` 内。Packet 即使内部一致，只要超出任何快照边界也
@@ -191,7 +191,7 @@ conditional，必须在执行前按照 [coordination.md](coordination.md)，取�
 Core 声明指令、上下文、工具和权限协议，但不选择 subagent API。Host Adapter 将该协议解析为
 宿主原生 prompt、Skill、文件系统和工具控制，如实报告不支持的要求，并返回标准 Handoff。
 宿主不能强制执行 required 指令或有效权限边界时，不得声称 `supported`。如果宿主不提供可强制
-隔离的 subagent，老周可以在当前 Agent 上下文直接执行 Packet，但不得把该回退描述为独立
+隔离的 subagent，小涛可以在当前 Agent 上下文直接执行 Packet，但不得把该回退描述为独立
 Worker 运行。
 
 ### Memory Worker 原生宿主映射与回退边界
@@ -214,7 +214,7 @@ Memory Worker 是在持久边界（委派完成、Session Handoff、Temporary �
    - `autonomous` 权限严格限定为只读提取、语义比对并输出候选提案；
    - **严禁自我批准或直接修改正式 Long-term Memory 或 Playbooks**；
    - 输出必须符合 [memory-worker-response.schema.json](schemas/memory-worker-response.schema.json)，
-     动作仅限 `UPDATE`、`MERGE`、`CREATE`、`SKIP` 提案，必须经老周/强模型评审者或用户确认后才能提升。
+     动作仅限 `UPDATE`、`MERGE`、`CREATE`、`SKIP` 提案，必须经小涛/强模型评审者或用户确认后才能提升。
 4. **宿主原生映射规则**：
    - **Codex 映射**：宿主提供原生 subagent（如可用时的 `spawn_agent`）时，映射为原生独立 subagent；
      工具侧使用小写 snake_case 标识，面向用户使用简洁的中文名称（如“记忆整理员”或“经验审查员”）；
@@ -222,7 +222,7 @@ Memory Worker 是在持久边界（委派完成、Session Handoff、Temporary �
    - **DeepSeek Harness 等宿主映射**：若宿主仅提供生命周期 hooks 或文件/状态能力而缺乏独立 subagent 隔离运行时，
      必须如实报告原生 Memory Worker 为 `unsupported`，不得虚报隔离能力。
 5. **In-Session Fallback 回退协议**：
-   - 当宿主不支持可强制隔离的原生 subagent 时，老周（当前 Agent）在当前会话直接执行有界压缩；
+   - 当宿主不支持可强制隔离的原生 subagent 时，小涛（当前 Agent）在当前会话直接执行有界压缩；
    - **回退执行必须遵守完全相同的输入约束、只读工具约束、候选提案与禁止自我批准约束**；
    - 执行回执或 Handoff 中必须如实标记 `execution: in-session-fallback`，**绝不得虚报为独立 Worker 运行**；
    - 校验失败时重试一次；若两次仍失败，以 `.invalid.json` 保存于预期工件旁，原始请求存入 `memory/pending/`，

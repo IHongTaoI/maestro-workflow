@@ -1,6 +1,6 @@
 # 结果与 Handoff
 
-一次较大的 Worker 委派会产生三项工件。老周消费这些工件、判断证据，并且只告诉用户下一次
+一次较大的 Worker 委派会产生三项工件。小涛消费这些工件、判断证据，并且只告诉用户下一次
 决策所需的内容。
 
 ## Detailed Result
@@ -26,7 +26,7 @@ State。
 
 ## 轻量 Handoff
 
-只返回老周判断结果和决定下一步所需的内容：
+只返回小涛判断结果和决定下一步所需的内容：
 
 ```json
 {
@@ -47,7 +47,7 @@ State。
 
 下一步建议使用非空 `capabilities` 列表重新解析，绝不直接选择下一个 Worker，也不授予其权限。
 
-Worker 因等待用户而阻塞时，Handoff 携带老周需要询问的准确问题：
+Worker 因等待用户而阻塞时，Handoff 携带小涛需要询问的准确问题：
 
 ```json
 {
@@ -66,7 +66,7 @@ Worker 因等待用户而阻塞时，Handoff 携带老周需要询问的准确�
 }
 ```
 
-`needs_user_input: true` 要求 `status: blocked`，并至少包含一个简洁问题及其决策上下文。老周
+`needs_user_input: true` 要求 `status: blocked`，并至少包含一个简洁问题及其决策上下文。小涛
 可以直接依据 Handoff 提问，只有回答需要更多支撑细节时才读取 Detailed Result。`blocked`
 不代表一定需要用户输入：Worker 也可能正在等待其他依赖。当 `needs_user_input` 为 false 时，
 省略 `questions` 或使用空数组；不得沿用过期问题。
@@ -91,14 +91,14 @@ CLI 强制执行 [handoff.schema.json](schemas/handoff.schema.json)、可移植�
 `.maestro/memory/temporary/active/<temporary-id>/handoffs/`。Session 作用域工作不持久化
 Handoff。
 
-老周不应读取每个 Detailed Result。仅在 Worker 阻塞、结论冲突、决策所需细节超过结构化问题、
+小涛不应读取每个 Detailed Result。仅在 Worker 阻塞、结论冲突、决策所需细节超过结构化问题、
 用户要求查看分析，或其他 Worker 需要来源时读取。
 
-在 Worker 之间直接传递路径，不要让完整结果反复经过老周的上下文。
+在 Worker 之间直接传递路径，不要让完整结果反复经过小涛的上下文。
 
 ## 面向用户的结果
 
-老周先说结论，并且只包含适用的内容：
+小涛先说结论，并且只包含适用的内容：
 
 - 结果；
 - 验证或证据路径；

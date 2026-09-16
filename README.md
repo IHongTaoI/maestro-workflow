@@ -3,7 +3,7 @@
 Maestro 是面向结果的软件协作 Agent Skill。一个小型 npm CLI 会把同一份 Skill Core 安装到各个
 受支持 AI 编码宿主所需的项目本地目录。
 
-用户只和 **老周（Old Zhou）** 对话，他是 Maestro 唯一预置角色。老周理解目标，把技术工作
+用户只和 **小涛（Xiao Tao）** 对话，他是 Maestro 唯一预置角色。小涛理解目标，把技术工作
 委派给按能力选择的项目 Worker 或动态生成的 Worker，判断其证据，再用大白话报告结果。Maestro
 通过项目内的 Temporary、Task 和 Long-term 三层 Memory 延续工作，不强迫所有请求经过固定流程。
 
@@ -156,18 +156,18 @@ CLI 只负责安装、更新和诊断。它绝不调度 Worker、解释 Memory�
 使用 Maestro 帮我分析这个项目的启动性能问题。
 ```
 
-或者直接叫老周：
+或者直接叫小涛：
 
 ```text
-老周，我想先讨论一下新架构，暂时不要正式开工。
+小涛，我想先讨论一下新架构，暂时不要正式开工。
 ```
 
 用户不需要选择专家：
 
 ```text
-老周，评审一下这个设计，只告诉我主要风险和建议。
-老周，调查当前调用链，先不要改代码。
-老周，按刚才确定的方案开始修改。
+小涛，评审一下这个设计，只告诉我主要风险和建议。
+小涛，调查当前调用链，先不要改代码。
+小涛，按刚才确定的方案开始修改。
 ```
 
 能力路由可以复用或组合 `.maestro/workers/registry.yaml` 中的 Workers；没有安全的可复用匹配时，
@@ -202,7 +202,7 @@ Activity Timeline 从带有可靠 `completed_at` 的 Task、带有 `promoted_at`
 以及带有 `decided_at` 的里程碑级不可变 Decision Record 与 Playbook 评审记录
 （`playbooks/decisions/`）派生，回答“某段时间完成了什么、晋升了什么、做过哪些关键决定、
 批准了哪些 Playbook”。它只生成本地可重建的
-`.maestro/activity/index.json`，不维护第二套事件日志。老周通过
+`.maestro/activity/index.json`，不维护第二套事件日志。小涛通过
 `maestro/scripts/activity_catalog.py search` 查询有限时间窗口，不把完整历史装入上下文。
 
 ## 手动行为检查

@@ -62,10 +62,10 @@
 禁止：把设计认可当作实施批准；创建正式 Task。
 ```
 
-## 自然地请求老周
+## 自然地请求小涛
 
 ```text
-用户：老周，评估一下这个模块边界，不要改代码，只给我结论和风险。
+用户：小涛，评估一下这个模块边界，不要改代码，只给我结论和风险。
 期望：把有界只读目标委派给项目或 Session 作用域 Worker；使用简洁的任务中文显示名；只有结果
      值得保留时才用 Temporary Memory。
 禁止：要求用户选择角色或能力；没有执行意图就提升为 Task。
@@ -76,7 +76,7 @@
 ```text
 前提：设计 Worker 不知道初始化顺序是否允许改变，因此无法在两个设计间选择。
 用户：保存一下，我换个 Session 继续。
-期望：持久化 status=blocked、needs_user_input=true 的轻量 Handoff；包含老周所需的准确问题和
+期望：持久化 status=blocked、needs_user_input=true 的轻量 Handoff；包含小涛所需的准确问题和
      原因；下一 Session 无需先打开 Detailed Result 就能提问。
 禁止：持久化没有 questions 的阻塞 Handoff；将 needs_user_input=true 与 completed、failed 或
      cancelled 状态组合；把完整 Detailed Result 复制到 Handoff。

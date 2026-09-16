@@ -140,7 +140,7 @@ id: project-workers
 source: project
 revision: 0
 updated_at: 2026-08-27T14:25:00Z
-updated_by: old-zhou/session-or-run-id
+updated_by: xiao-tao/session-or-run-id
 aliases: {}
 workers: []
 ```
@@ -212,7 +212,7 @@ topic: 首页启动性能
 status: active
 created_at: 2026-08-31T10:30:00Z
 updated_at: 2026-08-31T11:05:00Z
-updated_by: old-zhou/session-or-run-id
+updated_by: xiao-tao/session-or-run-id
 revision: 12
 aliases:
   - home startup performance
@@ -241,7 +241,7 @@ objective: 优化登录流程
 status: active
 created_at: 2026-08-31T12:00:00Z
 updated_at: 2026-08-31T12:03:00Z
-updated_by: old-zhou/session-or-run-id
+updated_by: xiao-tao/session-or-run-id
 revision: 1
 source_temporary: 20260831-登录流程梳理
 promotion_transaction: 20260831T120000Z-p7q8r9

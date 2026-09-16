@@ -32,7 +32,7 @@ Skill 的宿主）运行受影响场景；每次变更无需执行全部场景�
 
 准备：新建 Session；选择不需要检查代码的产品问题。
 
-Prompt：`老周，Maestro 会要求我选择固定角色吗？只简单回答，不保存状态。`
+Prompt：`小涛，Maestro 会要求我选择固定角色吗？只简单回答，不保存状态。`
 
 通过条件：Maestro 直接按 Core 规则回答；不创建 Temporary 或 Task；不打开任何
 `references/*.md`。
@@ -44,7 +44,7 @@ Prompt：`老周，Maestro 会要求我选择固定角色吗？只简单回答�
 
 Prompt：`帮我分析一下首页为什么启动慢，先不要改代码。`
 
-通过条件：原生有界 Worker 可用时，老周把详细调查委派出去，只报告有意义的发现；不修改产品
+通过条件：原生有界 Worker 可用时，小涛把详细调查委派出去，只报告有意义的发现；不修改产品
 代码，也不创建正式 Task。值得持久化时可以创建或恢复 Temporary。
 
 ### 3. 执行意图必须明确
@@ -59,7 +59,7 @@ Prompt：`帮我分析一下首页为什么启动慢，先不要改代码。`
 准备：新建 Session；确保项目已有有效且当前的 `.maestro/memory/manifest.md` 与 `index.json`，
 避免本场景触发 Catalog 重建。
 
-Prompt：`老周，当前项目有哪些记忆？只给我总览，不展开详情。`
+Prompt：`小涛，当前项目有哪些记忆？只给我总览，不展开详情。`
 
 通过条件：打开 `references/memory.md`；读取 `.maestro/memory/manifest.md`；不打开单个
 Long-term、Temporary 或 Task 详情；不创建或修改 Maestro 状态。
@@ -75,18 +75,18 @@ Long-term、Temporary 或 Task 详情；不创建或修改 Maestro 状态。
 
 ### 6. 允许运行中的 Worker 完成
 
-使用一个 Worker 已经运行的任务，然后询问老周进度。
+使用一个 Worker 已经运行的任务，然后询问小涛进度。
 
-通过条件：老周等待或报告状态；没有真实阻塞或用户明确指示时，不得中断 Worker 或接管其工作。
+通过条件：小涛等待或报告状态；没有真实阻塞或用户明确指示时，不得中断 Worker 或接管其工作。
 
-### 7. 老周创建任务特定 Worker
+### 7. 小涛创建任务特定 Worker
 
 准备：新建 Session；请求中提供足够设计上下文，使评审不依赖此前对话。
 
-Prompt：`老周，请评审这个设计：应用启动时同步读取本地配置文件。只给结论和主要风险，不实施、不保存状态。`
+Prompt：`小涛，请评审这个设计：应用启动时同步读取本地配置文件。只给结论和主要风险，不实施、不保存状态。`
 
 通过条件：Maestro 加载 `workers.md` 和 `coordination.md`；原生 sub-agent 可用时使用 Session
-作用域生成 Worker；Worker 有 Schema 安全内部 ID 和简洁的任务中文显示名；老周不暴露能力路由
+作用域生成 Worker；Worker 有 Schema 安全内部 ID 和简洁的任务中文显示名；小涛不暴露能力路由
 或常规调查步骤；不创建 Temporary 或 Task。
 
 失败条件：调用预置 Architect 角色、创建持久状态或叙述完整技术过程。
@@ -149,7 +149,7 @@ npm run dsh:audit:checkpoint
 
 依次验收：
 
-1. 在当前 Session 明确要求老周保存当前目标；确认模型实际调用 `maestro_checkpoint inspect` 后以同一
+1. 在当前 Session 明确要求小涛保存当前目标；确认模型实际调用 `maestro_checkpoint inspect` 后以同一
    base revision/hash 调用 `save`，并核对 Current State 只更新一个 managed checkpoint 区块。
 2. 使用相同 `request_id` 重试；应返回已提交且 revision 不再增加。随后产生新进展并使用新
    `request_id` 保存；旧请求不得吞掉新进展。
@@ -201,7 +201,7 @@ request_id、保存前后 revision、结果和失败恢复来源。不要记录�
    指向当前可达文件。
 4. 删除或损坏 `activity/index.json` 后可从 Task 重建；修改 Task 后 `check` 能识别缓存陈旧。
 5. `.maestro/activity/` 下不产生 `events/*.jsonl`，也不存在手工 `record` 流程。
-6. 老周使用 `activity_catalog.py search` 查询受限窗口，不直接加载完整 Index；只在需要详情时读取
+6. 小涛使用 `activity_catalog.py search` 查询受限窗口，不直接加载完整 Index；只在需要详情时读取
    少量 `source_refs`。
 7. 新建 `importance: milestone`、结果为 `approved` 或 `superseded` 的规范 Decision Record；查询
    分别返回 `decision_approved` 和 `decision_superseded`，时间只来自 `decided_at`，引用指向该记录。

@@ -27,7 +27,7 @@ Temporary Memory 表示正式 Task 之前值得保留的讨论。保持 `current
 ---
 revision: 12
 updated_at: 2026-08-27T11:05:00Z
-updated_by: old-zhou/session-or-run-id
+updated_by: xiao-tao/session-or-run-id
 ---
 
 # 主题
@@ -113,7 +113,7 @@ Long-term Memory 是维护中的经验库，不是 Task 记录归档。绝不要
 ---
 revision: 0
 updated_at: 2026-09-10T08:00:00Z
-updated_by: old-zhou/session-or-run-id
+updated_by: xiao-tao/session-or-run-id
 ---
 
 # Long-term Memory Entry
@@ -189,7 +189,7 @@ revision 保持不变；任一 ID 冲突都在写入前失败。迁移期间所�
 `"current_memory": {}` 的生产者必须迁移为
 `"current_memory": {"long_term_entries": []}`，否则请求校验失败。
 
-Memory Worker 输出只是候选。提升前，老周或强模型评审者必须验证其稳定、在当前 Task 之外仍有
+Memory Worker 输出只是候选。提升前，小涛或强模型评审者必须验证其稳定、在当前 Task 之外仍有
 价值，并有可达 `source_refs` 支撑。在 `memory/long-term/decisions/` 记录批准或拒绝；保留被拒绝
 候选，避免反复评审同一薄弱声明。
 
@@ -208,7 +208,7 @@ Memory Worker 输出只是候选。提升前，老周或强模型评审者必须
   "outcome": "approved",
   "importance": "milestone",
   "decided_at": "2026-09-11T10:00:00Z",
-  "decided_by": "old-zhou/session-or-run-id",
+  "decided_by": "xiao-tao/session-or-run-id",
   "reason": "让用户能按时间回顾关键取舍。",
   "target_ids": ["issue-54"],
   "source_refs": ["docs/plans/2026-09-10-activity-timeline-design.md"]
@@ -262,7 +262,7 @@ low-value 不指向目标。不得用 `CREATE` 逃避与现有主题比较。
 `source` 元数据包含 `type: temporary | task`、来源 ID、创建时间和可选的宿主 `workspace_id`。
 它有助于路由和审计，但不能替代 `source_refs`；可达来源文件才是权威证据。
 
-这些动作是提案，不是写入。Memory Worker 不能应用或批准。老周或强模型评审者要验证价值、
+这些动作是提案，不是写入。Memory Worker 不能应用或批准。小涛或强模型评审者要验证价值、
 稳定性、匹配目标和来源，可以改变提议动作，并在任何已批准更新使用可变状态协议前，发布不可变
 决策。
 
@@ -290,7 +290,7 @@ low-value 不指向目标。不得用 `CREATE` 逃避与现有主题比较。
 说法、删除其来源，或在已知矛盾未解决时仍作为当前事实。
 
 矛盾尚未验证时，在当前上下文把旧条目标为 disputed，并在本次决策中采用较高优先级证据。
-Memory Worker 可以提议 supersession，但必须由老周或强模型评审者批准。
+Memory Worker 可以提议 supersession，但必须由小涛或强模型评审者批准。
 
 冲突提案在证据验证前使用 `conflict_status: pending-confirmation`，矛盾本身验证后使用
 `confirmed`。两者在修改前都仍需评审。非冲突提案使用 `none`。不得为了通过校验而把 conflict
@@ -339,7 +339,7 @@ python <maestro-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 
 `overview` 默认检查 Catalog freshness，缺失或陈旧时自动重建。默认以 Markdown 文本形式返回
 `manifest.md` 内容；传入 `--format json` 时返回结构化摘要（包含活跃 Temporary、活跃 Task、各层
-计数与 `has_active_work` 标记）。这是老周形成初始 Runtime Context 的核心输入。
+计数与 `has_active_work` 标记）。这是小涛形成初始 Runtime Context 的核心输入。
 
 ### 最新记忆（recent）
 
@@ -456,7 +456,7 @@ revision 元数据和可达 `source_refs`，使 Worker 在提出新指导前比�
 `explicit-create` 可以使用 `bounded`，并且 `query`、`limit` 必填，`limit` 与实际条目数均不得超过
 3。其他持久边界继续使用 `full`，不能用轻量路径规避 UPDATE、MERGE 或冲突检查。
 
-用户明确的创建指令同时授权无冲突的 `CREATE`：Memory Worker 仍只输出候选，由老周独立校验、
+用户明确的创建指令同时授权无冲突的 `CREATE`：Memory Worker 仍只输出候选，由小涛独立校验、
 发布 Decision Record 并写入 entry，无需重复询问。duplicate 直接 `SKIP`；任何 conflict、UPDATE
 或 MERGE 都停止轻量写入并请求用户确认。
 

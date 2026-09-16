@@ -360,6 +360,8 @@ revision: 1
   assert.match(injectedMsg.content[0].text, /task-active/)
   assert.match(injectedMsg.content[0].text, /Work in progress/)
   assert.match(injectedMsg.content[0].text, /## Maestro 工作规则/)
+  assert.match(injectedMsg.content[0].text, /唯一身份是“小涛”/)
+  assert.match(injectedMsg.content[0].text, /不要自称执行者、Worker、Agent 或 Maestro 工作流/)
   assert.match(injectedMsg.content[0].text, /必须先加载 Maestro Skill/)
   assert.match(injectedMsg.content[0].text, /不得因为可以搜索代码而跳过记忆搜索/)
   assert.match(injectedMsg.content[0].text, /最多 `show` 3 条相关记忆/)
@@ -411,6 +413,7 @@ test('injectSessionRuntimeContext still injects memory-first routing when Maestr
   assert.equal(f.steered.length, 0)
   assert.equal(f.injected.length, 1)
   assert.match(f.injected[0].content[0].text, /## Maestro 工作规则/)
+  assert.match(f.injected[0].content[0].text, /唯一身份是“小涛”/)
   assert.doesNotMatch(f.injected[0].content[0].text, /# Memory Overview/)
 })
 
