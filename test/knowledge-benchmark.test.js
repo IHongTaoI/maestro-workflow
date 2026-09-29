@@ -104,7 +104,7 @@ async function createBenchmarkProject(t) {
 
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/entries/project.overview.md',
+    '.xiaotao/memory/knowledge/entries/project.overview.md',
     entryFile(overviewEntry),
   );
 
@@ -128,7 +128,7 @@ async function createBenchmarkProject(t) {
 
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-user-preference.md',
+    '.xiaotao/memory/knowledge/entries/lt-user-preference.md',
     entryFile(noteEntry),
   );
 
@@ -151,7 +151,7 @@ test('shipped project overview is indexed from the project memory directory', as
     'package.json',
     'xiaotao/SKILL.md',
     'bin/xiaotao.js',
-    '.xiaotao/memory/long-term/entries/project.overview.md',
+    '.xiaotao/memory/knowledge/entries/project.overview.md',
   ]) {
     const source = path.join(repositoryRoot, ...relativePath.split('/'));
     const destination = path.join(projectRoot, ...relativePath.split('/'));
@@ -210,7 +210,7 @@ test('knowledge retrieval benchmark suite passes top-5 recall and negative asser
 
 test('code freshness check returns fresh when code matches, review_needed when code changes, and unknown when no code refs', async (t) => {
   const { projectRoot, originalBinContent } = await createBenchmarkProject(t);
-  const overviewFile = path.join(projectRoot, '.xiaotao/memory/long-term/entries/project.overview.md');
+  const overviewFile = path.join(projectRoot, '.xiaotao/memory/knowledge/entries/project.overview.md');
   const originalOverviewText = await readFile(overviewFile, 'utf8');
 
   // 1. Initial state: all code matches fingerprints -> fresh

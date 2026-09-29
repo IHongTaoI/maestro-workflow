@@ -1,15 +1,15 @@
 # 长期记忆单文件存储
 
-状态：Issue #51 首版实现。旧聚合格式可读，新写入使用单文件；迁移必须由用户显式执行。
+状态：Issue #51 首版实现。项目知识库存放在 `knowledge/`；旧 `long-term/` 路径可读，迁移必须由用户显式执行。
 
 ## 权威路径
 
 | 状态 | 路径 | 规则 |
 | --- | --- | --- |
-| active / disputed | `.xiaotao/memory/long-term/entries/<entry-id>.md` | 一个文件一个 entry，文件名等于 entry ID |
-| superseded / rejected | `.xiaotao/memory/long-term/history/<entry-id>.md` | 保留失效 snapshot，常规搜索不可见 |
-| 旧格式 | `.xiaotao/memory/long-term/current.md` | 多 entry 聚合仍可读，不再写入新 entry |
-| 新格式说明 | `.xiaotao/memory/long-term/current.md` | 固定指引，不保存 entry 内容 |
+| active / disputed | `.xiaotao/memory/knowledge/entries/<entry-id>.md` | 一个文件一个 entry，文件名等于 entry ID |
+| superseded / rejected | `.xiaotao/memory/knowledge/history/<entry-id>.md` | 保留失效 snapshot，常规搜索不可见 |
+| 旧格式 | `.xiaotao/memory/knowledge/current.md` | 多 entry 聚合仍可读，不再写入新 entry |
+| 新格式说明 | `.xiaotao/memory/knowledge/current.md` | 固定指引，不保存 entry 内容 |
 
 每个 entry 文件包含独立 `revision`、`updated_at`、`updated_by` front matter 和且仅一个
 `xiaotao-memory-entry` JSON block。Catalog 同时扫描三类来源；同一 ID 重复时失败。
@@ -31,3 +31,17 @@
 任一 ID 冲突都会在写入前失败。
 
 迁移是旧存储格式的一次性维护操作，不代替正常 UPDATE/MERGE 的 lock、CAS 和 transaction 协议。
+
+## 目录改名迁移
+
+旧项目第一次使用新版本时，Catalog 仍会从 `.xiaotao/memory/long-term/` 读取；新项目只使用
+`.xiaotao/memory/knowledge/`。检查并迁移旧目录：
+
+```bash
+python xiaotao/scripts/memory_catalog.py --project-root . migrate-knowledge-path
+python xiaotao/scripts/memory_catalog.py --project-root . migrate-knowledge-path \
+  --apply --actor <actor-id>
+```
+
+预检会报告需更新的项目内引用文件数。执行时命令取得迁移锁、移动整个目录、更新 `.xiaotao/` 下
+指向旧目录的路径，并重建 Catalog。若新旧目录同时存在，命令停止，要求先人工处理冲突。

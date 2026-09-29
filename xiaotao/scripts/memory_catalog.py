@@ -32,12 +32,10 @@ if hasattr(sys.stdout, "reconfigure"):
 
 INDEX_PATH = Path(".xiaotao/memory/index.json")
 MANIFEST_PATH = Path(".xiaotao/memory/manifest.md")
-LONG_TERM_ROOT = Path(".xiaotao/memory/long-term")
-LONG_TERM_PATH = LONG_TERM_ROOT / "current.md"
-LONG_TERM_ENTRIES_PATH = LONG_TERM_ROOT / "entries"
-LONG_TERM_HISTORY_PATH = LONG_TERM_ROOT / "history"
-LONG_TERM_MIGRATIONS_PATH = LONG_TERM_ROOT / "migrations"
-LONG_TERM_MIGRATION_LOCK = Path(".xiaotao/locks/memory-long-term-migration.lock")
+LONG_TERM_ROOT = Path(".xiaotao/memory/knowledge")
+LEGACY_LONG_TERM_ROOT = Path(".xiaotao/memory/long-term")
+LONG_TERM_MIGRATION_LOCK = Path(".xiaotao/locks/memory-knowledge-migration.lock")
+LEGACY_LONG_TERM_MIGRATION_LOCK = Path(".xiaotao/locks/memory-long-term-migration.lock")
 FOLLOWUPS_ROOT = Path(".xiaotao/memory/followups")
 FOLLOWUPS_PENDING_PATH = FOLLOWUPS_ROOT / "pending"
 FOLLOWUPS_RESOLVED_PATH = FOLLOWUPS_ROOT / "resolved"
@@ -553,9 +551,10 @@ def split_long_term_records(
     source_files: set[Path],
 ) -> list[tuple[dict[str, Any], Path, str | None]]:
     records: list[tuple[dict[str, Any], Path, str | None]] = []
+    root_base = resolve_long_term_root(project_root)
     for relative_root, expected_statuses in (
-        (LONG_TERM_ENTRIES_PATH, CURRENT_ENTRY_STATUSES),
-        (LONG_TERM_HISTORY_PATH, HISTORY_ENTRY_STATUSES),
+        (root_base / "entries", CURRENT_ENTRY_STATUSES),
+        (root_base / "history", HISTORY_ENTRY_STATUSES),
     ):
         root = project_root / relative_root
         if root.exists() and not root.is_dir():
@@ -596,7 +595,8 @@ def long_term_records(
     source_files: set[Path],
 ) -> list[tuple[dict[str, Any], Path, str | None]]:
     records: list[tuple[dict[str, Any], Path, str | None]] = []
-    legacy_path = project_root / LONG_TERM_PATH
+    root_base = resolve_long_term_root(project_root)
+    legacy_path = project_root / root_base / "current.md"
     if legacy_path.is_file():
         source_files.add(legacy_path)
         text = read_optional(legacy_path)
@@ -609,6 +609,18 @@ def long_term_records(
     records.extend(split_long_term_records(project_root, source_files))
     validate_unique_long_term_records(records)
     return records
+
+
+def resolve_long_term_root(project_root: Path) -> Path:
+    """Read the new knowledge path, or the old path until explicitly migrated."""
+    current = project_root / LONG_TERM_ROOT
+    legacy = project_root / LEGACY_LONG_TERM_ROOT
+    if current.exists() and legacy.exists():
+        raise CatalogError(
+            f"both knowledge directories exist: {current} and {legacy}; "
+            "resolve the conflict before rebuilding the memory catalog"
+        )
+    return LONG_TERM_ROOT if current.exists() or not legacy.exists() else LEGACY_LONG_TERM_ROOT
 
 
 def long_term_index_entries(
@@ -1010,6 +1022,21 @@ def atomic_write(path: Path, content: str) -> None:
     temporary_path = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def atomic_write_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
@@ -1793,7 +1820,7 @@ def migration_preview(
     dict[str, Any],
     list[tuple[dict[str, Any], Path, str | None]],
 ]:
-    current_path = project_root / LONG_TERM_PATH
+    current_path = project_root / resolve_long_term_root(project_root) / "current.md"
     if not current_path.is_file():
         raise CatalogError("legacy Long-term current.md does not exist")
     text = read_optional(current_path)
@@ -1809,22 +1836,26 @@ def migration_preview(
     return entries, metadata, existing_records
 
 
-def migration_lock(project_root: Path, actor: str) -> tuple[int, Path]:
-    path = project_root / LONG_TERM_MIGRATION_LOCK
-    path.parent.mkdir(parents=True, exist_ok=True)
+def migration_lock(project_root: Path, actor: str) -> tuple[list[int], list[Path]]:
+    paths = [project_root / LONG_TERM_MIGRATION_LOCK, project_root / LEGACY_LONG_TERM_MIGRATION_LOCK]
+    acquired: list[tuple[int, Path]] = []
     try:
-        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError as error:
-        raise CatalogError(f"migration lock already exists: {path}") from error
-    try:
-        payload = json.dumps({"actor": actor, "created_at": utc_now()}, sort_keys=True).encode("utf-8")
-        os.write(descriptor, payload)
-        os.fsync(descriptor)
+        for path in paths:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError as error:
+                raise CatalogError(f"migration lock already exists: {path}") from error
+            acquired.append((descriptor, path))
+            payload = json.dumps({"actor": actor, "created_at": utc_now()}, sort_keys=True).encode("utf-8")
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        return [item[0] for item in acquired], [item[1] for item in acquired]
     except Exception:
-        os.close(descriptor)
-        path.unlink(missing_ok=True)
+        for descriptor, path in reversed(acquired):
+            os.close(descriptor)
+            path.unlink(missing_ok=True)
         raise
-    return descriptor, path
 
 
 def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[str, Any]:
@@ -1838,7 +1869,7 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
             "history_entries": len(entries) - active,
             "preserved_entries": len(existing_records),
             "entry_ids": sorted(
-                require_string(entry, "entry_id", project_root / LONG_TERM_PATH)
+                require_string(entry, "entry_id", project_root / resolve_long_term_root(project_root) / "current.md")
                 for entry in entries
             ),
         }
@@ -1846,8 +1877,8 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
     actor = " ".join(actor.split()).strip()
     if not actor:
         raise CatalogError("--actor must be a non-empty string when --apply is used")
-    descriptor, lock_path = migration_lock(project_root, actor)
-    current_path = project_root / LONG_TERM_PATH
+    descriptors, lock_paths = migration_lock(project_root, actor)
+    current_path = project_root / resolve_long_term_root(project_root) / "current.md"
     original: str | None = None
     stage_root: Path | None = None
     published: list[Path] = []
@@ -1874,7 +1905,8 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
             + "-"
             + original_hash[:8]
         )
-        audit_root = project_root / LONG_TERM_MIGRATIONS_PATH / migration_id
+        root_base = resolve_long_term_root(project_root)
+        audit_root = project_root / root_base / "migrations" / migration_id
         if audit_root.exists():
             raise CatalogError(f"migration audit already exists: {audit_root}")
         revision = metadata.get("revision", 0)
@@ -1888,7 +1920,7 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
             updated_by = actor
 
         stage_root = Path(
-            tempfile.mkdtemp(prefix=".entry-migration-", dir=project_root / LONG_TERM_ROOT)
+            tempfile.mkdtemp(prefix=".entry-migration-", dir=project_root / root_base)
         )
         for entry in entries:
             status = entry.get("status", "active")
@@ -1919,7 +1951,7 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
                     "migration_id": migration_id,
                     "actor": actor,
                     "created_at": migration_time,
-                    "source_path": LONG_TERM_PATH.as_posix(),
+                    "source_path": (root_base / "current.md").as_posix(),
                     "source_sha256": original_hash,
                     "entry_ids": preview["entry_ids"],
                     "preserved_entry_ids": sorted(
@@ -1937,7 +1969,7 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
             folder = "entries" if status in CURRENT_ENTRY_STATUSES else "history"
             entry_id = require_string(entry, "entry_id", current_path)
             staged = stage_root / folder / f"{entry_id}.md"
-            relative_root = LONG_TERM_ENTRIES_PATH if folder == "entries" else LONG_TERM_HISTORY_PATH
+            relative_root = root_base / folder
             target = project_root / relative_root / f"{entry_id}.md"
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists():
@@ -1970,9 +2002,11 @@ def migrate_long_term(project_root: Path, *, actor: str, apply: bool) -> dict[st
             target.unlink(missing_ok=True)
         raise
     finally:
-        os.close(descriptor)
-        if lock_path.exists():
-            lock_path.unlink()
+        for descriptor in descriptors:
+            os.close(descriptor)
+        for lock_path in lock_paths:
+            if lock_path.exists():
+                lock_path.unlink()
         if stage_root is not None and stage_root.exists():
             shutil.rmtree(stage_root)
 
@@ -2182,6 +2216,103 @@ revision: {meta_rev}
         if not active_backup.exists():
             shutil.rmtree(staging_root, ignore_errors=True)
 
+def migrate_knowledge_path(project_root: Path, *, actor: str, apply: bool) -> dict[str, Any]:
+    """Move the old directory and repair project-local references as one migration."""
+    actor = " ".join(actor.split()).strip()
+    if apply and not actor:
+        raise CatalogError("--actor must be a non-empty string when --apply is used")
+    old_root = project_root / LEGACY_LONG_TERM_ROOT
+    new_root = project_root / LONG_TERM_ROOT
+    if old_root.exists() and new_root.exists():
+        raise CatalogError(
+            f"both knowledge directories exist: {old_root} and {new_root}; "
+            "merge or remove one before migrating"
+        )
+    if not old_root.exists():
+        return {"status": "already-current" if new_root.exists() else "nothing-to-migrate"}
+    # Validate the legacy catalog and its references before touching project data.
+    derive_catalog(project_root)
+
+    replacements = (
+        (b".xiaotao/memory/long-term/", b".xiaotao/memory/knowledge/"),
+        (b".xiaotao/memory/long-term", b".xiaotao/memory/knowledge"),
+        (b"memory/long-term/", b"memory/knowledge/"),
+        (b"memory/long-term", b"memory/knowledge"),
+    )
+    reference_files: dict[Path, bytes] = {}
+    state_root = project_root / ".xiaotao"
+    roots_to_scan = [state_root]
+    project_gitignore = project_root / ".gitignore"
+    if project_gitignore.is_file():
+        roots_to_scan.append(project_gitignore)
+    for scan_root in roots_to_scan:
+        paths = scan_root.rglob("*") if scan_root.is_dir() else (scan_root,)
+        for path in paths:
+            if not path.is_file() or path.is_symlink():
+                continue
+            try:
+                content = path.read_bytes()
+                content.decode("utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            updated = content
+            for old, new in replacements:
+                updated = updated.replace(old, new)
+            if updated != content:
+                reference_files[path] = updated
+
+    preview = {
+        "status": "ready" if not apply else "migrated",
+        "source": LEGACY_LONG_TERM_ROOT.as_posix(),
+        "destination": LONG_TERM_ROOT.as_posix(),
+        "updated_reference_files": len(reference_files),
+    }
+    if not apply:
+        return preview
+
+    descriptors, lock_paths = migration_lock(project_root, actor)
+    moved = False
+    originals: dict[Path, bytes] = {}
+    catalog_originals = {
+        project_root / INDEX_PATH: (project_root / INDEX_PATH).read_bytes()
+        if (project_root / INDEX_PATH).is_file() else None,
+        project_root / MANIFEST_PATH: (project_root / MANIFEST_PATH).read_bytes()
+        if (project_root / MANIFEST_PATH).is_file() else None,
+    }
+    try:
+        if not old_root.is_dir() or new_root.exists():
+            raise CatalogError("knowledge path changed after preflight; rerun migration preview")
+        os.replace(old_root, new_root)
+        moved = True
+        for path, updated in reference_files.items():
+            try:
+                target = new_root / path.relative_to(old_root)
+            except ValueError:
+                target = path
+            originals[target] = target.read_bytes()
+            atomic_write_bytes(target, updated)
+        persist_catalog(project_root, derive_catalog(project_root))
+        preview["status"] = "migrated"
+        return preview
+    except Exception:
+        for path, original in originals.items():
+            atomic_write_bytes(path, original)
+        if moved and new_root.exists() and not old_root.exists():
+            os.replace(new_root, old_root)
+        for path, original in catalog_originals.items():
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                atomic_write_bytes(path, original)
+        raise
+    finally:
+        for descriptor in descriptors:
+            os.close(descriptor)
+        for lock_path in lock_paths:
+            if lock_path.exists():
+                lock_path.unlink()
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--project-root", type=Path, default=argparse.SUPPRESS)
@@ -2232,6 +2363,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     migrate.add_argument("--apply", action="store_true")
     migrate.add_argument("--actor", default="")
 
+    migrate_path = subparsers.add_parser("migrate-knowledge-path", parents=[common])
+    migrate_path.add_argument("--apply", action="store_true")
+    migrate_path.add_argument("--actor", default="")
+
     promote = subparsers.add_parser("promote-temporary", parents=[common])
     promote.add_argument("temporary_id")
     promote.add_argument("--task-id")
@@ -2276,6 +2411,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "migrate-long-term":
             result = migrate_long_term(project_root, actor=args.actor, apply=args.apply)
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "migrate-knowledge-path":
+            result = migrate_knowledge_path(project_root, actor=args.actor, apply=args.apply)
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         if args.command == "promote-temporary":

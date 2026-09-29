@@ -538,7 +538,7 @@ test('Codex injects bounded live Runtime Context when active Task, Temporary, or
   await put(root, '.xiaotao/tasks/task-ci/task.yaml', 'id: task-ci\nobjective: Setup CI pipelines\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
   await put(root, '.xiaotao/tasks/task-db/task.yaml', 'id: task-db\nobjective: DB migration\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
   await put(root, '.xiaotao/memory/temporary/active/temp-investigate/meta.yaml', 'id: temp-investigate\ntopic: Investigate leak\nstatus: active\ncreated_at: 2026-09-12T10:00:00Z\nupdated_at: 2026-09-12T10:00:00Z\nupdated_by: xiao-tao/test\nrevision: 1\n');
-  await put(root, '.xiaotao/memory/long-term/entries/lt-api-boundary.md', `---
+  await put(root, '.xiaotao/memory/knowledge/entries/lt-api-boundary.md', `---
 revision: 1
 updated_at: 2026-09-12T10:00:00Z
 updated_by: xiao-tao/test

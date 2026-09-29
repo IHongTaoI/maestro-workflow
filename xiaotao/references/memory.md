@@ -10,7 +10,7 @@ XiaoTao 的记忆用于延续协作与沉淀经验，不用于复刻对话或流
 | :--- | :--- | :--- |
 | **用户目录：全局用户记忆** (`~/.xiaotao/memory/`) | 稳定习惯与偏好；按日期/项目记录跨项目经历简述，附项目身份和详情入口 | “我通常怎么协作？我在各项目做过什么？” |
 | **项目目录：项目记忆** (`.xiaotao/memory/timeline/`) | 项目经历的时间线，保留任务经过、关键讨论、决策原因、失败教训和原始来源 | “这个项目经历了什么？当时为什么这么做？” |
-| **项目目录：项目知识库** (`.xiaotao/memory/long-term/`) | 项目当前的现行说明文档，按主题维护架构、模块、规范、已核实的现行结论 | “项目现在是什么样？规则是什么？” |
+| **项目目录：项目知识库** (`.xiaotao/memory/knowledge/`) | 项目当前的现行说明文档，按主题维护架构、模块、规范、已核实的现行结论 | “项目现在是什么样？规则是什么？” |
 
 ### 边界与原则
 1. **轻量与解耦**：全局经历只保留“在哪个项目做了什么”的简要线索；项目记忆保存具体经过。知识库随项目迭代更新当前说明，并指回形成结论的项目记忆及原始来源。
@@ -21,7 +21,7 @@ XiaoTao 的记忆用于延续协作与沉淀经验，不用于复刻对话或流
    - **全局用户记忆**：按“用户总览 → 偏好主题或年月 → 简要经历 → 项目记忆入口”下钻。项目缺失或不可访问时如实说明，不能臆测详情。
 4. **长期记忆入库与路由规则**：
    - **经历及过程进入项目记忆**：任务曲折、调试经过、决策原因、验证结果进入 `timeline/`；
-   - **已核实的当前项目说明进入知识库**：架构图景、模块职责、约定规范、现行结论进入 `long-term/entries/`；
+   - **已核实的当前项目说明进入知识库**：架构图景、模块职责、约定规范、现行结论进入 `knowledge/entries/`；
    - **跨项目经历简述或稳定偏好进入全局用户记忆**：跨项目通用偏好进入 `preferences/`，经历线索进入 `journeys/`。**硬性约束**：不能仅凭一次行为推断稳定偏好，必须具备两次以上跨会话/任务事实佐证。
    - **同一事件多处关联**：同一件事可以分别在多处落地其侧重点，但以稳定引用关联，避免复制完整细节。
    - **时间线事件身份**：可由 Activity 派生的事件沿用 `activity_catalog.py` 根据事件类型、来源 ID 与归一化发生时间生成的 `event_id` 和 `occurred_at`，不另造时间线 ID；仅存在于项目记忆的事件也使用同一 ID 格式，并保留其稳定来源。
@@ -162,7 +162,7 @@ Long-term Memory 是维护中的经验库，不是 Task 记录归档。绝不要
 使候选能声明比较过哪些条目，而不依赖 Markdown 标题或宿主 API。
 
 新写入采用一条 Memory 一个文件，当前或待确认条目的规范路径是
-`long-term/entries/<entry_id>.md`。文件名必须与稳定 `entry_id` 完全一致；每个文件必须有独立的
+`knowledge/entries/<entry_id>.md`。文件名必须与稳定 `entry_id` 完全一致；每个文件必须有独立的
 `revision`、`updated_at`、`updated_by` front matter，并且只能包含一个机器可读 JSON fenced block：
 
 ````markdown
@@ -199,11 +199,11 @@ updated_by: xiao-tao/session-or-run-id
 现有 Memory Worker 候选和独立评审。
 
 `entries/` 只允许 `active` 或 `disputed`。经评审变为 `superseded` 或 `rejected` 的 entry snapshot
-移动到 `long-term/history/<entry_id>.md`，同时保留 decisions、conflicts 和 source refs。历史仍可通过
-Catalog 的 `show --include-inactive` 审计，但不会进入常规检索。`long-term/current.md` 在新格式中只
+移动到 `knowledge/history/<entry_id>.md`，同时保留 decisions、conflicts 和 source refs。历史仍可通过
+Catalog 的 `show --include-inactive` 审计，但不会进入常规检索。`knowledge/current.md` 在新格式中只
 保留固定的人类说明，不聚合 entry 内容，也不随 entry 更新而改写。
 
-旧项目的聚合 `long-term/current.md` 继续可读，也可以和不同 ID 的新 entry 文件共存；同一
+旧项目的聚合 `knowledge/current.md` 继续可读，也可以和不同 ID 的新 entry 文件共存；同一
 `entry_id` 同时出现在聚合文件、`entries/` 或 `history/` 时必须失败，不能猜测权威版本。普通
 Session 不得自动拆分旧文件。用户需要迁移时先预检，再显式执行：
 
@@ -214,9 +214,28 @@ python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 ```
 
 迁移保留 entry 内容、ID、状态、来源和 decision context，将旧聚合原文保存到
-`long-term/migrations/<migration-id>/current.md`，验证前后 entry 完全一致后才报告成功。失败时原
+`knowledge/migrations/<migration-id>/current.md`，验证前后 entry 完全一致后才报告成功。失败时原
 `current.md` 保持或恢复为权威来源。若不同 ID 的新 entry 已存在，迁移只补入旧条目，已有文件及
 revision 保持不变；任一 ID 冲突都在写入前失败。迁移期间所有 writer 必须遵守全局 migration lock。
+
+### 项目知识库目录迁移
+
+项目知识库的新目录是 `.xiaotao/memory/knowledge/`。旧项目若仍使用
+`.xiaotao/memory/long-term/`，Catalog 会继续从旧目录读取，直到用户显式执行迁移。先预检：
+
+```bash
+python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-root> migrate-knowledge-path
+```
+
+确认预检结果后再执行：
+
+```bash
+python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-root> \
+  migrate-knowledge-path --apply --actor <actor-id>
+```
+
+迁移会移动整个目录、更新 `.xiaotao/` 内引用旧路径的文件并重建目录索引。若新旧目录同时存在，
+迁移停止并要求人工处理；不得自动合并两边内容。
 
 `decision` 条目还可携带结构化上下文，不强制迁移旧条目：
 
@@ -246,12 +265,12 @@ revision 保持不变；任一 ID 冲突都在写入前失败。迁移期间所�
 `"current_memory": {"long_term_entries": []}`，否则请求校验失败。
 
 Memory Worker 输出只是候选。提升前，小涛或强模型评审者必须验证其稳定、在当前 Task 之外仍有
-价值，并有可达 `source_refs` 支撑。在 `memory/long-term/decisions/` 记录批准或拒绝；保留被拒绝
+价值，并有可达 `source_refs` 支撑。在 `memory/knowledge/decisions/` 记录批准或拒绝；保留被拒绝
 候选，避免反复评审同一薄弱声明。
 
 ### 不可变 Decision Record
 
-新评审使用 `.xiaotao/memory/long-term/decisions/<decision-id>.decision.json` 作为不可变的通用决策
+新评审使用 `.xiaotao/memory/knowledge/decisions/<decision-id>.decision.json` 作为不可变的通用决策
 记录，并使用 [decision-record.schema.json](schemas/decision-record.schema.json) 校验。文件名必须与
 `decision_id` 一致。示例：
 
@@ -443,7 +462,7 @@ python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 
 #### 项目全景概览条目与逐层下钻
 
-为解决“碎片化记忆难以回答项目全局组织与模块地图”的问题，小涛仓库将自己的项目全景概览条目 `project.overview` 保存在 `.xiaotao/memory/long-term/entries/project.overview.md`，由 Catalog 正常索引。其他项目需要根据自身代码建立对应条目，不能直接复用小涛仓库的架构描述和代码指纹：
+为解决“碎片化记忆难以回答项目全局组织与模块地图”的问题，小涛仓库将自己的项目全景概览条目 `project.overview` 保存在 `.xiaotao/memory/knowledge/entries/project.overview.md`，由 Catalog 正常索引。其他项目需要根据自身代码建立对应条目，不能直接复用小涛仓库的架构描述和代码指纹：
 - **全景内容规范：** 包含核心模块职责划分、关键代码入口文件、全局设计约定以及指向深层知识条目的下钻索引；
 - **宽泛提问优先召回：** 条目配置 `tags`（如 `overview`, `architecture`）、`aliases`（如 `项目结构`, `架构概览`, `代码地图`）与 `search_hints`（覆盖“项目怎么组织的”、“入口文件是哪个”等宽泛自然语言问题）；
 - **渐进下钻路径：** 用户提出宏观问题时，检索器通过 `search "项目结构"` 首位召回 `project.overview`；小涛或 Worker 通过 `show project.overview` 获取系统概貌与子模块线索，再按需检索具体子模块条目，避免一次性倾倒全量知识。
@@ -523,7 +542,7 @@ Memory Worker 负责整理 memory 和有界 Experience Review。它按 memory �
 预置角色。它受 [Core Guard](guard.md) 与 [workers.md](workers.md) 约束：
 - **工具白名单仅限只读**：仅允许读取指定文件与查询已知条目；严禁提供写工具、修改工具、命令执行或网络工具。
 - **提案禁止自我批准**：Memory Worker 只能生成候选提案，绝对不能批准自己的 Long-term 或
-  Playbook 候选，严禁直接改写 `.xiaotao/memory/long-term/entries/` 或 `.xiaotao/playbooks/`。
+  Playbook 候选，严禁直接改写 `.xiaotao/memory/knowledge/entries/` 或 `.xiaotao/playbooks/`。
 - **职责不得越权**：它不得选择其他 Worker、作出架构决定，或改变 Task 范围。该评审不会引入新的预置角色或 Runtime。
 
 每个请求还暴露 `current_playbooks`；项目没有 Playbook 时也要提供空数组。每个索引 Playbook
@@ -610,7 +629,7 @@ Memory Worker 请求或响应。
 ## 团队共享 Memory 与 Git 语义合并
 
 多个开发者或 Agent 在并行 Git 分支工作时，提交进 Git 的团队共享 memory
-（`.xiaotao/memory/long-term/entries/*.md`、历史、Playbooks 和已评审决策）可能分叉。不同 entry
+（`.xiaotao/memory/knowledge/entries/*.md`、历史、Playbooks 和已评审决策）可能分叉。不同 entry
 文件的独立修改由 Git 正常合并；同一 entry 或多文件语义变化发生冲突时，标准 Git 文本
 合并无法解决语义演进或发现矛盾。
 
@@ -652,7 +671,7 @@ Memory Merger 按以下确定性规则，将 `OURS`、`THEIRS` 与 `BASE` 比较
 发现冲突 → pending-confirmation → resolved → active / superseded / rejected
 ```
 
-冲突以 `status: pending-confirmation` 持久化到 `.xiaotao/memory/long-term/conflicts/`。经过人工或
+冲突以 `status: pending-confirmation` 持久化到 `.xiaotao/memory/knowledge/conflicts/`。经过人工或
 证据评审后，发布不可变决策，把状态转换为 `resolved`，将已确认声明写入目标 entry 文件，并用
 `superseded_by` 引用标记被取代声明，保证完整可审计性。
 

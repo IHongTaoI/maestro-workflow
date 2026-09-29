@@ -822,7 +822,7 @@ try {
         @{ Path = "xiaotao/references/storage.md"; Text = "团队共享 Memory（纳入 Git）" },
         @{ Path = "xiaotao/references/storage.md"; Text = "本地 Runtime 状态（不纳入 Git）" },
         @{ Path = "xiaotao/references/storage.md"; Text = "不读取、迁移或恢复旧 Role 目录" },
-        @{ Path = "xiaotao/references/memory.md"; Text = '`long-term/entries/<entry_id>.md`' },
+        @{ Path = "xiaotao/references/memory.md"; Text = '`knowledge/entries/<entry_id>.md`' },
         @{ Path = "xiaotao/references/memory.md"; Text = "migrate-long-term" },
         @{ Path = "xiaotao/references/storage.md"; Text = "不同 entry 的独立 UPDATE 不共享 revision 或 lock" },
         @{ Path = "xiaotao/references/storage.md"; Text = '`completed_at` 是 Activity' },

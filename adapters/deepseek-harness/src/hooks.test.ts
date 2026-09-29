@@ -268,7 +268,7 @@ test('loadBoundedRuntimeContext returns bounded runtime context when active work
   const task3 = path.join(tmp, '.xiaotao/tasks/task-3')
   const task4 = path.join(tmp, '.xiaotao/tasks/task-4')
   const temp1 = path.join(tmp, '.xiaotao/memory/temporary/active/temp-1')
-  const ltDir = path.join(tmp, '.xiaotao/memory/long-term/entries')
+  const ltDir = path.join(tmp, '.xiaotao/memory/knowledge/entries')
   const fuDir = path.join(tmp, '.xiaotao/memory/followups/pending')
 
   await mkdir(task1, { recursive: true })
@@ -329,6 +329,17 @@ source_refs:
   assert.match(result, /temp-1/)
   assert.match(result, /## Pending Follow-ups \(1\)/)
   assert.match(result, /f-1/)
+  assert.match(result, /## Long-term Memory \(1 项已索引\)/)
+})
+
+test('loadBoundedRuntimeContext recognizes the legacy knowledge directory', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-legacy-knowledge-'))
+  t.after(() => rm(tmp, { recursive: true, force: true }))
+  const entries = path.join(tmp, '.xiaotao/memory/long-term/entries')
+  await mkdir(entries, { recursive: true })
+  await writeFile(path.join(entries, 'lt-legacy.md'), 'legacy knowledge\n')
+  const result = await loadBoundedRuntimeContext(tmp)
+  assert.ok(result)
   assert.match(result, /## Long-term Memory \(1 项已索引\)/)
 })
 

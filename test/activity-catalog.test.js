@@ -154,7 +154,7 @@ async function seedDecision(projectRoot, options, fileId = options.id) {
   await writeProjectFile(projectRoot, '.xiaotao/evidence/decision.md', 'decision evidence\n');
   return writeProjectFile(
     projectRoot,
-    `.xiaotao/memory/long-term/decisions/${fileId}.decision.json`,
+    `.xiaotao/memory/knowledge/decisions/${fileId}.decision.json`,
     decisionRecord(options),
   );
 }
@@ -556,7 +556,7 @@ test('approved and superseded Decision Records become Activity events', async (t
   routine.importance = 'routine';
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/decisions/decision-routine.decision.json',
+    '.xiaotao/memory/knowledge/decisions/decision-routine.decision.json',
     `${JSON.stringify(routine)}\n`,
   );
 
@@ -568,7 +568,7 @@ test('approved and superseded Decision Records become Activity events', async (t
   );
   assert.equal(result.events[0].occurred_at, '2026-09-04T02:00:00Z');
   assert.deepEqual(result.events[0].source_refs, [
-    '.xiaotao/memory/long-term/decisions/decision-approve.decision.json',
+    '.xiaotao/memory/knowledge/decisions/decision-approve.decision.json',
   ]);
 
   const approved = parseJson(await runActivity(projectRoot, [
@@ -576,6 +576,26 @@ test('approved and superseded Decision Records become Activity events', async (t
   ]));
   assert.equal(approved.total, 1);
   assert.equal(approved.events[0].title, '采用派生 Activity');
+});
+
+test('Activity reads Decision Records from the legacy knowledge directory', async (t) => {
+  const projectRoot = await createProject(t);
+  await writeProjectFile(projectRoot, '.xiaotao/evidence/decision.md', 'decision evidence\n');
+  await writeProjectFile(
+    projectRoot,
+    '.xiaotao/memory/long-term/decisions/decision-legacy.decision.json',
+    decisionRecord({
+      id: 'decision-legacy',
+      title: '旧目录中的决定',
+      decidedAt: '2026-09-07T03:00:00Z',
+    }),
+  );
+  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
+  assert.equal(result.total, 1);
+  assert.equal(result.events[0].event_type, 'decision_approved');
+  assert.deepEqual(result.events[0].source_refs, [
+    '.xiaotao/memory/long-term/decisions/decision-legacy.decision.json',
+  ]);
 });
 
 test('legacy and nested Decision files are ignored', async (t) => {
@@ -587,12 +607,12 @@ test('legacy and nested Decision files are ignored', async (t) => {
   });
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/decisions/legacy.json',
+    '.xiaotao/memory/knowledge/decisions/legacy.json',
     '{old unstructured record',
   );
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/decisions/archive/nested.decision.json',
+    '.xiaotao/memory/knowledge/decisions/archive/nested.decision.json',
     '{broken nested record',
   );
 
@@ -625,7 +645,7 @@ test('unsafe Decision evidence paths still block Activity rebuild', async (t) =>
   unsafe.source_refs = ['../outside.md'];
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/decisions/decision-unsafe-ref.decision.json',
+    '.xiaotao/memory/knowledge/decisions/decision-unsafe-ref.decision.json',
     `${JSON.stringify(unsafe)}\n`,
   );
 
@@ -644,7 +664,7 @@ test('invalid canonical Decision Records fail instead of inventing an event', as
   delete invalid.decided_at;
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/decisions/decision-invalid.decision.json',
+    '.xiaotao/memory/knowledge/decisions/decision-invalid.decision.json',
     `${JSON.stringify(invalid)}\n`,
   );
 

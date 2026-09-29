@@ -106,7 +106,7 @@ Prompt：`小涛，请评审这个设计：应用启动时同步读取本地配�
 
 ## Issue #51：长期记忆拆文件
 
-在可丢弃项目中分别准备旧聚合 `long-term/current.md` 和新 `entries/*.md`，确认：
+在可丢弃项目中分别准备旧聚合 `knowledge/current.md` 和新 `entries/*.md`，确认：
 
 1. `build/search/show` 对两种格式保持相同调用方式，只读取选中的 entry。
 2. 修改一个 entry 只改变它自己的文件与 revision，另一个 entry 的字节和 Git diff 不变。

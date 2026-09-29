@@ -13,7 +13,7 @@
         "branch": "feat-a",
         "commit": "111aaa",
         "task_id": "task-a",
-        "memory_path": ".xiaotao/memory/long-term/current.md",
+        "memory_path": ".xiaotao/memory/knowledge/current.md",
         "claim": "Claim A",
         "source_refs": [
           "xiaotao/references/scenarios/validator-fixtures/files/source.md"
@@ -25,7 +25,7 @@
         "branch": "feat-b",
         "commit": "222bbb",
         "task_id": "task-b",
-        "memory_path": ".xiaotao/memory/long-term/current.md",
+        "memory_path": ".xiaotao/memory/knowledge/current.md",
         "claim": "Claim B",
         "source_refs": [
           "xiaotao/references/scenarios/validator-fixtures/files/result.md"

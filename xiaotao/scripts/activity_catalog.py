@@ -36,7 +36,8 @@ from validate import (
 ACTIVITY_ROOT = Path(".xiaotao/activity")
 INDEX_PATH = ACTIVITY_ROOT / "index.json"
 TASKS_ROOT = Path(".xiaotao/tasks")
-DECISIONS_ROOT = Path(".xiaotao/memory/long-term/decisions")
+DECISIONS_ROOT = Path(".xiaotao/memory/knowledge/decisions")
+LEGACY_DECISIONS_ROOT = Path(".xiaotao/memory/long-term/decisions")
 PLAYBOOK_DECISIONS_ROOT = Path(".xiaotao/playbooks/decisions")
 IMPORTS_ROOT = Path(".xiaotao/memory/imports")
 WORKER_APPROVALS_ROOT = Path(".xiaotao/workers/approvals")
@@ -160,9 +161,17 @@ def decision_record_source_files(
 
 
 def decision_source_files(project_root: Path) -> list[Path]:
+    new_root = project_root / DECISIONS_ROOT
+    legacy_root = project_root / LEGACY_DECISIONS_ROOT
+    if new_root.exists() and legacy_root.exists():
+        raise CatalogError(
+            f"both knowledge decision directories exist: {new_root} and {legacy_root}; "
+            "resolve the directory migration before rebuilding Activity"
+        )
+    root = DECISIONS_ROOT if new_root.exists() or not legacy_root.exists() else LEGACY_DECISIONS_ROOT
     return decision_record_source_files(
         project_root,
-        DECISIONS_ROOT,
+        root,
         root_label="Decision",
         record_label="Decision Record",
     )

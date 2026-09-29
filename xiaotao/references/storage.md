@@ -45,7 +45,7 @@ XiaoTao 状态属于目标项目，绝不能写入已安装 Skill。执行状态
         <month>/
           summary.md
           <day>.yaml
-    long-term/
+    knowledge/
       current.md
       entries/<entry-id>.md
       history/<entry-id>.md
@@ -98,7 +98,7 @@ XiaoTao 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 
 - **团队共享 Memory（纳入 Git）：**
   - `memory/sources/`：仅在聊天是唯一证据时保存用户明确授权持久化的、内容寻址且不可变的来源记录；
-  - `memory/long-term/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
+  - `memory/knowledge/`：`entries/`、`history/`、轻量 `current.md`、`candidates/`、`decisions/`、
     `conflicts/` 和显式迁移审计；
   - `memory/followups/`：团队共享决策待办跟进项（`pending/` 与 `resolved/`）；
   - `playbooks/`：已批准的团队指导，以及已评审 `candidates/` 和 `decisions/`；
@@ -126,7 +126,7 @@ XiaoTao 状态属于目标项目，绝不能写入已安装 Skill。执行状态
 !.xiaotao/workers/approvals/
 !.xiaotao/workers/registry.yaml
 !.xiaotao/instructions/registry.yaml
-!.xiaotao/memory/long-term/
+!.xiaotao/memory/knowledge/
 !.xiaotao/memory/timeline/
 !.xiaotao/memory/followups/
 !.xiaotao/memory/sources/
@@ -179,15 +179,15 @@ Long-term 当前知识以 `entries/<entry-id>.md` 为权威，一条 entry 一�
 revision 和按规范状态路径派生的独立 lock；措辞更新不改变 ID，只有不可变决策能将其退役。
 `current.md` 新格式只保存固定说明，不是聚合权威内容。已取代或拒绝的 snapshot 放入 `history/`，
 并继续由不可变 decision/conflict/source refs 审计。每个通过校验的
-Memory Worker 提案（包括 `SKIP`）都持久化到 `memory/long-term/candidates/pending/`，直到评审
-记录批准或拒绝。未解决合并冲突存入 `memory/long-term/conflicts/`，状态为
+Memory Worker 提案（包括 `SKIP`）都持久化到 `memory/knowledge/candidates/pending/`，直到评审
+记录批准或拒绝。未解决合并冲突存入 `memory/knowledge/conflicts/`，状态为
 `pending-confirmation`。`SKIP` 决策不修改 entry 文件，但应保留，避免没有新证据时重复评审
 同一 duplicate 或 low-value 声明。
 
 新批准的 `decision` 可以包含 [memory.md](memory.md) 定义的向后兼容 `decision_context`。更新和
 语义合并必须保留它。它解释理由和已记录的否定方案，但绝不授予权限或替代不可变评审记录。
 
-新评审以 `memory/long-term/decisions/<decision-id>.decision.json` 发布不可变 Decision Record。
+新评审以 `memory/knowledge/decisions/<decision-id>.decision.json` 发布不可变 Decision Record。
 文件名必须与 `decision_id` 一致，并显式记录 `outcome`、`importance`、`decided_at`、评审者、理由、
 目标及可达来源。`superseded` 还必须记录 `superseded_by`。旧格式无需迁移；没有可靠 `decided_at`
 的历史记录不进入 Activity，也不得从更新时间或文件时间推断。
@@ -298,7 +298,7 @@ mtime 代替真实时间。已提交的提升会把 Task 实体化为 `active`�
 
 当后续触发该 Task 的 Experience Review 且全部审查结论（包括显式 `SKIP`）与不可变 Decision Record 确认持久化后，先从归档 `task.yaml` 中更新 `memory_pending: false` 并记录 `memory_reviewed_at`（ISO 8601 UTC 时间戳），最后清理 `.xiaotao/memory/pending/tasks/<task-id>.json`。若更新后清理前中断，保留的指针用于核验提交结果并完成清理；不得再次执行 entry 或 Playbook 写入。若审查失败或等待确认，保留待审指针和诊断现场（`last_error`），下次可安全重试。
 
-Activity 还会从 `memory/long-term/decisions/` 与 `playbooks/decisions/` 直属的规范
+Activity 还会从 `memory/knowledge/decisions/` 与 `playbooks/decisions/` 直属的规范
 `*.decision.json` 文件分别派生 `decision_approved` / `decision_superseded` 与
 `playbook_approved` / `playbook_superseded`。只有 `importance: milestone` 的批准或取代记录进入
 时间线；`routine` 和 `rejected` 仅供审计。事件时间只取不可变的 `decided_at`，事件引用指向该
@@ -442,7 +442,7 @@ revision，并在改变规范状态前准备以下不可变事务包：
 Temporary；未提交的提升相反。不需要维护组不变量时，优先使用单文件更新。
 
 旧聚合 Long-term 的拆分迁移是显式维护操作，不在普通 Session 自动运行。迁移前取得
-`.xiaotao/locks/memory-long-term-migration.lock`；所有 Long-term writer 看到该锁时停止。工具先
+`.xiaotao/locks/memory-knowledge-migration.lock`；所有知识库 writer 看到该锁时停止。工具先
 完整校验旧文件和全部目标 entry，在隐藏 staging 目录准备单文件，保存旧聚合原文与 intent 审计，
 再发布目录和轻量 `current.md`。发布后逐项验证 ID、内容、status、source refs 与 decision context
 一致；失败则恢复旧聚合，不能报告成功。已有的不同 ID entry 保持字节和 revision 不变；同 ID
