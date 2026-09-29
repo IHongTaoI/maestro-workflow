@@ -182,55 +182,6 @@ test('builds a three-layer catalog and selectively returns one Memory detail', a
   assert.match(inactive.stderr, /unavailable/);
 });
 
-test('migrates the legacy knowledge directory and repairs project-local references', async (t) => {
-  const projectRoot = await createMemoryProject(t);
-  await rm(path.join(projectRoot, '.xiaotao/memory/knowledge'), { recursive: true, force: true });
-  const oldEntry = entryFile({
-    entry_id: 'lt-path-migration',
-    title: 'Path migration evidence',
-    memory_kind: 'fact',
-    content: 'Keep project-relative references valid when moving the knowledge directory.',
-    source_refs: ['.xiaotao/memory/long-term/notes.md'],
-    status: 'active',
-  });
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/notes.md', 'migration evidence\n');
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-path-migration.md', oldEntry);
-  await writeProjectFile(projectRoot, '.xiaotao/tasks/task-path/context.md',
-    'Evidence: .xiaotao/memory/long-term/entries/lt-path-migration.md\n');
-
-  const legacyBuild = JSON.parse((await runCatalog(projectRoot, ['build'])).stdout);
-  assert.equal(legacyBuild.status, 'built');
-  const legacyIndex = JSON.parse(await readFile(path.join(projectRoot, '.xiaotao/memory/index.json'), 'utf8'));
-  assert.equal(legacyIndex.entries.some((item) => item.memory_id === 'lt-path-migration'), true);
-
-  const preview = JSON.parse((await runCatalog(projectRoot, ['migrate-knowledge-path'])).stdout);
-  assert.equal(preview.status, 'ready');
-  assert.equal(preview.updated_reference_files, 3);
-  assert.equal(await readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-path-migration.md'), 'utf8'), oldEntry);
-
-  const applied = JSON.parse((await runCatalog(projectRoot, [
-    'migrate-knowledge-path', '--apply', '--actor', 'test/path-migration',
-  ])).stdout);
-  assert.equal(applied.status, 'migrated');
-  const migratedEntry = await readFile(path.join(projectRoot,
-    '.xiaotao/memory/knowledge/entries/lt-path-migration.md'), 'utf8');
-  assert.match(migratedEntry, /\.xiaotao\/memory\/knowledge\/notes\.md/);
-  await assert.rejects(readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-path-migration.md'), 'utf8'));
-  assert.match(await readFile(path.join(projectRoot,
-    '.xiaotao/tasks/task-path/context.md'), 'utf8'), /\.xiaotao\/memory\/knowledge\/entries/);
-  const shown = JSON.parse((await runCatalog(projectRoot, ['show', 'lt-path-migration'])).stdout);
-  assert.equal(shown.detail.entry_id, 'lt-path-migration');
-});
-
-test('rejects a legacy knowledge migration when both roots exist', async (t) => {
-  const projectRoot = await createMemoryProject(t);
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/current.md', '# legacy\n');
-  const error = await rejectedCommand(runCatalog(projectRoot, ['migrate-knowledge-path']));
-  assert.match(error.stderr, /both knowledge directories exist/);
-});
-
 test('detects stale catalogs and refreshes them before search', async (t) => {
   const projectRoot = await createMemoryProject(t);
   await runCatalog(projectRoot, ['build']);

@@ -1,6 +1,6 @@
 # 长期记忆单文件存储
 
-状态：Issue #51 首版实现。项目知识库存放在 `knowledge/`；旧 `long-term/` 路径可读，迁移必须由用户显式执行。
+状态：Issue #51 首版实现。项目知识库存放在 `.xiaotao/memory/knowledge/`。
 
 ## 权威路径
 
@@ -31,17 +31,3 @@
 任一 ID 冲突都会在写入前失败。
 
 迁移是旧存储格式的一次性维护操作，不代替正常 UPDATE/MERGE 的 lock、CAS 和 transaction 协议。
-
-## 目录改名迁移
-
-旧项目第一次使用新版本时，Catalog 仍会从 `.xiaotao/memory/long-term/` 读取；新项目只使用
-`.xiaotao/memory/knowledge/`。检查并迁移旧目录：
-
-```bash
-python xiaotao/scripts/memory_catalog.py --project-root . migrate-knowledge-path
-python xiaotao/scripts/memory_catalog.py --project-root . migrate-knowledge-path \
-  --apply --actor <actor-id>
-```
-
-预检会报告需更新的项目内引用文件数。执行时命令取得迁移锁、移动整个目录、更新 `.xiaotao/` 下
-指向旧目录的路径，并重建 Catalog。若新旧目录同时存在，命令停止，要求先人工处理冲突。

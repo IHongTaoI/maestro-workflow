@@ -218,26 +218,10 @@ python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-ro
 `current.md` 保持或恢复为权威来源。若不同 ID 的新 entry 已存在，迁移只补入旧条目，已有文件及
 revision 保持不变；任一 ID 冲突都在写入前失败。迁移期间所有 writer 必须遵守全局 migration lock。
 
-### 项目知识库目录迁移
+项目知识库统一使用 `.xiaotao/memory/knowledge/`。旧项目需要整理目录时，由用户明确要求小涛执行
+一次性迁移；当前版本不读取旧目录，也不自动迁移。
 
-项目知识库的新目录是 `.xiaotao/memory/knowledge/`。旧项目若仍使用
-`.xiaotao/memory/long-term/`，Catalog 会继续从旧目录读取，直到用户显式执行迁移。先预检：
-
-```bash
-python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-root> migrate-knowledge-path
-```
-
-确认预检结果后再执行：
-
-```bash
-python <xiaotao-skill-root>/scripts/memory_catalog.py --project-root <project-root> \
-  migrate-knowledge-path --apply --actor <actor-id>
-```
-
-迁移会移动整个目录、更新 `.xiaotao/` 内引用旧路径的文件并重建目录索引。若新旧目录同时存在，
-迁移停止并要求人工处理；不得自动合并两边内容。
-
-`decision` 条目还可携带结构化上下文，不强制迁移旧条目：
+条目还可携带结构化上下文，不强制迁移旧条目：
 
 ```json
 "decision_context": {

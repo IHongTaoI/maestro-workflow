@@ -332,17 +332,6 @@ source_refs:
   assert.match(result, /## Long-term Memory \(1 项已索引\)/)
 })
 
-test('loadBoundedRuntimeContext recognizes the legacy knowledge directory', async (t) => {
-  const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-legacy-knowledge-'))
-  t.after(() => rm(tmp, { recursive: true, force: true }))
-  const entries = path.join(tmp, '.xiaotao/memory/long-term/entries')
-  await mkdir(entries, { recursive: true })
-  await writeFile(path.join(entries, 'lt-legacy.md'), 'legacy knowledge\n')
-  const result = await loadBoundedRuntimeContext(tmp)
-  assert.ok(result)
-  assert.match(result, /## Long-term Memory \(1 项已索引\)/)
-})
-
 test('injectSessionRuntimeContext queues non-waking bounded context on session start', async (t) => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'dsh-runtime-context-inject-'))
   t.after(() => rm(tmp, { recursive: true, force: true }))

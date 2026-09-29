@@ -578,26 +578,6 @@ test('approved and superseded Decision Records become Activity events', async (t
   assert.equal(approved.events[0].title, '采用派生 Activity');
 });
 
-test('Activity reads Decision Records from the legacy knowledge directory', async (t) => {
-  const projectRoot = await createProject(t);
-  await writeProjectFile(projectRoot, '.xiaotao/evidence/decision.md', 'decision evidence\n');
-  await writeProjectFile(
-    projectRoot,
-    '.xiaotao/memory/long-term/decisions/decision-legacy.decision.json',
-    decisionRecord({
-      id: 'decision-legacy',
-      title: '旧目录中的决定',
-      decidedAt: '2026-09-07T03:00:00Z',
-    }),
-  );
-  const result = parseJson(await runActivity(projectRoot, ['search', '--year', '2026']));
-  assert.equal(result.total, 1);
-  assert.equal(result.events[0].event_type, 'decision_approved');
-  assert.deepEqual(result.events[0].source_refs, [
-    '.xiaotao/memory/long-term/decisions/decision-legacy.decision.json',
-  ]);
-});
-
 test('legacy and nested Decision files are ignored', async (t) => {
   const projectRoot = await createProject(t);
   await seedDecision(projectRoot, {
