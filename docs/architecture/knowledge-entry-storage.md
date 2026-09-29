@@ -1,6 +1,6 @@
 # 长期记忆单文件存储
 
-状态：Issue #51 首版实现。项目知识库存放在 `.xiaotao/memory/knowledge/`。
+状态：Issue #51 首版实现。项目知识库存放在 `.xiaotao/memory/knowledge/`。这里的 `knowledge/` 是磁盘目录名；Long-term Memory、`long-term` 等名称仍表示记忆层和既有接口标识。
 
 ## 权威路径
 
@@ -25,7 +25,7 @@
 ## 显式迁移
 
 `memory_catalog.py migrate-long-term` 默认只做完整预检。只有提供 `--apply --actor` 才会写入。
-迁移取得全局 migration lock，在隐藏 staging 中生成并校验全部目标文件，保存旧聚合原文和 intent，
+迁移取得全局 migration lock（路径保留为 `.xiaotao/locks/memory-long-term-migration.lock`，以便升级期间与旧版本互斥），在隐藏 staging 中生成并校验全部目标文件，保存旧聚合原文和 intent，
 发布后再次比较所有 entry。验证失败会恢复旧聚合且不报告成功。普通 build/search/show 永不触发迁移。
 若旧聚合与不同 ID 的新单文件共存，迁移只补入旧 entry，已有单文件的内容和 revision 保持不变；
 任一 ID 冲突都会在写入前失败。

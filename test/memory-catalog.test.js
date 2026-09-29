@@ -437,6 +437,22 @@ test('explicit migration preserves legacy entries and leaves an auditable snapsh
   assert.equal(check.entries, 5);
 });
 
+test('migration respects the lock path used before the knowledge directory rename', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const currentPath = path.join(projectRoot, '.xiaotao/memory/knowledge/current.md');
+  const original = await readFile(currentPath, 'utf8');
+  const lockPath = '.xiaotao/locks/memory-long-term-migration.lock';
+  const lockContent = JSON.stringify({ actor: 'older-process' });
+  await writeProjectFile(projectRoot, lockPath, lockContent);
+
+  const blocked = await rejectedCommand(runCatalog(projectRoot,
+    ['migrate-long-term', '--apply', '--actor', 'new-process']));
+  assert.equal(blocked.code, 2);
+  assert.match(blocked.stderr, /migration lock already exists/);
+  assert.equal(await readFile(path.join(projectRoot, ...lockPath.split('/')), 'utf8'), lockContent);
+  assert.equal(await readFile(currentPath, 'utf8'), original);
+});
+
 test('mixed-mode migration preserves existing split entries byte for byte', async (t) => {
   const projectRoot = await createMemoryProject(t);
   const existing = {

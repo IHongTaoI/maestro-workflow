@@ -10,13 +10,13 @@
 | :--- | :--- | :--- | :--- |
 | **全局用户记忆** | `~/.xiaotao/memory/` 或 `$XIAOTAO_HOME/.xiaotao/memory/` | “我通常怎么协作？在各项目做过什么？” | `global-preference.schema.json` |
 | **项目记忆** | `.xiaotao/memory/timeline/` | “这个项目经历了什么？当时为什么这么做？” | `timeline-event.schema.json` |
-| **项目知识库** | `.xiaotao/memory/long-term/` | “项目现在是什么样？规则规范是什么？” | `long-term-entry` 现行主题库 |
+| **项目知识库** | `.xiaotao/memory/knowledge/` | “项目现在是什么样？规则规范是什么？” | `long-term-entry` 现行主题库 |
 
 ## 核心规则与场景验证
 
 ### 场景 1：候选分流路由（Admission & Routing）
 - **经历进入时间线**：Task 完成曲折、调试经过、架构选型讨论进入 `timeline/`，保留日期层及 Task 原始证据；
-- **规范进入知识库**：已核实的代码风格、现行架构说明与技术约定进入 `long-term/entries/`，按主题分类；
+- **规范进入知识库**：已核实的代码风格、现行架构说明与技术约定进入 `.xiaotao/memory/knowledge/entries/`，按主题分类；
 - **习惯进入全局记忆**：跨项目的通用协作偏好（如简洁大白话沟通）进入 `preferences/`。**硬性约束**：严禁单次推断稳定偏好，必须具备两次以上跨会话/任务事实佐证。
 
 ### 场景 2：逐层有界下钻（Progressive Retrieval）
@@ -25,7 +25,7 @@
 - **全局记忆下钻**：`用户总览` → `偏好分类/经历年月` → `跨项目经历简述` → `项目记忆入口`。
 
 ### 场景 3：权威记录与平滑兼容
-- 现存 `long-term/entries/` 平滑演进为项目知识库，稳定 ID 与历史决策保持完全兼容；
+- 项目知识条目存放在 `.xiaotao/memory/knowledge/entries/`，稳定 ID 与历史决策保持完全兼容；
 - 机器 Activity（`.xiaotao/activity/index.json`）与项目记忆时间线事件严格对齐事件 ID 与发生时间，避免构造两套相互矛盾的事实。
 
 ## 测试与契约覆盖

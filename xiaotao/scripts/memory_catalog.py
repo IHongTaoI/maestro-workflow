@@ -33,7 +33,9 @@ if hasattr(sys.stdout, "reconfigure"):
 INDEX_PATH = Path(".xiaotao/memory/index.json")
 MANIFEST_PATH = Path(".xiaotao/memory/manifest.md")
 LONG_TERM_ROOT = Path(".xiaotao/memory/knowledge")
-LONG_TERM_MIGRATION_LOCK = Path(".xiaotao/locks/memory-knowledge-migration.lock")
+# Keep this coordination path stable across the directory rename so an in-flight
+# migration from an older version still blocks writers during a rolling upgrade.
+LONG_TERM_MIGRATION_LOCK = Path(".xiaotao/locks/memory-long-term-migration.lock")
 FOLLOWUPS_ROOT = Path(".xiaotao/memory/followups")
 FOLLOWUPS_PENDING_PATH = FOLLOWUPS_ROOT / "pending"
 FOLLOWUPS_RESOLVED_PATH = FOLLOWUPS_ROOT / "resolved"
