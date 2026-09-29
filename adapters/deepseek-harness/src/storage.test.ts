@@ -112,8 +112,8 @@ function makeFs(overrides: Partial<Pick<StateFileSystem, 'resolve'>> = {}) {
 test('lockPathFor derives a stable lock path under .xiaotao/locks', () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  assert.equal(store.lockPathFor('memory/knowledge/current.md'), '.xiaotao/locks/memory-long-term-current.md.lock')
-  assert.equal(store.lockPathFor('.xiaotao/memory/knowledge/current.md'), '.xiaotao/locks/memory-long-term-current.md.lock')
+  assert.equal(store.lockPathFor('memory/knowledge/current.md'), '.xiaotao/locks/memory-knowledge-current.md.lock')
+  assert.equal(store.lockPathFor('.xiaotao/memory/knowledge/current.md'), '.xiaotao/locks/memory-knowledge-current.md.lock')
 })
 
 test('lockPathFor rejects traversal and absolute paths', () => {
