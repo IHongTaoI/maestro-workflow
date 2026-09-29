@@ -112,8 +112,8 @@ function makeFs(overrides: Partial<Pick<StateFileSystem, 'resolve'>> = {}) {
 test('lockPathFor derives a stable lock path under .xiaotao/locks', () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  assert.equal(store.lockPathFor('memory/long-term/current.md'), '.xiaotao/locks/memory-long-term-current.md.lock')
-  assert.equal(store.lockPathFor('.xiaotao/memory/long-term/current.md'), '.xiaotao/locks/memory-long-term-current.md.lock')
+  assert.equal(store.lockPathFor('memory/knowledge/current.md'), '.xiaotao/locks/memory-knowledge-current.md.lock')
+  assert.equal(store.lockPathFor('.xiaotao/memory/knowledge/current.md'), '.xiaotao/locks/memory-knowledge-current.md.lock')
 })
 
 test('lockPathFor rejects traversal and absolute paths', () => {
@@ -162,12 +162,12 @@ test('writeGuarded replaces only when the version still matches', async () => {
 test('acquireLock: release tombstone lets a second writer re-acquire immediately', async () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a')
   await release()
   // Re-acquire right away — must not block on lease expiry or contention.
-  const release2 = await acquireLock(store, 'memory/long-term/current.md', 'agent-b', { timeoutMs: 1000 })
+  const release2 = await acquireLock(store, 'memory/knowledge/current.md', 'agent-b', { timeoutMs: 1000 })
   await release2()
-  const lockKey = store.lockPathFor('memory/long-term/current.md')
+  const lockKey = store.lockPathFor('memory/knowledge/current.md')
   const content = await store.readSnapshot(lockKey)
   assert.ok(content)
   const lease = JSON.parse(content.content)
@@ -179,12 +179,12 @@ test('acquireLock: expired held lock is NOT reclaimed without canReclaim', async
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
   // First owner holds the lock; its lease expires quickly.
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a', { leaseMs: 5 })
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a', { leaseMs: 5 })
   try {
     await new Promise((r) => setTimeout(r, 20))
     // Second writer has no canReclaim → clock age alone is insufficient.
     await assert.rejects(
-      () => acquireLock(store, 'memory/long-term/current.md', 'agent-b', { timeoutMs: 60, retryDelayMs: 10 }),
+      () => acquireLock(store, 'memory/knowledge/current.md', 'agent-b', { timeoutMs: 60, retryDelayMs: 10 }),
       /lock contention/,
     )
   } finally {
@@ -195,10 +195,10 @@ test('acquireLock: expired held lock is NOT reclaimed without canReclaim', async
 test('acquireLock: expired held lock is reclaimed when canReclaim confirms', async () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a', { leaseMs: 5 })
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a', { leaseMs: 5 })
   await new Promise((r) => setTimeout(r, 20))
   const seen: string[] = []
-  const release2 = await acquireLock(store, 'memory/long-term/current.md', 'agent-b', {
+  const release2 = await acquireLock(store, 'memory/knowledge/current.md', 'agent-b', {
     timeoutMs: 1000,
     retryDelayMs: 10,
     canReclaim: (lease) => {
@@ -214,11 +214,11 @@ test('acquireLock: expired held lock is reclaimed when canReclaim confirms', asy
 test('acquireLock: contention throws after the bounded timeout', async () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a', { leaseMs: 60_000 })
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a', { leaseMs: 60_000 })
   try {
     await assert.rejects(
       () =>
-        acquireLock(store, 'memory/long-term/current.md', 'agent-b', {
+        acquireLock(store, 'memory/knowledge/current.md', 'agent-b', {
           timeoutMs: 50,
           retryDelayMs: 10,
         }),
@@ -232,9 +232,9 @@ test('acquireLock: contention throws after the bounded timeout', async () => {
 test('acquireLock: contention wait is cooperatively cancellable', async () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a')
   const controller = new AbortController()
-  const waiting = acquireLock(store, 'memory/long-term/current.md', 'agent-b', {
+  const waiting = acquireLock(store, 'memory/knowledge/current.md', 'agent-b', {
     timeoutMs: 10_000,
     retryDelayMs: 1_000,
     signal: controller.signal,
@@ -247,7 +247,7 @@ test('acquireLock: contention wait is cooperatively cancellable', async () => {
 test('acquireLock: release is idempotent and safe to call twice', async () => {
   const { fs } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a')
   await release()
   await release() // second call must not throw or corrupt state
 })
@@ -268,7 +268,7 @@ test('writeGuarded rejects a fabricated snapshot whose target escapes .xiaotao',
 test('acquireLock: release retries after a transient write failure', async () => {
   const { fs, failNextReplace } = makeFs()
   const store = new XiaoTaoStateStore(fs)
-  const release = await acquireLock(store, 'memory/long-term/current.md', 'agent-a')
+  const release = await acquireLock(store, 'memory/knowledge/current.md', 'agent-a')
 
   // First release attempt hits a transient I/O error and must surface it…
   failNextReplace()
@@ -279,7 +279,7 @@ test('acquireLock: release retries after a transient write failure', async () =>
 
   // …but a second attempt (failure cleared) succeeds — the lock is released.
   await release()
-  const lockKey = store.lockPathFor('memory/long-term/current.md')
+  const lockKey = store.lockPathFor('memory/knowledge/current.md')
   const snapshot = await store.readSnapshot(lockKey)
   assert.ok(snapshot)
   assert.equal(JSON.parse(snapshot.content).state, 'released')

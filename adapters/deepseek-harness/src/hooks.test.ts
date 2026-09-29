@@ -268,7 +268,7 @@ test('loadBoundedRuntimeContext returns bounded runtime context when active work
   const task3 = path.join(tmp, '.xiaotao/tasks/task-3')
   const task4 = path.join(tmp, '.xiaotao/tasks/task-4')
   const temp1 = path.join(tmp, '.xiaotao/memory/temporary/active/temp-1')
-  const ltDir = path.join(tmp, '.xiaotao/memory/long-term/entries')
+  const ltDir = path.join(tmp, '.xiaotao/memory/knowledge/entries')
   const fuDir = path.join(tmp, '.xiaotao/memory/followups/pending')
 
   await mkdir(task1, { recursive: true })

@@ -81,12 +81,12 @@ async function hasAuthoritativeSources(root) {
     if (entries.some(e => !e.startsWith('.'))) return true;
   } catch (error) { if (error instanceof ScanBudgetError) throw error; }
   try {
-    const ltDir = path.join(root, '.xiaotao/memory/long-term/entries');
+    const ltDir = path.join(root, '.xiaotao/memory/knowledge/entries');
     const entries = await boundedEntries(ltDir);
     if (entries.some(e => e.endsWith('.md'))) return true;
   } catch (error) { if (error instanceof ScanBudgetError) throw error; }
   try {
-    if (await exists(path.join(root, '.xiaotao/memory/long-term/current.md'))) return true;
+    if (await exists(path.join(root, '.xiaotao/memory/knowledge/current.md'))) return true;
   } catch (error) { if (error instanceof ScanBudgetError) throw error; }
   try {
     if (await exists(path.join(root, '.xiaotao/memory/legacy/memory.md'))) return true;
@@ -383,11 +383,11 @@ async function followupRecords(root, budget) {
 
 async function longTermCount(root) {
   try {
-    return (await boundedEntries(path.join(root, '.xiaotao/memory/long-term/entries')))
+    return (await boundedEntries(path.join(root, '.xiaotao/memory/knowledge/entries')))
       .filter(name => name.endsWith('.md') && !name.startsWith('.')).length;
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
-      return await exists(path.join(root, '.xiaotao/memory/long-term/current.md')) ? 1 : 0;
+      return await exists(path.join(root, '.xiaotao/memory/knowledge/current.md')) ? 1 : 0;
     }
     throw error;
   }

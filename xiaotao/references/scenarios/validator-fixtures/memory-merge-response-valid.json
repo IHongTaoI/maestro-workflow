@@ -46,7 +46,7 @@
         "branch": "feature/perf-opt",
         "commit": "7a8b9c0",
         "task_id": "task-perf-a",
-        "memory_path": ".xiaotao/memory/long-term/current.md",
+        "memory_path": ".xiaotao/memory/knowledge/current.md",
         "claim": "Module A can be lazily initialized after startup",
         "source_refs": [
           "xiaotao/references/scenarios/validator-fixtures/files/source.md"
@@ -58,7 +58,7 @@
         "branch": "fix/login-race",
         "commit": "3d4e5f6",
         "task_id": "task-login-fix",
-        "memory_path": ".xiaotao/memory/long-term/current.md",
+        "memory_path": ".xiaotao/memory/knowledge/current.md",
         "claim": "Module A must initialize synchronously to avoid login auth race",
         "source_refs": [
           "xiaotao/references/scenarios/validator-fixtures/files/result.md"

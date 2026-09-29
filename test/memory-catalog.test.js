@@ -54,7 +54,7 @@ async function createMemoryProject(t) {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'xiaotao-memory-catalog-'));
   t.after(() => rm(projectRoot, { recursive: true, force: true }));
   await writeProjectFile(projectRoot, '.xiaotao/evidence/performance.md', '# Trace\nVerified startup bottleneck.\n');
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/current.md', `---
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/current.md', `---
 revision: 2
 updated_at: 2026-09-01T06:00:00Z
 updated_by: old-zhou/test
@@ -135,17 +135,17 @@ Measure cache invalidation fan-out.
 
 test('builds a three-layer catalog and selectively returns one Memory detail', async (t) => {
   const projectRoot = await createMemoryProject(t);
-  const legacyPath = path.join(projectRoot, '.xiaotao', 'memory', 'long-term', 'current.md');
+  const legacyPath = path.join(projectRoot, '.xiaotao', 'memory', 'knowledge', 'current.md');
   const legacyBefore = await readFile(legacyPath, 'utf8');
   const build = JSON.parse((await runCatalog(projectRoot, ['build'])).stdout);
   assert.equal(build.status, 'built');
-  assert.equal(build.entries, 5);
   assert.equal(await readFile(legacyPath, 'utf8'), legacyBefore);
   await assert.rejects(readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-startup-performance.md'), 'utf8'));
+    '.xiaotao/memory/knowledge/entries/lt-startup-performance.md'), 'utf8'));
 
   const indexPath = path.join(projectRoot, '.xiaotao', 'memory', 'index.json');
   const index = JSON.parse(await readFile(indexPath, 'utf8'));
+  assert.equal(build.entries, 5);
   assert.deepEqual(index.entries.map((entry) => entry.memory_id), [
     'lt-old-workflow',
     'lt-startup-performance',
@@ -222,7 +222,7 @@ test('returns no candidate instead of forcing unrelated Memory into context', as
 test('rejects unstructured Long-term Memory instead of silently creating a weak index', async (t) => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'xiaotao-memory-invalid-'));
   t.after(() => rm(projectRoot, { recursive: true, force: true }));
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/current.md', '# Long-term Memory\n\n- An unstructured claim\n');
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/current.md', '# Long-term Memory\n\n- An unstructured claim\n');
 
   const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(failure.code, 2);
@@ -233,7 +233,7 @@ test('rejects decision context on a non-decision Long-term entry', async (t) => 
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'xiaotao-memory-decision-invalid-'));
   t.after(() => rm(projectRoot, { recursive: true, force: true }));
   await writeProjectFile(projectRoot, '.xiaotao/evidence/source.md', '# Evidence\n');
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/current.md', `# Long-term Memory
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/current.md', `# Long-term Memory
 
 \`\`\`xiaotao-memory-entry
 {"entry_id":"lt-invalid","title":"Invalid context","memory_kind":"fact","content":"Facts do not carry decision context.","decision_context":{"reason":"Invalid fixture."},"source_refs":[".xiaotao/evidence/source.md"]}
@@ -256,9 +256,9 @@ test('derives Long-term temporal states and hides non-current knowledge by defau
     { entry_id: 'lt-expired', title: 'Policy window expired', memory_kind: 'fact', content: 'Expired policy window.', source_refs: ['.xiaotao/evidence/source.md'], status: 'active', valid_until: '2026-09-10T12:00:00Z' },
   ];
   for (const entry of entries) {
-    await writeProjectFile(projectRoot, `.xiaotao/memory/long-term/entries/${entry.entry_id}.md`, entryFile(entry));
+    await writeProjectFile(projectRoot, `.xiaotao/memory/knowledge/entries/${entry.entry_id}.md`, entryFile(entry));
   }
-  const expiredPath = path.join(projectRoot, '.xiaotao/memory/long-term/entries/lt-expired.md');
+  const expiredPath = path.join(projectRoot, '.xiaotao/memory/knowledge/entries/lt-expired.md');
   const expiredBefore = await readFile(expiredPath, 'utf8');
 
   await runCatalog(projectRoot, ['build']);
@@ -300,7 +300,7 @@ test('rejects invalid Long-term validity fields', async (t) => {
     [{ ...base, entry_id: 'lt-wrong-kind', memory_kind: 'principle', valid_until: '2026-09-10T00:00:00Z' }, /allowed only.*fact.*constraint/],
   ];
   for (const [entry, message] of cases) {
-    const target = `.xiaotao/memory/long-term/entries/${entry.entry_id}.md`;
+    const target = `.xiaotao/memory/knowledge/entries/${entry.entry_id}.md`;
     await writeProjectFile(projectRoot, target, entryFile(entry));
     const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
     assert.match(failure.stderr, message);
@@ -325,28 +325,28 @@ test('indexes split Long-term files and updates one entry without rewriting anot
     entry_id: 'lt-fixed-roles', title: 'Fixed roles', memory_kind: 'decision',
     content: 'Use fixed roles.', source_refs: ['.xiaotao/evidence/source.md'], status: 'superseded',
   };
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-api-boundary.md', entryFile(first));
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-worker-isolation.md',
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-api-boundary.md', entryFile(first));
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-worker-isolation.md',
     entryFile(second, { revision: 4, updatedAt: '2026-09-10T02:00:00Z' }));
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/history/lt-fixed-roles.md', entryFile(old));
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/history/lt-fixed-roles.md', entryFile(old));
 
   await runCatalog(projectRoot, ['build']);
   const index = JSON.parse(await readFile(path.join(projectRoot, '.xiaotao/memory/index.json'), 'utf8'));
   assert.deepEqual(index.entries.map((entry) => entry.path), [
-    '.xiaotao/memory/long-term/entries/lt-api-boundary.md',
-    '.xiaotao/memory/long-term/history/lt-fixed-roles.md',
-    '.xiaotao/memory/long-term/entries/lt-worker-isolation.md',
+    '.xiaotao/memory/knowledge/entries/lt-api-boundary.md',
+    '.xiaotao/memory/knowledge/history/lt-fixed-roles.md',
+    '.xiaotao/memory/knowledge/entries/lt-worker-isolation.md',
   ]);
   assert.equal(index.entries.find((entry) => entry.memory_id === 'lt-worker-isolation').updated_at,
     '2026-09-10T02:00:00Z');
   const before = await readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-worker-isolation.md'), 'utf8');
+    '.xiaotao/memory/knowledge/entries/lt-worker-isolation.md'), 'utf8');
   first.content = 'Keep public API boundaries explicit and versioned.';
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-api-boundary.md',
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-api-boundary.md',
     entryFile(first, { revision: 1, updatedAt: '2026-09-10T03:00:00Z' }));
   await runCatalog(projectRoot, ['build']);
   assert.equal(await readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-worker-isolation.md'), 'utf8'), before);
+    '.xiaotao/memory/knowledge/entries/lt-worker-isolation.md'), 'utf8'), before);
   const detail = JSON.parse((await runCatalog(projectRoot, ['show', 'lt-api-boundary'])).stdout);
   assert.equal(detail.detail.content, 'Keep public API boundaries explicit and versioned.');
   const inactive = JSON.parse((await runCatalog(projectRoot,
@@ -362,13 +362,13 @@ test('rejects duplicate IDs across legacy and split Long-term sources', async (t
     entry_id: 'lt-duplicate', title: 'Duplicate', memory_kind: 'fact', content: 'One claim.',
     source_refs: ['.xiaotao/evidence/source.md'], status: 'active',
   };
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/current.md', `# Long-term Memory
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/current.md', `# Long-term Memory
 
 \`\`\`xiaotao-memory-entry
 ${JSON.stringify(entry)}
 \`\`\`
 `);
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-duplicate.md', entryFile(entry));
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-duplicate.md', entryFile(entry));
   const failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.equal(failure.code, 2);
   assert.match(failure.stderr, /duplicate Long-term entry_id/);
@@ -382,12 +382,12 @@ test('split Long-term files enforce one matching entry and independent metadata'
     entry_id: 'lt-right-name', title: 'Right name', memory_kind: 'fact', content: 'A fact.',
     source_refs: ['.xiaotao/evidence/source.md'], status: 'active',
   };
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-wrong-name.md', entryFile(entry));
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-wrong-name.md', entryFile(entry));
   let failure = await rejectedCommand(runCatalog(projectRoot, ['build']));
   assert.match(failure.stderr, /filename must match entry_id/);
 
-  await rm(path.join(projectRoot, '.xiaotao/memory/long-term/entries'), { recursive: true, force: true });
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-right-name.md', `# Entry
+  await rm(path.join(projectRoot, '.xiaotao/memory/knowledge/entries'), { recursive: true, force: true });
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-right-name.md', `# Entry
 
 \`\`\`xiaotao-memory-entry
 ${JSON.stringify(entry)}
@@ -399,7 +399,7 @@ ${JSON.stringify(entry)}
 
 test('explicit migration preserves legacy entries and leaves an auditable snapshot', async (t) => {
   const projectRoot = await createMemoryProject(t);
-  const currentPath = path.join(projectRoot, '.xiaotao/memory/long-term/current.md');
+  const currentPath = path.join(projectRoot, '.xiaotao/memory/knowledge/current.md');
   const original = await readFile(currentPath, 'utf8');
   const beforeActive = JSON.parse((await runCatalog(projectRoot,
     ['show', 'lt-startup-performance'])).stdout).detail;
@@ -410,7 +410,7 @@ test('explicit migration preserves legacy entries and leaves an auditable snapsh
   assert.equal(preview.status, 'ready');
   assert.equal(preview.entries, 2);
   await assert.rejects(readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-startup-performance.md'), 'utf8'));
+    '.xiaotao/memory/knowledge/entries/lt-startup-performance.md'), 'utf8'));
   assert.equal(await readFile(currentPath, 'utf8'), original);
 
   const migrated = JSON.parse((await runCatalog(projectRoot,
@@ -422,9 +422,9 @@ test('explicit migration preserves legacy entries and leaves an auditable snapsh
   assert.equal(await readFile(path.join(projectRoot, ...migrated.legacy_snapshot.split('/')), 'utf8'), original);
 
   const activeFile = await readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-startup-performance.md'), 'utf8');
+    '.xiaotao/memory/knowledge/entries/lt-startup-performance.md'), 'utf8');
   const historyFile = await readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/history/lt-old-workflow.md'), 'utf8');
+    '.xiaotao/memory/knowledge/history/lt-old-workflow.md'), 'utf8');
   assert.match(activeFile, /revision: 2/);
   assert.match(historyFile, /status.*superseded/);
   const afterActive = JSON.parse((await runCatalog(projectRoot,
@@ -437,6 +437,22 @@ test('explicit migration preserves legacy entries and leaves an auditable snapsh
   assert.equal(check.entries, 5);
 });
 
+test('migration respects the lock path used before the knowledge directory rename', async (t) => {
+  const projectRoot = await createMemoryProject(t);
+  const currentPath = path.join(projectRoot, '.xiaotao/memory/knowledge/current.md');
+  const original = await readFile(currentPath, 'utf8');
+  const lockPath = '.xiaotao/locks/memory-long-term-migration.lock';
+  const lockContent = JSON.stringify({ actor: 'older-process' });
+  await writeProjectFile(projectRoot, lockPath, lockContent);
+
+  const blocked = await rejectedCommand(runCatalog(projectRoot,
+    ['migrate-long-term', '--apply', '--actor', 'new-process']));
+  assert.equal(blocked.code, 2);
+  assert.match(blocked.stderr, /migration lock already exists/);
+  assert.equal(await readFile(path.join(projectRoot, ...lockPath.split('/')), 'utf8'), lockContent);
+  assert.equal(await readFile(currentPath, 'utf8'), original);
+});
+
 test('mixed-mode migration preserves existing split entries byte for byte', async (t) => {
   const projectRoot = await createMemoryProject(t);
   const existing = {
@@ -445,8 +461,8 @@ test('mixed-mode migration preserves existing split entries byte for byte', asyn
     source_refs: ['.xiaotao/evidence/performance.md'], status: 'active',
   };
   const existingPath = path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-existing-split.md');
-  await writeProjectFile(projectRoot, '.xiaotao/memory/long-term/entries/lt-existing-split.md',
+    '.xiaotao/memory/knowledge/entries/lt-existing-split.md');
+  await writeProjectFile(projectRoot, '.xiaotao/memory/knowledge/entries/lt-existing-split.md',
     entryFile(existing, { revision: 7, updatedAt: '2026-09-10T04:00:00Z' }));
   const before = await readFile(existingPath, 'utf8');
 
@@ -457,7 +473,7 @@ test('mixed-mode migration preserves existing split entries byte for byte', asyn
   assert.equal(migrated.preserved_entries, 1);
   assert.equal(await readFile(existingPath, 'utf8'), before);
   assert.match(await readFile(path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-startup-performance.md'), 'utf8'),
+    '.xiaotao/memory/knowledge/entries/lt-startup-performance.md'), 'utf8'),
   /lt-startup-performance/);
   const check = JSON.parse((await runCatalog(projectRoot, ['check'])).stdout);
   assert.equal(check.entries, 6);
@@ -465,7 +481,7 @@ test('mixed-mode migration preserves existing split entries byte for byte', asyn
 
 test('migration ID conflict never changes either storage format', async (t) => {
   const projectRoot = await createMemoryProject(t);
-  const currentPath = path.join(projectRoot, '.xiaotao/memory/long-term/current.md');
+  const currentPath = path.join(projectRoot, '.xiaotao/memory/knowledge/current.md');
   const original = await readFile(currentPath, 'utf8');
   const duplicate = {
     entry_id: 'lt-startup-performance', title: 'Duplicate', memory_kind: 'experience',
@@ -473,9 +489,9 @@ test('migration ID conflict never changes either storage format', async (t) => {
     status: 'active',
   };
   const duplicatePath = path.join(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-startup-performance.md');
+    '.xiaotao/memory/knowledge/entries/lt-startup-performance.md');
   await writeProjectFile(projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-startup-performance.md', entryFile(duplicate));
+    '.xiaotao/memory/knowledge/entries/lt-startup-performance.md', entryFile(duplicate));
   const duplicateBefore = await readFile(duplicatePath, 'utf8');
   const collision = await rejectedCommand(runCatalog(projectRoot,
     ['migrate-long-term', '--apply', '--actor', 'old-zhou/migration']));
@@ -484,7 +500,7 @@ test('migration ID conflict never changes either storage format', async (t) => {
   assert.equal(await readFile(currentPath, 'utf8'), original);
   assert.equal(await readFile(duplicatePath, 'utf8'), duplicateBefore);
 
-  await rm(path.join(projectRoot, '.xiaotao/memory/long-term/entries'), { recursive: true, force: true });
+  await rm(path.join(projectRoot, '.xiaotao/memory/knowledge/entries'), { recursive: true, force: true });
   const missingActor = await rejectedCommand(runCatalog(projectRoot, ['migrate-long-term', '--apply']));
   assert.equal(missingActor.code, 2);
   assert.match(missingActor.stderr, /--actor/);
@@ -506,7 +522,7 @@ test('indexes long-term search hints, ranks by them with search hint reason, and
   };
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-with-hints.md',
+    '.xiaotao/memory/knowledge/entries/lt-with-hints.md',
     entryFile(hintEntry, { revision: 1, updatedAt: '2026-09-10T02:00:00Z' })
   );
 
@@ -1116,7 +1132,7 @@ test('searches memory with synonym expansion and ranks exact matches above synon
   const projectRoot = await createMemoryProject(t);
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-auth.md',
+    '.xiaotao/memory/knowledge/entries/lt-auth.md',
     entryFile({
       entry_id: 'lt-auth',
       title: '统一鉴权中心设计',
@@ -1152,7 +1168,7 @@ test('loads custom synonym groups from .xiaotao/config.yaml', async (t) => {
   );
   await writeProjectFile(
     projectRoot,
-    '.xiaotao/memory/long-term/entries/lt-payment.md',
+    '.xiaotao/memory/knowledge/entries/lt-payment.md',
     entryFile({
       entry_id: 'lt-payment',
       title: '结账流程异常重试',

@@ -313,7 +313,7 @@ export function hasAuthoritativeSourcesDsh(projectRoot: string): boolean {
   } catch {}
 
   try {
-    const ltDir = path.join(projectRoot, '.xiaotao/memory/long-term/entries')
+    const ltDir = path.join(projectRoot, '.xiaotao/memory/knowledge/entries')
     if (existsSync(ltDir)) {
       const ltEntries = readdirSync(ltDir)
       if (ltEntries.some(e => e.endsWith('.md'))) return true
@@ -321,7 +321,7 @@ export function hasAuthoritativeSourcesDsh(projectRoot: string): boolean {
   } catch {}
 
   try {
-    if (existsSync(path.join(projectRoot, '.xiaotao/memory/long-term/current.md'))) return true
+    if (existsSync(path.join(projectRoot, '.xiaotao/memory/knowledge/current.md'))) return true
     if (existsSync(path.join(projectRoot, '.xiaotao/memory/legacy/memory.md'))) return true
   } catch {}
 

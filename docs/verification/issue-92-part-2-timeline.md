@@ -7,7 +7,7 @@
 ## 核心机制与场景验证
 
 ### 场景 1：分层结构与自动化派生
-- **行为**：从 `.xiaotao/tasks/archive/` 中的已归档 Task 以及 `memory/long-term/decisions/`、`playbooks/decisions/` 等不可变决策中提取事件，运行 `python xiaotao/scripts/timeline_catalog.py build`；
+- **行为**：从 `.xiaotao/tasks/archive/` 中的已归档 Task 以及 `.xiaotao/memory/knowledge/decisions/`、`playbooks/decisions/` 等不可变决策中提取事件，运行 `python xiaotao/scripts/timeline_catalog.py build`；
 - **产物验证**：
   - `.xiaotao/memory/timeline/summary.md`：项目经历总览（跨年份主线与年度导航）；
   - `years/<year>/summary.md`：年度总览；

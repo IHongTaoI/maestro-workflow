@@ -49,7 +49,7 @@ Worker registry 批准事件，以及显式 checkpoint 恢复成功事件。
 
 `decision_approved` 和 `decision_superseded`：
 
-- 来源只包括 `.xiaotao/memory/long-term/decisions/<decision-id>.decision.json`；
+- 来源只包括 `.xiaotao/memory/knowledge/decisions/<decision-id>.decision.json`；
 - Decision Record 必须是 `importance: milestone`，结果必须是 `approved` 或 `superseded`；
 - `occurred_at` 只取不可变记录的显式 `decided_at`，并归一化为 UTC；
 - Activity Event 的 `source_refs` 指向当前存在的不可变 Decision Record；记录内保留发布时已验证的
